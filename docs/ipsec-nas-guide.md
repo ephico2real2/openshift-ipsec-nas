@@ -83,7 +83,7 @@ Firewalls must allow UDP 500, UDP 4500 and ESP (IP protocol 50) between every wo
 | **NSS database** | The certificate store libreswan uses on each node: `/var/lib/ipsec/nss`. |
 | **`left` / `right`** | libreswan terms. `left` = the OpenShift node, `right` = the NAS. |
 | **Kyverno** | Policy engine. We use it to **generate** one object per node (NNCP, Certificate) and to **mutate** pods. |
-| **cert-manager** | Issues and renews certificates from a `ClusterIssuer`. Ours is `company-issuer-rnd`. |
+| **cert-manager** | Issues and renews certificates from a `ClusterIssuer`. We use the one the cluster **already has** for the enterprise CA. This guide never creates an issuer; `company-issuer-rnd` is a placeholder for that issuer's name. |
 | **MCO / MachineConfig** | Machine Config Operator. Changing a MachineConfig **reboots nodes one at a time**. |
 
 ### 0.2 Requirements checklist
@@ -96,7 +96,7 @@ Firewalls must allow UDP 500, UDP 4500 and ESP (IP protocol 50) between every wo
 - [ ] The **storage team** has a ticket to create the **NAS (`right`) certificate** and IPsec policy (see [4.1](#41-nas-configuration-storage-team-not-us)). We do not create the NAS certificate.
 - [ ] Tools on your workstation: `oc`, `openssl`, `helm` (Part 1), `butane` (Option A only).
 - [ ] A **change window** has been approved: Part 1 reboots every node at least once.
-- [ ] **Option B only:** the cert-manager Operator is installed and `ClusterIssuer/company-issuer-rnd` is `Ready`.
+- [ ] **Option B only:** the cert-manager Operator is installed and the cluster's **existing enterprise CA `ClusterIssuer`** is `Ready`. You know its name (`oc get clusterissuer`). This guide does not create one.
 
 ### 0.3 Open a shell and set variables
 
@@ -110,6 +110,9 @@ set +H
 export NODE_DOMAIN="ocp.example.com"   # worker FQDN = <node-name>.${NODE_DOMAIN}
 export NAS_FQDN="nas01.example.com"    # NAS hostname (must match the NAS certificate)
 export NAS_IP="10.10.10.50"            # NAS NFS data IP
+# Option B: the ClusterIssuer your cluster ALREADY has for the enterprise CA (find it: oc get clusterissuer).
+# "company-issuer-rnd" is only a placeholder. This guide does not create an issuer.
+export CLUSTER_ISSUER="company-issuer-rnd"
 # ----------------------
 
 # Butane version = your cluster's x.y with .0 on the end (e.g. 4.19.0)
@@ -117,7 +120,7 @@ export OCP_VERSION="$(oc get clusterversion version -o jsonpath='{.status.desire
 
 # Working folder for files we create
 mkdir -p ~/ipsec-nas && cd ~/ipsec-nas
-echo "Domain=${NODE_DOMAIN} NAS=${NAS_FQDN}/${NAS_IP} Butane=${OCP_VERSION}"
+echo "Domain=${NODE_DOMAIN} NAS=${NAS_FQDN}/${NAS_IP} Issuer=${CLUSTER_ISSUER} Butane=${OCP_VERSION}"
 ```
 
 > [!TIP]
@@ -757,7 +760,7 @@ Renewal before expiry is the same procedure, steps 2–7.
 
 ### 3.0 How it works
 
-Each worker gets **its own** certificate, issued automatically by `ClusterIssuer/company-issuer-rnd`. No MachineConfig is used, so **nothing reboots** when nodes are added or certificates renew.
+Each worker gets **its own** certificate, issued automatically by the cluster's existing enterprise CA `ClusterIssuer` (`${CLUSTER_ISSUER}`; `company-issuer-rnd` is the placeholder name). No MachineConfig is used, so **nothing reboots** when nodes are added or certificates renew.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/option-b-per-node-certs.dark.png">
@@ -772,7 +775,7 @@ KYVERNO + CERT-MANAGER                   cert-sync POD (kcs-ipsec)              
 
 1. Policy 1: Certificate per worker  <------------ Node created ------------  A worker joins the cluster
    ipsec-<node>                                                                (no manual step from here on)
-   signed by company-issuer-rnd
+   signed by the enterprise CA issuer
         |
 2. cert-manager writes the Secret    -->  3. cert-sync pod starts on the node
    ipsec-cert-<node>                         Policy 2 pointed it at ONLY this Secret
@@ -799,7 +802,7 @@ What each piece does:
 | Piece | Job |
 |---|---|
 | **Policy 1** `ipsec-node-certificate` | For every worker, create a cert-manager `Certificate` named `ipsec-<node>`. |
-| **cert-manager** | Signs it with `company-issuer-rnd`, stores it in Secret `ipsec-cert-<node>`, renews it automatically. |
+| **cert-manager** | Signs it with the enterprise CA `ClusterIssuer` (`${CLUSTER_ISSUER}`), stores it in Secret `ipsec-cert-<node>`, renews it automatically. |
 | **Policy 2** `ipsec-cert-sync-mount` | When the DaemonSet starts a pod on a node, mount **only that node's** Secret into it. |
 | **DaemonSet** `ipsec-cert-sync` | Imports the cert into the node's NSS DB, labels the node `ipsec.kcs.io/cert-ready=true`, re-imports on renewal. |
 | **Policy 3** `ipsec-nncp-per-node` | Only after the label appears, create the NNCP for that node. This prevents NNCPs failing because the cert isn't there yet. |
@@ -819,10 +822,16 @@ What each piece does:
 
 ```bash
 oc get pods -n cert-manager
-oc get clusterissuer company-issuer-rnd
+oc get clusterissuer                          # every issuer on this cluster; pick the enterprise CA one
+oc get clusterissuer "${CLUSTER_ISSUER}"
 ```
 
-✅ **Expected:** cert-manager pods `Running`, and `READY=True` on `company-issuer-rnd`.
+✅ **Expected:** cert-manager pods `Running`, and `READY=True` on `${CLUSTER_ISSUER}`.
+
+> [!IMPORTANT]
+> **This guide does not create a certificate issuer.** An enterprise cluster already has a `ClusterIssuer` that signs with the enterprise CA. The per-node certificates must come from that issuer, so that they chain to the same root the NAS trusts. `company-issuer-rnd` is only a **placeholder** for its name.
+>
+> If the last command answers `NotFound`, `CLUSTER_ISSUER` is still the placeholder: set it to the real name in [0.3](#03-open-a-shell-and-set-variables) and run the check again. If your cluster has no enterprise CA issuer at all, stop and ask the team that owns the enterprise CA; do not create a self-signed one for this.
 
 ### Step B.2 – Create the namespace
 
@@ -900,7 +909,7 @@ spec:
           issuerRef:
             group: cert-manager.io
             kind: ClusterIssuer
-            name: company-issuer-rnd
+            name: ${CLUSTER_ISSUER}       # the existing enterprise CA issuer, set in Part 0.3
 EOF
 
 oc apply -f 21-kyverno-node-certificate.yaml
@@ -1329,7 +1338,7 @@ The NAS needs its **own** certificate (the `right` side), and the **storage team
 |---|---|---|
 | Installed on | Every worker, NSS nickname `left_server` | The NAS |
 | Key + CSR created by | **Us.** Option A: by hand (Step A.3). Option B: cert-manager (Step B.4) | **Storage team**, on the NAS |
-| Signed by | Enterprise CA (Option B: through `company-issuer-rnd`) | The **same** enterprise CA |
+| Signed by | Enterprise CA (Option B: through the existing `ClusterIssuer`, `${CLUSTER_ISSUER}`) | The **same** enterprise CA |
 | Name in the SAN | Worker FQDN `<node-name>.${NODE_DOMAIN}` | `${NAS_FQDN}` |
 | IP address in the certificate | Not needed | Not needed. `${NAS_IP}` is only used in the NNCP `rightsubnet` |
 | Private key stays | On our side | On the NAS |
@@ -1392,7 +1401,7 @@ openssl verify -CAfile enterprise-root.pem -untrusted intermediate.pem nas.crt  
 > If the NAS cert is signed by a **different** CA than our node certs, the nodes won't trust it: `ca.pem` / `ipsec-trust-ca` holds **one** root only. Agree on **one enterprise CA for both sides** before starting.
 
 > [!NOTE]
-> We *could* issue the NAS cert from `company-issuer-rnd` with cert-manager, but the private key would then be created inside our cluster and handed to another team. Only do this if the storage team and security explicitly agree, and the key is transferred securely.
+> We *could* issue the NAS cert from the same `ClusterIssuer` (`${CLUSTER_ISSUER}`) with cert-manager, but the private key would then be created inside our cluster and handed to another team. Only do this if the storage team and security explicitly agree, and the key is transferred securely.
 
 ### 4.2 Verify end to end
 
@@ -1420,7 +1429,7 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 | No Kyverno pods; `oc get events -n kyverno` shows `unable to validate against any security context constraint` | Chart sets a fixed user ID that `restricted-v2` rejects | Apply the SCC setting in Step 1.6.3, then `helm upgrade` with the same flags |
 | `clusterpolicy` READY = False | Policy syntax or missing RBAC | `oc describe clusterpolicy <name>`; re-check Step 1.7 |
 | No NNCP / Certificate created | Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
-| Certificate not `Ready` (B) | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check `company-issuer-rnd` |
+| Certificate not `Ready` (B) | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check the issuer: `oc get clusterissuer "${CLUSTER_ISSUER}"` |
 | cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-unassigned" not found` (B) | Kyverno mutation did not run | Check policy `ipsec-cert-sync-mount` is Ready, then `oc delete pod <pod> -n kcs-ipsec` |
 | cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-<node>" not found` (B) | Certificate not issued yet | Fix the Certificate first (row above) |
 | Logs: `ERROR: import failed` (B) | `openssl`/NSS refused the bundle (e.g. FIPS-mode cluster rejecting an empty password) | Read the full log; on FIPS clusters, change the script to use a non-empty password for `-passout`/`-W` |

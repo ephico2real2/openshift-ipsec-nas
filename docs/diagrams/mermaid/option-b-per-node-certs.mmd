@@ -9,7 +9,7 @@ sequenceDiagram
 
     N->>K: Node created
     K->>CM: Generate Certificate ipsec-<node> (policy 1)
-    CM->>CM: Sign with company-issuer-rnd -> Secret ipsec-cert-<node>
+    CM->>CM: Sign with the enterprise CA ClusterIssuer -> Secret ipsec-cert-<node>
     K->>D: Mutate new pod: mount ONLY Secret ipsec-cert-<node> (policy 2)
     D->>N: Import cert into /var/lib/ipsec/nss as "left_server"
     D->>N: Label node ipsec.kcs.io/cert-ready=true

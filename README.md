@@ -55,12 +55,13 @@ lab/rhel/                            NAS, stand-in worker and verification scrip
 lab/container/                       the test NAS as a container image
 ```
 
-Files ending in `.tmpl` contain `${NODE_DOMAIN}`, `${NAS_FQDN}`, `${NAS_IP}` or `${OCP_VERSION}`.
+Files ending in `.tmpl` contain `${NODE_DOMAIN}`, `${NAS_FQDN}`, `${NAS_IP}`, `${CLUSTER_ISSUER}` or `${OCP_VERSION}`.
 
 ## Quick start
 
 ```bash
 export NODE_DOMAIN="ocp.example.com" NAS_FQDN="nas01.example.com" NAS_IP="10.10.10.50"
+export CLUSTER_ISSUER="company-issuer-rnd"   # placeholder: the enterprise CA ClusterIssuer your cluster already has
 ./render.sh
 ```
 
@@ -73,7 +74,7 @@ Apply the files in numeric order **only as the guide tells you** — e.g. in Opt
 
 - OpenShift 4.19 (design target), RHCOS workers, bare metal / vSphere / RHOSP / GCP
 - Kyverno ≥ 1.13 (community software, not Red Hat supported)
-- Option B: cert-manager Operator with a Ready `ClusterIssuer` (`company-issuer-rnd` in the guide)
+- Option B: cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the guide is a placeholder for its name (`CLUSTER_ISSUER`).
 - NAS supporting IKEv2 transport mode with PKI auth, chaining to the same enterprise root CA
 
 ## Security
