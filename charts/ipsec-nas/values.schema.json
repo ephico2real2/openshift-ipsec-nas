@@ -49,6 +49,7 @@
         "grafanaDashboard": { "type": "boolean" }
       }
     },
+    "uninstallCleanup": { "type": "object", "properties": { "enabled": { "type": "boolean" } } },
     "prerequisites": {
       "type": "object",
       "properties": { "skipCheck": { "type": "boolean" }, "kyvernoNamespace": { "type": "string" } }

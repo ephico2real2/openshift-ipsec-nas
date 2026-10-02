@@ -62,6 +62,12 @@ metrics:
   # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1").
   grafanaDashboard: false
 
+uninstallCleanup:
+  # -- Before the release is removed, take the tunnels off the nodes and remove each node's
+  # certificate, key, Secret and label (files/uninstall.sh). A Helm pre-delete hook and an
+  # Argo CD PreDelete hook (Argo CD 3.3 or later).
+  enabled: true
+
 prerequisites:
   # -- Skip the checks in templates/_prerequisites.tpl. For "helm template" without a cluster.
   skipCheck: false

@@ -32,6 +32,13 @@ compare() {  # $1 = label; the rest = helm --set arguments. The matching render.
     # in the chart only: what the guide creates with "oc create configmap" and "oc adm policy"
     chart.delete("ConfigMap/kcs-ipsec/ipsec-trust-ca")
     chart.delete("RoleBinding/kcs-ipsec/system:openshift:scc:privileged")
+    # in the chart only: the uninstall hook (it exists only while a release is being removed)
+    hooks = chart.select { |_, d| d["metadata"]["annotations"]&.key?("helm.sh/hook") }
+    abort "      expected the 7 uninstall hook objects, found #{hooks.size}" unless hooks.size == 7
+    hooks.each_key { |k| chart.delete(k) }
+    # in the chart only: the checksum that restarts the pods when a script changes
+    sum = chart["DaemonSet/kcs-ipsec/ipsec-cert-sync"]["spec"]["template"]["metadata"].delete("annotations")
+    abort "      the DaemonSet has no script checksum" unless sum&.key?("checksum/scripts")
     # every chart object carries an Argo CD sync wave; the manifests do not
     waves = chart.values.map { |d| d["metadata"]["annotations"]&.delete("argocd.argoproj.io/sync-wave") }
     abort "      an object has no sync wave" if waves.any?(&:nil?)

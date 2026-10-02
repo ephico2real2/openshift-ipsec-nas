@@ -15,6 +15,9 @@ spec:
     metadata:
       labels:
         app: ipsec-cert-sync
+      annotations:
+        # a changed script must restart the pods: a running script is not read again
+        checksum/scripts: {{ printf "%s%s%s" (.Files.Get "files/sync.sh") (.Files.Get "files/collect.sh") (.Files.Get "files/serve.py") | sha256sum }}
     spec:
       serviceAccountName: ipsec-cert-sync
       nodeSelector:

@@ -18,6 +18,9 @@ CHECK_EVERY=300
 # the secret name in the DaemonSet template, before Kyverno replaces it
 PLACEHOLDER_SECRET=ipsec-cert-unassigned
 RECREATE_AFTER=60
+# created in this container by the chart's uninstall hook, just before it removes the
+# certificate from the node; without it the next check would import the certificate again
+TEARDOWN_FLAG=/tmp/ipsec-nas-teardown
 
 log() { echo "$(date -u +%FT%TZ) [${NODE_NAME}] $*"; }
 
@@ -61,6 +64,11 @@ import_cert() {
 log "Starting"
 recreate_if_unassigned
 while true; do
+  if [[ -e "${TEARDOWN_FLAG}" ]]; then
+    log "Uninstall in progress: not importing"
+    sleep "${CHECK_EVERY}"
+    continue
+  fi
   if [[ -s /certs/tls.crt && -s /certs/tls.key && -s /ca/ca.pem ]]; then
     want=$(cat /certs/tls.crt /ca/ca.pem | sha256sum | cut -d' ' -f1)
     have=$(cat "${STAMP}" 2>/dev/null || echo none)
