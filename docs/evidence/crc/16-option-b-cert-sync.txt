@@ -1,0 +1,44 @@
+$ oc apply -f .../22-cert-sync-script.yaml -f .../23-cert-sync-rbac.yaml; oc adm policy add-scc-to-user privileged -z ipsec-cert-sync -n kcs-ipsec; oc apply -f .../24-kyverno-cert-sync-mount.yaml
+2026-10-02T21:51:53Z
+== H.5 the cert-sync script
+configmap/ipsec-cert-sync-script created
+== H.6 service account, permissions, SCC
+serviceaccount/ipsec-cert-sync created
+clusterrole.rbac.authorization.k8s.io/ipsec-cert-sync-label-node created
+clusterrolebinding.rbac.authorization.k8s.io/ipsec-cert-sync-label-node created
+clusterrole.rbac.authorization.k8s.io/system:openshift:scc:privileged added: "ipsec-cert-sync"
+== H.7 policy 2: mount this node's certificate
+clusterpolicy.kyverno.io/ipsec-cert-sync-mount created
+NAME                    ADMISSION   BACKGROUND   READY   AGE   MESSAGE
+ipsec-cert-sync-mount   true        false        True    0s    Ready
+$ oc apply -f .../25-metrics-scripts.yaml -f .../26-cert-sync-daemonset.yaml; oc rollout status ds/ipsec-cert-sync -n kcs-ipsec; oc logs ... -c sync
+2026-10-02T21:52:01Z
+== H.8 metrics scripts and the DaemonSet
+configmap/ipsec-metrics-scripts created
+daemonset.apps/ipsec-cert-sync created
+Waiting for daemon set "ipsec-cert-sync" rollout to finish: 0 of 1 updated pods are available...
+daemon set "ipsec-cert-sync" successfully rolled out
+2026-10-02T21:52:12Z
+ipsec-cert-sync-snl6s 3/3 Running crc
+node-cert volume -> secret: ipsec-cert-crc
+-- sync container log
+2026-10-02T21:52:02Z [crc] Starting
+2026-10-02T21:52:02Z [crc] New or renewed certificate detected - importing into NSS
+pk12util: PKCS12 IMPORT SUCCESSFUL
+2026-10-02T21:52:02Z [crc] Import OK
+node/crc labeled
+2026-10-02T21:52:02Z [crc] Node labelled ipsec.kcs.io/cert-ready=true
+$ oc debug node/crc -q -- chroot /host bash -c 'certutil -L -d /var/lib/ipsec/nss; certutil -L -n left_server ... | grep -E "Subject:|Issuer:|Not After"; ls -la /etc/pki/certs/kcs-ipsec/'
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+KCS-IPSEC-CA                                                 CT,C,C
+left_server                                                  u,u,u
+        Issuer: "CN=Enterprise Root CA,O=Enterprise POC"
+            Not After : Sat Oct 02 21:51:42 2027
+        Subject: "CN=crc.crc.testing"
+total 12
+drwxr-xr-x. 2 root root   60 Oct  2 21:52 .
+drwxr-xr-x. 3 root root   23 Oct  2 21:52 ..
+-rw-r--r--. 1 root root   65 Oct  2 21:52 .installed-sha256
+-r--r--r--. 1 root root 1874 Oct  2 21:52 ca.pem
+-r--------. 1 root root 1744 Oct  2 21:52 tls.crt

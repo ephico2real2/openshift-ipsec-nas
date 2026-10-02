@@ -17,9 +17,9 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | E | libreswan on the CRC node as a system extension, because CRC cannot install it the supported way | **Done**, measured. It runs in its own SELinux domain and survives a reboot |
 | F | Option A, the shared certificate, end to end: certificate, MachineConfig, NNCP, tunnel, NFS through the tunnel | **Done**, measured, with its costs listed |
 | G | Remove Option A from CRC | **Done**, measured |
-| H | Option B, per-node certificates: our standard | **Not run yet** |
+| H | Option B, per-node certificates, our standard: certificate, DaemonSet, NNCP, tunnel, a demo application with its Route, metrics in Observe | **Done**, measured. No reboot; 47 seconds from the first policy to the tunnel |
 
-Every output shown in this guide is real and was measured on the date above, including the steps that failed (they are in [Gotchas](#gotchas)). Where a step is not run yet, it says so.
+Every output shown in this guide is real and was measured on the date above, including the steps that failed (they are in [Gotchas](#gotchas)). Where something is not tested, it says so.
 
 ## What stands in for what
 
@@ -47,7 +47,7 @@ A laptop has no enterprise NAS, no storage team and no routed data-centre networ
 | E | A CRC node can run libreswan from OpenShift's own RPMs, under SELinux, across reboots | `pluto` in `ipsec_t` with no denial; the extension merged again after each boot (captures 4 to 7) |
 | F | The shared-certificate procedure works on a real OpenShift node through NMState, and what it costs | NNCP `Available` in 12 seconds; the tunnel on both sides; 5 MiB of NFS counted on it (captures 8 to 13); the cost table in F.8 |
 | G | Option A can be taken off a cluster completely | No tunnel, no policy, no MachineConfig, no shared certificate left on the node (capture 14) |
-| H | Our standard, Option B | Not run yet |
+| H | Our standard, Option B, works on a real OpenShift node with no manual step and no reboot; an application stores data on the NAS through it; OpenShift's monitoring sees the tunnel | The NAS logging the node's own identity `CN=crc.crc.testing`; the demo page through the Route; `ipsec_nas_tunnel_up 1` in Observe (captures 15 to 19, screenshot 20) |
 
 ---
 
@@ -684,7 +684,7 @@ oc get nodes; oc get mcp master
 
 ## Part F – Option A: the shared certificate, installed and measured
 
-Option A is Appendix A of the main guide: **one** certificate for all nodes, delivered by a MachineConfig. It is **not our standard**. It is installed here once, on a real node, so that its steps, its results and its costs are on record. [F.8](#f8--what-option-a-costs-and-why-it-is-not-our-standard) lists the costs, [Part G](#part-g--remove-option-a) removes it, and Part H installs the standard, Option B.
+Option A is Appendix A of the main guide: **one** certificate for all nodes, delivered by a MachineConfig. It is **not our standard**. It is installed here once, on a real node, so that its steps, its results and its costs are on record. [F.8](#f8--what-option-a-costs-and-why-it-is-not-our-standard) lists the costs, [Part G](#part-g--remove-option-a) removes it, and [Part H](#part-h--option-b-per-node-certificates-our-standard) installs the standard, Option B.
 
 Four things differ from the main guide on CRC, and `render.sh` takes them as variables. Left unset, each one gives the main guide's value.
 
@@ -908,7 +908,7 @@ Option A works. The table lists what it took to get there and what it would take
 | **The SAN list gives no real control** | libreswan identifies the peer by the certificate's subject, not its SAN, so a node missing from the list still got a tunnel | Lima lab, same section |
 | **Nothing renews it** | The certificate expires on a date (here 31 December 2026) and someone has to repeat all of the above before then | Step F.3 |
 
-Our goal and preferred setup is **Option B**, per-node certificates (main guide, Part 2): cert-manager issues one certificate per node from the same enterprise CA, a DaemonSet imports it without a reboot, a new node gets its certificate and tunnel by itself, and renewal is automatic. The same manifests work unchanged on every cluster.
+Our goal and preferred setup is **Option B**, per-node certificates (main guide, Part 2): cert-manager issues one certificate per node from the same enterprise CA, a DaemonSet imports it without a reboot, a new node gets its certificate and tunnel by itself, and renewal is automatic. The same manifests work unchanged on every cluster. Part H installs it on this CRC and measures the difference.
 
 ---
 
@@ -1064,15 +1064,192 @@ What stays on CRC after this part, on purpose: `routingViaHost: true`, NMState, 
 
 ---
 
-## Part H – Option B, per-node certificates: our standard (not run yet)
+## Part H – Option B, per-node certificates: our standard
 
-This is the main guide's Part 2, and the setup we want on every cluster: cert-manager issues one certificate per node from the enterprise CA, a DaemonSet imports it without a reboot, and Kyverno creates the NNCP when the certificate is in place.
+This is the main guide's Part 2, and the setup we want on every cluster: cert-manager issues **one certificate per node** from the enterprise CA, a DaemonSet imports it, and Kyverno creates the NNCP when the certificate is in place. **No step in this part reboots the node**, and nothing is done by hand on a workstation: every step is an `oc apply` of a file from this repository.
 
-It has **not** been run on CRC yet. Known before starting:
+It starts from the clean node Part G left behind. The manifests are rendered with the same CRC values as in Step F.1.
 
-- The manifests are rendered with the same CRC values as in Step F.1.
-- The metrics collector looks for the tunnel by the name `ipsec-nas` in `ipsec trafficstatus`. On a real node libreswan names it by NetworkManager's UUID ([Gotcha 7](#gotcha-7--on-a-real-node-libreswan-names-the-connection-by-uuid)), so the collector has to be fixed and tested first.
-- No step of Option B reboots the node.
+### Step H.1 – Render, check the issuer, store the root CA (main guide, Steps B.1 to B.3)
+
+```bash
+export NODE_DOMAIN=crc.testing NAS_FQDN=crc-nas.lab.internal NAS_IP=192.168.64.8 CLUSTER_ISSUER=enterprise-ca
+export MCP_ROLE=master IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 NODE_LEFT='%defaultroute'
+./render.sh
+
+oc get pods -n cert-manager
+oc get clusterissuer enterprise-ca
+oc apply -f rendered/option-b-per-node-certs/20-namespace.yaml
+
+# enterprise-root.pem is the file from Step C.3
+openssl x509 -in enterprise-root.pem -noout -subject -issuer
+oc create configmap ipsec-trust-ca -n kcs-ipsec --from-file=ca.pem=enterprise-root.pem
+```
+
+✅ **Expected** (measured, 21:51:32 UTC): the issuer is `READY=True`; subject and issuer of the root are the same; the ConfigMap is created. No issuer is created: `enterprise-ca` is the one this cluster already has.
+
+### Step H.2 – Policy 1: one Certificate per node (main guide, Step B.4)
+
+```bash
+oc apply -f rendered/option-b-per-node-certs/21-kyverno-node-certificate.yaml
+oc wait -n kcs-ipsec certificate/ipsec-crc --for=condition=Ready --timeout=90s
+oc get certificate -n kcs-ipsec -o wide
+oc get certificate -n kcs-ipsec ipsec-crc -o jsonpath='{.status.notAfter} renewal={.status.renewalTime}{"\n"}'
+```
+
+✅ **Expected** (measured): Kyverno created the `Certificate` and cert-manager issued it within **3 seconds** of the policy. It is valid for one year, and cert-manager has already set the renewal for 30 days before it expires.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/15-option-b-certificate.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/15-option-b-certificate.light.png">
+  <img alt="Terminal capture: cert-manager pods running, the ClusterIssuer enterprise-ca ready, the root CA ConfigMap created; then the policy ipsec-node-certificate applied at 21:51:42 and at 21:51:45 the Certificate ipsec-crc ready, issued by enterprise-ca into the secret ipsec-cert-crc, valid until 2 October 2027 with renewal on 2 September 2027." src="images/crc/15-option-b-certificate.light.png">
+</picture>
+
+*Capture 15. The node's own certificate, issued by the enterprise CA with no manual step. Text: [`evidence/crc/15-option-b-certificate.txt`](evidence/crc/15-option-b-certificate.txt).*
+
+### Step H.3 – The cert-sync script, its permissions, and policy 2 (main guide, Steps B.5 to B.7)
+
+```bash
+oc apply -f rendered/option-b-per-node-certs/22-cert-sync-script.yaml
+oc apply -f rendered/option-b-per-node-certs/23-cert-sync-rbac.yaml
+oc adm policy add-scc-to-user privileged -z ipsec-cert-sync -n kcs-ipsec
+
+oc apply -f rendered/option-b-per-node-certs/24-kyverno-cert-sync-mount.yaml
+oc get clusterpolicy ipsec-cert-sync-mount       # READY must be True, before the next step
+```
+
+### Step H.4 – The DaemonSet (main guide, Step B.8)
+
+```bash
+oc apply -f rendered/option-b-per-node-certs/25-metrics-scripts.yaml
+oc apply -f rendered/option-b-per-node-certs/26-cert-sync-daemonset.yaml
+oc rollout status ds/ipsec-cert-sync -n kcs-ipsec --timeout=180s
+
+p=$(oc get pods -n kcs-ipsec -l app=ipsec-cert-sync -o name | head -1)
+oc get $p -n kcs-ipsec -o jsonpath='node-cert volume -> secret: {.spec.volumes[?(@.name=="node-cert")].secret.secretName}{"\n"}'
+oc logs -n kcs-ipsec $p -c sync --tail=12
+
+oc debug node/crc -q -- chroot /host bash -c '
+certutil -L -d /var/lib/ipsec/nss
+certutil -L -n left_server -d /var/lib/ipsec/nss | grep -E "Subject:|Issuer:|Not After"
+ls -la /etc/pki/certs/kcs-ipsec/'
+```
+
+✅ **Expected** (measured): the pod is `3/3 Running` 11 seconds after the DaemonSet was applied. Kyverno pointed its `node-cert` volume at **this node's** secret, `ipsec-cert-crc`. The `sync` container imported the certificate one second after it started and labelled the node `ipsec.kcs.io/cert-ready=true`. On the node, `left_server` is now the node's **own** certificate, `CN=crc.crc.testing`, and neither the private key nor the `.p12` is left on disk.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/16-option-b-cert-sync.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/16-option-b-cert-sync.light.png">
+  <img alt="Terminal capture: the cert-sync script, service account, cluster role, privileged SCC and the mount policy applied; the DaemonSet rolled out with its pod 3/3 Running on node crc and its node-cert volume pointing at the secret ipsec-cert-crc; the sync log showing PKCS12 IMPORT SUCCESSFUL and the node labelled cert-ready; and the node's NSS database holding KCS-IPSEC-CA and left_server with subject CN=crc.crc.testing, valid until 2 October 2027." src="images/crc/16-option-b-cert-sync.light.png">
+</picture>
+
+*Capture 16. The certificate reaches the node without a MachineConfig and without a reboot. Text: [`evidence/crc/16-option-b-cert-sync.txt`](evidence/crc/16-option-b-cert-sync.txt).*
+
+### Step H.5 – Policy 3: the NNCP, and the tunnel (main guide, Step B.9)
+
+```bash
+oc apply -f rendered/option-b-per-node-certs/27-kyverno-nncp-per-node.yaml
+oc get clusterpolicy ipsec-nncp-per-node
+oc get nncp,nnce
+
+oc debug node/crc -q -- chroot /host bash -c '
+ipsec trafficstatus
+ipsec status | grep -E "Total IPsec connections|IKE SAs|IPsec SAs"
+nmcli -t -f NAME,TYPE,STATE connection show --active | grep -i vpn
+ip xfrm state | grep -E "^src|mode|encap"'
+limactl shell crc-nas sudo bash -c 'ipsec trafficstatus; journalctl -u ipsec --since "-2min" --no-pager | grep -E "established"'
+```
+
+✅ **Expected** (measured): the policy was applied at 21:52:23 and the NNCP was `Available` 13 seconds later. The NAS log shows the difference to Option A in one line: the peer is now **`CN=crc.crc.testing`**, this node's own identity, not the shared `CN=ocp-ipsec-workers`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/17-option-b-tunnel.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/17-option-b-tunnel.light.png">
+  <img alt="Terminal capture: the policy ipsec-nncp-per-node applied at 21:52:23, the NNCP ipsec-nas-crc and its enactment Available at 21:52:36; on the node one IPsec connection active, ipsec-nas an activated VPN, tunnel mode with ESP in UDP 4500; on the NAS the peer certificate CN=crc.crc.testing authenticated against Enterprise Root CA and the tunnel 192.168.64.8/32 to 192.168.127.2/32 established at 21:52:29." src="images/crc/17-option-b-tunnel.light.png">
+</picture>
+
+*Capture 17. The tunnel with the node's own certificate. Text: [`evidence/crc/17-option-b-tunnel.txt`](evidence/crc/17-option-b-tunnel.txt).*
+
+From the first policy (21:51:42) to the established tunnel (21:52:29): **47 seconds, no reboot**.
+
+### Step H.6 – An application that stores its data on the NAS
+
+The demo application from [`nas-consumer-app-guide.md`](nas-consumer-app-guide.md): a PersistentVolume that points at the NAS export, a claim, a pod that appends a line to a file every 10 seconds, and a Route that shows the file.
+
+```bash
+for f in 40-namespace 41-nfs-pv 42-nfs-pvc 43-app 44-route; do oc apply -f rendered/demo-app/$f.yaml; done
+oc rollout status deploy/nas-demo -n ipsec-nas-demo --timeout=240s
+oc get pv ipsec-nas-demo; oc get pvc,pods,route -n ipsec-nas-demo
+
+oc exec -n ipsec-nas-demo deploy/nas-demo -c writer -- sh -c 'grep " nfs4 " /proc/mounts'
+curl -sk https://nas-demo-ipsec-nas-demo.apps-crc.testing/
+limactl shell crc-nas sudo bash -c 'ls -l /export; ipsec trafficstatus; nft list table inet nas_ipsec_only | grep -E "nfs-"'
+```
+
+✅ **Expected** (measured): the claim is `Bound` and the pod `2/2 Running` 13 seconds after the manifests were applied. The pod's `/data` is `192.168.64.8:/export` over NFS 4.1. On the NAS, the application's directory appears in `/export`, the rule for NFS **through IPsec** went from 725 to 843 packets, and the cleartext drop rule did not move (22 before and after).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/18-option-b-demo-app.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/18-option-b-demo-app.light.png">
+  <img alt="Terminal capture: the demo namespace, PersistentVolume, claim, deployment, service and route created; the volume Bound and the pod 2/2 Running; the pod's /data mounted from 192.168.64.8:/export over NFS 4.1; the web page listing three lines written by the pod on node crc; on the NAS the directory ipsec-nas-demo in /export, the tunnel counting bytes for peer CN=crc.crc.testing, the NFS-over-IPsec rule at 843 packets and the cleartext drop rule unchanged at 22." src="images/crc/18-option-b-demo-app.light.png">
+</picture>
+
+*Capture 18. The demo application: its volume, its page, and the NAS counting its traffic on the IPsec rule. Text: [`evidence/crc/18-option-b-demo-app.txt`](evidence/crc/18-option-b-demo-app.txt).*
+
+The page itself, opened through the Route in a browser:
+
+<img alt="Browser screenshot of the demo application's page, titled Data on the NAS: written by pod nas-demo-649cbc69f8-vhtz7 on node crc to the NFS volume, with the lines the pod has written so far, one every ten seconds." src="images/crc/20-demo-app-page.png" width="700">
+
+*Screenshot 20. `https://nas-demo-ipsec-nas-demo.apps-crc.testing/` at 21:54:44 UTC. This one is a real browser screenshot; the page reads the file from the NAS.*
+
+### Step H.7 – Metrics in Observe, and the alert rules (main guide, Step B.12)
+
+```bash
+oc apply -f rendered/option-b-per-node-certs/28-metrics-servicemonitor.yaml
+oc apply -f rendered/option-b-per-node-certs/29-prometheus-rule.yaml
+oc get servicemonitor,prometheusrule -n kcs-ipsec
+```
+
+Then in the console: **Observe → Metrics**, and run `ipsec_nas_tunnel_up`. The same query from the command line:
+
+```bash
+curl -sk -H "Authorization: Bearer $(oc whoami -t)" --data-urlencode 'query=ipsec_nas_tunnel_up' \
+  https://thanos-querier-openshift-monitoring.apps-crc.testing/api/v1/query
+```
+
+✅ **Expected** (measured, less than a minute after the ServiceMonitor was applied): OpenShift's own monitoring has the metrics, with the node's name on each. The tunnel is up, the certificate has 365 days left, the scrape target is up, and none of the six alerts is firing.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/19-option-b-observe.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/19-option-b-observe.light.png">
+  <img alt="Terminal capture: the exporter on node crc serving ipsec_nas_tunnel_up 1, the peer identity of the NAS, byte counters, the certificate expiry and libreswan version 5.3; the ServiceMonitor and PrometheusRule created; then queries against the Thanos querier returning ipsec_nas_tunnel_up 1 for node crc, the certificate with 364.998 days left, the scrape target up, zero firing alerts, and the six alert names of the rule group." src="images/crc/19-option-b-observe.light.png">
+</picture>
+
+*Capture 19. The tunnel's metrics on the node and in OpenShift's monitoring. Text: [`evidence/crc/19-option-b-observe.txt`](evidence/crc/19-option-b-observe.txt).*
+
+The collector reports the tunnel as up because it now looks the connection up under NetworkManager's UUID ([Gotcha 7](#gotcha-7--on-a-real-node-libreswan-names-the-connection-by-uuid)); before that fix it would have said `0` on every real node.
+
+### H.8 – Option A and Option B side by side, as measured on this CRC
+
+| | Option A (shared certificate) | Option B (per-node certificates) |
+|---|---|---|
+| Work by hand before the cluster sees anything | Six steps on a workstation: SAN list, key, CSR, signing, bundle, Butane | None. Every step is `oc apply` of a file from the repository |
+| Reboots of the node to install it | 1 (the MachineConfig) | **0** |
+| From the first command to an established tunnel | Not comparable as a number: it included a reboot, a CRC restart and the two Kyverno gotchas. The reboot and CRC restart alone took 9 minutes when Option A was removed (Step G.3) | **47 seconds** |
+| Where the private key is made | On an engineer's workstation, then copied into a MachineConfig | In the cluster, by cert-manager. No person handles it |
+| Who the NAS sees | `CN=ocp-ipsec-workers`, the same for every node | `CN=crc.crc.testing`, this node only |
+| Validity, and who renews it | 90 days as requested; nobody: redo everything by hand | One year; cert-manager, renewal already scheduled for 2 September 2027 |
+| A new node | New certificate with a longer SAN list, new MachineConfig, every node reboots | By design, the policies give it a certificate and a tunnel by themselves. **Not tested here**: CRC has one node |
+| Taking it away | Policy, `absent` NNCP, MachineConfig (reboot), **and** the key that stays in the NSS database (Step G.4) | Not run here; the main guide's section 3.4 has the steps |
+
+### Not tested on CRC
+
+- **Scale-up and scale-down** (main guide, Steps B.10 and B.11): CRC has one node.
+- **Renewal**: the certificate was just issued. The cert-sync script's re-import path was not exercised.
+- **The alerts firing**: the rules are loaded and none fires; no tunnel was broken on purpose to see `IpsecNasTunnelDown`.
+- **The Grafana dashboard**: this CRC has no `ocp-platform-grafana` or `ocp-grafana` namespace. The dashboard was tested in the Lima lab.
+- **A restart of CRC with Option B in place**: whether the tunnel comes back by itself after `crc stop` and `crc start`.
+- **Dynamic provisioning** with `csi-driver-nfs` against this NAS.
 
 ---
 
@@ -1088,7 +1265,7 @@ Things that went wrong while this guide was built, in the order they were met. T
 | 4 | Kyverno ignores Nodes by default | Gap in this repository, fixed | Step D.3 |
 | 5 | `ipsec-sysext.sh activate` ended with an error although it had worked | Mistake in the script, fixed | – |
 | 6 | The first wait for the NMState Operator said "done" too early | Mistake in a one-off command | Step D.2 |
-| 7 | On a real node libreswan names the connection by UUID | Difference from the lab | Step F.6 |
+| 7 | On a real node libreswan names the connection by UUID | Difference from the lab; the collector is fixed | Steps F.6 and H.7 |
 | 8 | The Butane download in the main guide is a Linux binary | Gap in the main guide, fixed | Step F.4 |
 | 9 | A command kept in a shell variable does nothing in zsh | Mistake in one-off commands | – |
 
@@ -1239,7 +1416,7 @@ oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[
 
 ### Gotcha 7 – On a real node libreswan names the connection by UUID
 
-`ipsec trafficstatus` on the CRC node shows the connection as `"c5ccbae6-1377-43d4-8a6b-ae155d137023"`, NetworkManager's UUID, not as `ipsec-nas` (capture 12). In the Lima lab the stand-ins named it `ipsec-nas`, because there the connection is written straight into libreswan's configuration. Anything that looks for the connection by name in `ipsec trafficstatus` has to allow for this. The metrics collector of the standard installation does exactly that, so it must be checked in Part H.
+`ipsec trafficstatus` on the CRC node shows the connection as `"c5ccbae6-1377-43d4-8a6b-ae155d137023"`, NetworkManager's UUID, not as `ipsec-nas` (capture 12). In the Lima lab the stand-ins named it `ipsec-nas`, because there the connection is written straight into libreswan's configuration. Anything that looks for the connection by name in `ipsec trafficstatus` has to allow for this. The metrics collector of the standard installation did exactly that, and would have reported the tunnel as down on every real node. It now asks NetworkManager for the connection's UUID first (`manifests/option-b-per-node-certs/25-metrics-scripts.yaml`, tested in `tests/test-metrics-collector.sh` with the line recorded here), and Step H.7 shows it reporting `1`.
 
 ### Gotcha 8 – The Butane download in the main guide is a Linux binary
 
@@ -1257,12 +1434,14 @@ The main guide's Step A.1 downloads `butane` from Red Hat's mirror. That file is
 
 ## State of CRC, and how to undo everything
 
-State now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and the `kcs-ipsec` namespace with the NAS `CertificateRequest`. No policy, no NNCP, no tunnel, no certificate in the node's NSS database.
+State now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and **Option B installed and running**: the three policies, the node's certificate, the cert-sync DaemonSet, the NNCP with its tunnel, the ServiceMonitor and alert rules, and the demo application in `ipsec-nas-demo`.
 
 To undo the rest, in this order:
 
 | What | How | Run for this guide? |
 |---|---|---|
+| The demo application | `oc delete namespace ipsec-nas-demo; oc delete pv ipsec-nas-demo` | No |
+| Option B | The teardown in the main guide's section 3.4 | No |
 | libreswan on the node | `lab/crc/ipsec-sysext.sh remove` | **No**, not run yet |
 | Kyverno's Node filter | `helm rollback kyverno 1 -n kyverno` | No |
 | The Kyverno ClusterRoles | `oc delete -f manifests/common/03-kyverno-rbac.yaml` | No |

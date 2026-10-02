@@ -46,6 +46,21 @@ check "another connection's line is ignored" \
 
 check "no tunnels at all" "" "$(tunnel_fields <<<"")"
 
+# On an OpenShift node NetworkManager names the libreswan connection by its UUID (recorded on CRC 4.22.7)
+crc_line="#2: \"c5ccbae6-1377-43d4-8a6b-ae155d137023\", type=ESP, add_time=1790976853, inBytes=34492, outBytes=5477144, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'"
+check "a node's line is NOT found by the plain name" "" "$(tunnel_fields <<<"${crc_line}")"
+check "a node's line is found by the UUID (libreswan 5.3, recorded on CRC)" \
+  "1790976853 34492 5477144 O=KCS OpenShift lab, CN=crc-nas.lab.internal" \
+  "$(tunnel_fields "c5ccbae6-1377-43d4-8a6b-ae155d137023" <<<"${crc_line}")"
+
+# libreswan_conn_name asks the host's NetworkManager; stand in for "chroot /host nmcli ..."
+chroot() { if [[ "$*" == *"connection.uuid connection show ipsec-nas"* ]]; then echo "${FAKE_UUID}"; fi; }
+FAKE_UUID="c5ccbae6-1377-43d4-8a6b-ae155d137023"
+check "the connection name is NetworkManager's UUID when it knows the connection" "${FAKE_UUID}" "$(libreswan_conn_name)"
+FAKE_UUID=""
+check "the connection name falls back to ipsec-nas when NetworkManager does not know it" "ipsec-nas" "$(libreswan_conn_name)"
+unset -f chroot
+
 check "label escaping of quote and backslash" 'a\\b\"c' "$(label_escape 'a\b"c')"
 
 [[ ${fail} -eq 0 ]] && echo "all parser tests passed" || exit 1

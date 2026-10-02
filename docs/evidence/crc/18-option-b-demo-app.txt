@@ -1,0 +1,47 @@
+$ for f in 40-namespace 41-nfs-pv 42-nfs-pvc 43-app 44-route; do oc apply -f rendered/demo-app/$f.yaml; done; oc rollout status deploy/nas-demo -n ipsec-nas-demo; oc get pv,pvc,pods,route ...
+== NAS counters before
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 725 bytes 5290060 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 22 bytes 1376 drop comment "nfs-cleartext-dropped"
+== the demo application
+namespace/ipsec-nas-demo created
+persistentvolume/ipsec-nas-demo created
+persistentvolumeclaim/nas-data created
+deployment.apps/nas-demo created
+service/nas-demo created
+route.route.openshift.io/nas-demo created
+Waiting for deployment "nas-demo" rollout to finish: 0 of 1 updated replicas are available...
+deployment "nas-demo" successfully rolled out
+2026-10-02T21:53:28Z
+NAME             CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM                     STORAGECLASS       VOLUMEATTRIBUTESCLASS   REASON   AGE
+ipsec-nas-demo   1Gi        RWX            Retain           Bound    ipsec-nas-demo/nas-data   ipsec-nas-static   <unset>                          13s
+NAME                             STATUS   VOLUME           CAPACITY   ACCESS MODES   STORAGECLASS       VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/nas-data   Bound    ipsec-nas-demo   1Gi        RWX            ipsec-nas-static   <unset>                 13s
+NAME                            READY   STATUS    RESTARTS   AGE
+pod/nas-demo-649cbc69f8-vhtz7   2/2     Running   0          12s
+NAME                                HOST/PORT                                  PATH   SERVICES   PORT   TERMINATION     WILDCARD
+route.route.openshift.io/nas-demo   nas-demo-ipsec-nas-demo.apps-crc.testing          nas-demo   http   edge/Redirect   None
+$ oc exec -n ipsec-nas-demo deploy/nas-demo -c writer -- sh -c 'grep " nfs4 " /proc/mounts'; curl -sk https://nas-demo-ipsec-nas-demo.apps-crc.testing/; (NAS: ls -l /export; ipsec trafficstatus; nft ... | grep nfs-)
+2026-10-02T21:53:46Z
+== the mount inside the pod, and on the node
+192.168.64.8:/export /data nfs4 rw,noatime,vers=4.1,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientad
+total 6144
+drwxr-xr-x. 2 1001160000 nobody      40 Oct  2 21:53 ipsec-nas-demo
+-rw-r--r--. 1 nobody     nobody 1048576 Oct  2 19:42 nat-capture.bin
+-rw-r--r--. 1 nobody     nobody 5242880 Oct  2 19:43 verify-lima-nat-worker.bin
+== the web page through the Route
+ NAS demo  Data on the NAS 
+ Written by pod nas-demo-649cbc69f8-vhtz7 on node crc to the NFS volume. Page built 2026-10-02T21:53:45Z. 
+ 3 lines in  data.log . The newest 20:  
+2026-10-02T21:53:25Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=1
+2026-10-02T21:53:35Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=2
+2026-10-02T21:53:45Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=3
+== on the NAS: the files the app wrote
+total 6144
+drwxr-xr-x. 2 1001160000 nobody      40 Oct  2 21:53 ipsec-nas-demo
+-rw-r--r--. 1 nobody     nobody 1048576 Oct  2 19:42 nat-capture.bin
+-rw-r--r--. 1 nobody     nobody 5242880 Oct  2 19:43 verify-lima-nat-worker.bin
+#4: "workers"[2] 192.168.64.1, type=ESP, add_time=1790977948, inBytes=29356, outBytes=22432, maxBytes=2^63B, id='CN=crc.crc.testing'
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 843 bytes 5319416 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 22 bytes 1376 drop comment "nfs-cleartext-dropped"
+== on the node: tunnel counters
+#2: "bc9a0a40-787d-4bfb-a351-fa8a294698ef", type=ESP, add_time=1790977949, inBytes=22432, outBytes=29356, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'

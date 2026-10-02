@@ -1,0 +1,29 @@
+$ ./render.sh; oc get pods -n cert-manager; oc get clusterissuer enterprise-ca; oc apply -f .../20-namespace.yaml; oc create configmap ipsec-trust-ca -n kcs-ipsec --from-file=ca.pem=enterprise-root.pem
+2026-10-02T21:51:32Z
+Rendered into ./rendered (NODE_DOMAIN=crc.testing NAS=crc-nas.lab.internal/192.168.64.8 Issuer=enterprise-ca Butane=4.22.0)
+== H.1 cert-manager and the issuer
+cert-manager-59c8bd6954-qcht4 1/1 Running
+cert-manager-cainjector-5bb46f4bbd-pkf27 1/1 Running
+cert-manager-webhook-646df4d648-gk6bs 1/1 Running
+NAME            READY   AGE
+enterprise-ca   True    8d
+== H.2 namespace
+namespace/kcs-ipsec unchanged
+== H.3 the enterprise root CA for the nodes
+subject=O=Enterprise POC, CN=Enterprise Root CA
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+configmap/ipsec-trust-ca created
+NAME             DATA   AGE
+ipsec-trust-ca   1      0s
+$ oc apply -f rendered/option-b-per-node-certs/21-kyverno-node-certificate.yaml; oc wait -n kcs-ipsec certificate/ipsec-crc --for=condition=Ready; oc get certificate -n kcs-ipsec -o wide
+2026-10-02T21:51:42Z
+== H.4 policy 1: one Certificate per node
+clusterpolicy.kyverno.io/ipsec-node-certificate created
+certificate.cert-manager.io/ipsec-crc condition met
+2026-10-02T21:51:45Z
+NAME                     ADMISSION   BACKGROUND   READY   AGE   MESSAGE
+ipsec-node-certificate   true        true         True    3s    Ready
+NAME        READY   SECRET           ISSUER          STATUS                                          AGE
+ipsec-crc   True    ipsec-cert-crc   enterprise-ca   Certificate is up to date and has not expired   3s
+type=kubernetes.io/tls keys={"ca.crt":"<hidden>","tls.crt":"<hidden>","tls.key":"<hidden>"}
+2027-10-02T21:51:42Z renewal=2027-09-02T21:51:42Z

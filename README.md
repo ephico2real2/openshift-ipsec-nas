@@ -11,7 +11,7 @@ automated per node with **Kyverno**.
 | [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
 | [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
 | [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
-| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, step by step with terminal captures: the NAS certificate from the cluster's enterprise CA, libreswan on the CRC node as a system extension, the shared certificate (Option A) installed, measured, costed and removed, and a Gotchas section |
+| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, step by step with terminal captures: the NAS certificate from the cluster's enterprise CA, libreswan on the CRC node as a system extension, the shared certificate (Option A) installed, measured, costed and removed, the standard per-node setup (Option B) installed and measured with a demo application and metrics in Observe, and a Gotchas section |
 | [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
 
 ## How it works

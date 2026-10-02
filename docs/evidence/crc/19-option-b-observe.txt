@@ -1,0 +1,45 @@
+$ oc exec -n kcs-ipsec <pod> -c metrics -- python3 -c '...urlopen("http://127.0.0.1:9754/metrics")...' | grep -v '^#'; oc apply -f .../28-metrics-servicemonitor.yaml -f .../29-prometheus-rule.yaml
+2026-10-02T21:53:06Z
+== what the exporter serves on the node
+ipsec_nas_collect_success{node="crc"} 1
+ipsec_nas_collect_timestamp_seconds{node="crc"} 1790977982
+ipsec_nas_tunnel_up{node="crc",connection="ipsec-nas"} 1
+ipsec_nas_tunnel_info{node="crc",connection="ipsec-nas",peer_id="O=KCS OpenShift lab, CN=crc-nas.lab.internal"} 1
+ipsec_nas_tunnel_established_timestamp_seconds{node="crc",connection="ipsec-nas"} 1790977949
+ipsec_nas_tunnel_in_bytes_total{node="crc",connection="ipsec-nas"} 0
+ipsec_nas_tunnel_out_bytes_total{node="crc",connection="ipsec-nas"} 0
+ipsec_nas_certificate_not_after_timestamp_seconds{node="crc",nickname="left_server"} 1822513902
+ipsec_nas_certificate_import_timestamp_seconds{node="crc"} 1790977922
+ipsec_nas_libreswan_info{node="crc",version="5.3"} 1
+== H.10 ServiceMonitor and alert rules
+service/ipsec-nas-metrics created
+servicemonitor.monitoring.coreos.com/ipsec-nas created
+prometheusrule.monitoring.coreos.com/ipsec-nas created
+NAME                                             AGE
+servicemonitor.monitoring.coreos.com/ipsec-nas   1s
+NAME                                             AGE
+prometheusrule.monitoring.coreos.com/ipsec-nas   1s
+prometheus-operator-5f7546b64-2qkbt 2/2 Running
+prometheus-user-workload-0 6/6 Running
+thanos-ruler-user-workload-0 4/4 Running
+$ curl -sk -H "Authorization: Bearer $(oc whoami -t)" --data-urlencode 'query=...' https://thanos-querier-openshift-monitoring.apps-crc.testing/api/v1/query      (one query per block)
+2026-10-02T21:53:57Z
+== Observe (Thanos querier): what Prometheus has scraped
+ipsec_nas_tunnel_up {'connection': 'ipsec-nas', 'namespace': 'kcs-ipsec', 'node': 'crc'} 1
+results: 1
+ipsec_nas_tunnel_out_bytes_total {'connection': 'ipsec-nas', 'namespace': 'kcs-ipsec', 'node': 'crc'} 12744
+results: 1
+ipsec_nas_libreswan_info {'namespace': 'kcs-ipsec', 'node': 'crc', 'version': '5.3'} 1
+results: 1
+ {'namespace': 'kcs-ipsec', 'node': 'crc'} 364.99843160879556
+results: 1
+up {'namespace': 'kcs-ipsec'} 1
+results: 1
+== alerts from the rule group
+results: 0
+IpsecNasTunnelDown
+IpsecNasLibreswanNotAnswering
+IpsecNasCertificateExpiringSoon
+IpsecNasCertificateExpired
+IpsecNasMetricsStale
+IpsecNasExporterMissing

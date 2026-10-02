@@ -21,12 +21,22 @@ data:
     OUT_FILE=/metrics/ipsec_nas.prom
     COLLECT_EVERY=30
 
-    # Reads "ipsec trafficstatus" on stdin and prints, for the newest tunnel of our connection:
+    # The name libreswan knows our connection by. NetworkManager hands a connection to libreswan
+    # under its UUID, so on a node "ipsec trafficstatus" shows the UUID and not "ipsec-nas".
+    # Falls back to the plain name, which is what a hand-written libreswan connection uses.
+    libreswan_conn_name() {
+      local uuid
+      uuid=$(chroot /host nmcli -g connection.uuid connection show "${CONN_NAME}" 2>/dev/null | head -1)
+      echo "${uuid:-${CONN_NAME}}"
+    }
+
+    # Reads "ipsec trafficstatus" on stdin and prints, for the newest tunnel of the connection
+    # named $1 (default: CONN_NAME):
     #   <add_time> <inBytes> <outBytes> <peer id>
     # libreswan 4 starts each line with "006 ", libreswan 5 does not. Both are matched, because
     # the fields are found by name and not by position.
     tunnel_fields() {
-      awk -v conn="\"${CONN_NAME}\"" -v q="'" '
+      awk -v conn="\"${1:-${CONN_NAME}}\"" -v q="'" '
         index($0, conn) {
           t = ""; i = ""; o = ""; id = ""
           if (match($0, /add_time=[0-9]+/)) t = substr($0, RSTART + 9, RLENGTH - 9)
@@ -49,7 +59,7 @@ data:
       status=$(chroot /host ipsec trafficstatus 2>/dev/null)
       rc=$?
       if [[ ${rc} -eq 0 ]]; then
-        fields=$(tunnel_fields <<<"${status}")
+        fields=$(tunnel_fields "$(libreswan_conn_name)" <<<"${status}")
         if [[ -n "${fields}" ]]; then
           up=1
           read -r add_time in_bytes out_bytes peer <<<"${fields}"
