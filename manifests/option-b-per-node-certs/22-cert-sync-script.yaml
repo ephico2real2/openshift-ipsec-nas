@@ -68,6 +68,28 @@ data:
       "
     }
 
+    tunnel_active_in_nm() {
+      chroot /host nmcli -t -f NAME connection show --active 2>/dev/null | grep -qx "${CONN_NAME}"
+    }
+
+    # "nmcli connection up" does nothing on a connection that is already active, and libreswan only
+    # uses a new certificate in a new IKE session: take the connection down, then up again.
+    restart_tunnel() {
+      chroot /host nmcli connection down "${CONN_NAME}" >/dev/null 2>&1
+      chroot /host nmcli connection up "${CONN_NAME}" >/dev/null || log "WARNING: restart of ${CONN_NAME} failed"
+    }
+
+    # NetworkManager can report the connection as activated while libreswan has no tunnel for it
+    # (seen on CRC after a certificate changed). libreswan knows the connection by its UUID.
+    heal_tunnel() {
+      local uuid
+      tunnel_active_in_nm || return 0
+      uuid=$(chroot /host nmcli -g connection.uuid connection show "${CONN_NAME}" 2>/dev/null | head -1)
+      chroot /host ipsec trafficstatus 2>/dev/null | grep -q "\"${uuid:-${CONN_NAME}}\"" && return 0
+      log "NetworkManager has ${CONN_NAME} active, but libreswan has no tunnel for it: restarting it"
+      restart_tunnel
+    }
+
     log "Starting"
     recreate_if_unassigned
     while true; do
@@ -88,9 +110,9 @@ data:
             echo "${want}" > "${STAMP}"
             log "Import OK"
             # On renewal, restart the tunnel so libreswan loads the new cert
-            if chroot /host nmcli -t -f NAME connection show --active | grep -qx "${CONN_NAME}"; then
+            if tunnel_active_in_nm; then
               log "Restarting ${CONN_NAME} to load the new certificate"
-              chroot /host nmcli connection up "${CONN_NAME}" || log "WARNING: restart of ${CONN_NAME} failed"
+              restart_tunnel
             fi
           else
             log "ERROR: import failed - retrying in 60s"
@@ -98,6 +120,8 @@ data:
             continue
           fi
         fi
+
+        heal_tunnel
 
         current=$(oc get node "${NODE_NAME}" -o jsonpath="{.metadata.labels.ipsec\.kcs\.io/cert-ready}" 2>/dev/null)
         if [[ "${current}" != "true" ]]; then
