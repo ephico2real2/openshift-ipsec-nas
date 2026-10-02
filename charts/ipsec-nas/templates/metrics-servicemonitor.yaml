@@ -1,0 +1,40 @@
+{{- if .Values.metrics.serviceMonitor }}
+# Makes the per-node metrics visible in OpenShift's Observe pages.
+# Needs user workload monitoring (enableUserWorkload: true in cluster-monitoring-config).
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipsec-nas-metrics
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-cert-sync
+spec:
+  clusterIP: None            # one endpoint per node; nothing load-balances metrics
+  selector:
+    app: ipsec-cert-sync
+  ports:
+  - name: metrics
+    port: 9754
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ipsec-nas
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-cert-sync
+spec:
+  selector:
+    matchLabels:
+      app: ipsec-cert-sync
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+{{- end }}

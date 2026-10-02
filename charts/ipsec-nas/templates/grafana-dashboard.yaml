@@ -1,0 +1,16 @@
+{{- if .Values.metrics.grafanaDashboard }}
+# The label grafana_dashboard: "1" is the convention Grafana dashboard sidecars watch for.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipsec-nas-grafana-dashboard
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-cert-sync
+    grafana_dashboard: "1"
+data:
+  ipsec-nas.json: |
+{{ .Files.Get "files/ipsec-nas.json" | trimSuffix "\n" | indent 4 }}
+{{- end }}

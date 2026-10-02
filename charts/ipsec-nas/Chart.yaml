@@ -1,0 +1,16 @@
+apiVersion: v2
+name: ipsec-nas
+description: Per-node IPsec tunnels from OpenShift nodes to an external NAS (per-node certificates from the enterprise CA)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
+keywords:
+  - openshift
+  - ipsec
+  - libreswan
+  - nfs
+annotations:
+  # These must already be on the cluster. They are prerequisites, not chart dependencies:
+  # this chart never installs or upgrades them. templates/_prerequisites.tpl checks for them.
+  ipsec-nas/prerequisites: "cert-manager with a ClusterIssuer for the enterprise CA; Kyverno 1.13+ that does not filter out Nodes; NMState Operator with an NMState instance; libreswan on the nodes (ipsecConfig.mode External)"

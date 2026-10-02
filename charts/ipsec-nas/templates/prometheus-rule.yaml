@@ -1,0 +1,14 @@
+{{- if .Values.metrics.prometheusRule }}
+# Alerts on the per-node IPsec tunnel to the NAS. They appear under Observe > Alerting.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ipsec-nas
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-cert-sync
+spec:
+{{ .Files.Get "files/prometheus-rule-groups.yaml" | trimSuffix "\n" | indent 2 }}
+{{- end }}

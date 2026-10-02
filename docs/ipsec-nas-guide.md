@@ -708,8 +708,28 @@ data:
     STAGE=/host${HOST_STAGE}                # same path as this container sees it
     STAMP=${STAGE}/.installed-sha256
     CHECK_EVERY=300
+    # the secret name in the DaemonSet template, before Kyverno replaces it
+    PLACEHOLDER_SECRET=ipsec-cert-unassigned
+    RECREATE_AFTER=60
 
     log() { echo "$(date -u +%FT%TZ) [${NODE_NAME}] $*"; }
+
+    # Kyverno policy ipsec-cert-sync-mount swaps this node's own secret into the pod when the pod
+    # is created. A pod created while that policy was missing, or while Kyverno was down, keeps the
+    # placeholder for life and can never get a certificate. Such a pod deletes itself, and the
+    # DaemonSet creates a new one for Kyverno to see. The wait keeps a Kyverno outage from
+    # turning into a fast delete loop.
+    recreate_if_unassigned() {
+      local mounted
+      mounted=$(oc get pod "${POD_NAME}" -n "${POD_NAMESPACE}" \
+        -o jsonpath='{.spec.volumes[?(@.name=="node-cert")].secret.secretName}' 2>/dev/null)
+      [[ "${mounted}" == "${PLACEHOLDER_SECRET}" ]] || return 0
+      log "This pod mounts the placeholder secret: policy ipsec-cert-sync-mount did not run when it was created."
+      log "Deleting this pod in ${RECREATE_AFTER}s so that it is created again."
+      sleep "${RECREATE_AFTER}"
+      oc delete pod "${POD_NAME}" -n "${POD_NAMESPACE}" --wait=false
+      sleep "${CHECK_EVERY}"
+    }
 
     import_cert() {
       mkdir -p "${STAGE}" &&
@@ -732,6 +752,7 @@ data:
     }
 
     log "Starting"
+    recreate_if_unassigned
     while true; do
       if [[ -s /certs/tls.crt && -s /certs/tls.key && -s /ca/ca.pem ]]; then
         want=$(cat /certs/tls.crt /ca/ca.pem | sha256sum | cut -d' ' -f1)
@@ -763,6 +784,9 @@ data:
         fi
       else
         log "Waiting for certificate files in /certs (is Certificate ipsec-${NODE_NAME} Ready?)"
+        # the secret appears in the volume shortly after the Certificate is issued
+        sleep 15
+        continue
       fi
       sleep "${CHECK_EVERY}"
     done
@@ -773,7 +797,7 @@ oc apply -f 22-cert-sync-script.yaml
 
 ### Step B.6 – ServiceAccount, permissions and SCC for the DaemonSet
 
-The pod only needs to **read and label its node**. It gets **no** permission to read Secrets. Its own certificate is mounted by the kubelet (Step B.7).
+The pod only needs to **read and label its node**, and to delete a pod of its own DaemonSet (Step B.7 explains when). It gets **no** permission to read Secrets. Its own certificate is mounted by the kubelet (Step B.7).
 
 ```bash
 cat <<'EOF' > 23-cert-sync-rbac.yaml
@@ -804,6 +828,31 @@ subjects:
 - kind: ServiceAccount
   name: ipsec-cert-sync
   namespace: kcs-ipsec
+---
+# A pod that was created without its node's secret deletes itself (sync.sh, recreate_if_unassigned)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ipsec-cert-sync-recreate-pod
+  namespace: kcs-ipsec
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ipsec-cert-sync-recreate-pod
+  namespace: kcs-ipsec
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ipsec-cert-sync-recreate-pod
+subjects:
+- kind: ServiceAccount
+  name: ipsec-cert-sync
+  namespace: kcs-ipsec
 EOF
 
 oc apply -f 23-cert-sync-rbac.yaml
@@ -817,7 +866,7 @@ A DaemonSet has **one** pod template, but each node needs a **different** Secret
 > **How does Kyverno know the node?** The DaemonSet controller pins every pod to its node with `nodeAffinity` → `matchFields: metadata.name`. The policy reads the node name from there.
 
 > [!IMPORTANT]
-> Apply this policy **before** the DaemonSet (Step B.8). Otherwise pods start without the mutation and sit in `ContainerCreating` (that is the safe failure: delete the pods and they are recreated correctly).
+> Apply this policy **before** the DaemonSet (Step B.8). A pod that is created while this policy is missing, or while Kyverno is down, keeps the placeholder secret and can never get a certificate. The pod notices this itself: it logs `This pod mounts the placeholder secret`, waits 60 seconds, and deletes itself so that the DaemonSet creates it again. Measured on CRC: the replacement pod mounted the node's own secret, and the tunnel stayed up throughout.
 
 ```bash
 cat <<'EOF' > 24-kyverno-cert-sync-mount.yaml
@@ -918,6 +967,14 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         securityContext:
           privileged: true
           runAsUser: 0
@@ -1015,7 +1072,8 @@ spec:
       - name: node-cert
         secret:
           secretName: ipsec-cert-unassigned   # replaced per node by Kyverno policy ipsec-cert-sync-mount
-          optional: false
+          # optional, so that a pod that kept the placeholder can start, notice it and delete itself
+          optional: true
       - name: trust-ca
         configMap:
           name: ipsec-trust-ca
@@ -1373,8 +1431,8 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 | No NNCP / Certificate created, and Kyverno logs `nodes is forbidden` | Kyverno may not read Nodes | Apply both ClusterRoles of Step 1.7, then delete and re-apply the policy |
 | No NNCP / Certificate created | Another Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
 | Certificate not `Ready` | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check the issuer: `oc get clusterissuer "${CLUSTER_ISSUER}"` |
-| cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-unassigned" not found` | Kyverno mutation did not run | Check policy `ipsec-cert-sync-mount` is Ready, then `oc delete pod <pod> -n kcs-ipsec` |
-| cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-<node>" not found` | Certificate not issued yet | Fix the Certificate first (row above) |
+| cert-sync pods are replaced every minute, and their log says `This pod mounts the placeholder secret` | The Kyverno mutation does not run | The pods retry by themselves. Fix the cause: policy `ipsec-cert-sync-mount` must be `READY=True`, and Kyverno's admission controller must be running |
+| cert-sync log repeats `Waiting for certificate files in /certs` | Certificate not issued yet | Fix the Certificate first (row above) |
 | Logs: `ERROR: import failed` | `openssl`/NSS refused the bundle (e.g. FIPS-mode cluster rejecting an empty password) | Read the full log; on FIPS clusters, change the script to use a non-empty password for `-passout`/`-W` |
 | Node never gets `cert-ready` label | RBAC/SCC | `oc logs` of that node's pod; re-run Step B.6 |
 | NNCE `Failing` | Cert nickname missing, DNS for `left`/`right` not resolving | `oc get nnce <node>.ipsec-nas-<node> -o yaml` and read `status.conditions`; check `certutil -L` on the node |

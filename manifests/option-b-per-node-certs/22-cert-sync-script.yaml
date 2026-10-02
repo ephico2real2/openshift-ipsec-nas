@@ -22,8 +22,28 @@ data:
     STAGE=/host${HOST_STAGE}                # same path as this container sees it
     STAMP=${STAGE}/.installed-sha256
     CHECK_EVERY=300
+    # the secret name in the DaemonSet template, before Kyverno replaces it
+    PLACEHOLDER_SECRET=ipsec-cert-unassigned
+    RECREATE_AFTER=60
 
     log() { echo "$(date -u +%FT%TZ) [${NODE_NAME}] $*"; }
+
+    # Kyverno policy ipsec-cert-sync-mount swaps this node's own secret into the pod when the pod
+    # is created. A pod created while that policy was missing, or while Kyverno was down, keeps the
+    # placeholder for life and can never get a certificate. Such a pod deletes itself, and the
+    # DaemonSet creates a new one for Kyverno to see. The wait keeps a Kyverno outage from
+    # turning into a fast delete loop.
+    recreate_if_unassigned() {
+      local mounted
+      mounted=$(oc get pod "${POD_NAME}" -n "${POD_NAMESPACE}" \
+        -o jsonpath='{.spec.volumes[?(@.name=="node-cert")].secret.secretName}' 2>/dev/null)
+      [[ "${mounted}" == "${PLACEHOLDER_SECRET}" ]] || return 0
+      log "This pod mounts the placeholder secret: policy ipsec-cert-sync-mount did not run when it was created."
+      log "Deleting this pod in ${RECREATE_AFTER}s so that it is created again."
+      sleep "${RECREATE_AFTER}"
+      oc delete pod "${POD_NAME}" -n "${POD_NAMESPACE}" --wait=false
+      sleep "${CHECK_EVERY}"
+    }
 
     import_cert() {
       mkdir -p "${STAGE}" &&
@@ -46,6 +66,7 @@ data:
     }
 
     log "Starting"
+    recreate_if_unassigned
     while true; do
       if [[ -s /certs/tls.crt && -s /certs/tls.key && -s /ca/ca.pem ]]; then
         want=$(cat /certs/tls.crt /ca/ca.pem | sha256sum | cut -d' ' -f1)
@@ -77,6 +98,9 @@ data:
         fi
       else
         log "Waiting for certificate files in /certs (is Certificate ipsec-${NODE_NAME} Ready?)"
+        # the secret appears in the volume shortly after the Certificate is issued
+        sleep 15
+        continue
       fi
       sleep "${CHECK_EVERY}"
     done

@@ -1,0 +1,69 @@
+# ipsec-nas: per-node IPsec tunnels from OpenShift nodes to an external NAS.
+# docs/ipsec-nas-guide.md, Part 2, explains every object this chart creates.
+
+# -- DNS domain of the nodes. A node named worker-0 gets a certificate for worker-0.<nodeDomain>.
+nodeDomain: ""
+
+nas:
+  # -- DNS name of the NAS. It must be in the NAS certificate.
+  fqdn: ""
+  # -- IP address of the NAS that carries NFS. Only traffic to this address is encrypted.
+  ip: ""
+
+# -- Name of the EXISTING ClusterIssuer that signs with the enterprise CA. This chart never creates an issuer.
+clusterIssuer: ""
+
+trustCA:
+  # -- The enterprise ROOT CA certificate (PEM), the one the NAS certificate chains to.
+  # Set it with: --set-file trustCA.pem=enterprise-root.pem
+  pem: ""
+  # -- Use a ConfigMap that already exists (key ca.pem) instead of trustCA.pem.
+  existingConfigMap: ""
+
+ipsec:
+  # -- transport for a routed network (the standard). tunnel only when there is NAT between the nodes and the NAS.
+  type: transport
+  # -- libreswan "left". Empty means "<node name>.<nodeDomain>", which must resolve to the node's address toward the NAS.
+  left: ""
+  # -- libreswan "right". Empty means nas.fqdn.
+  right: ""
+
+# -- Labels a Node must have to get a certificate, the cert-sync pod and a tunnel.
+nodeSelector:
+  node-role.kubernetes.io/worker: ""
+
+# -- Tolerations for the cert-sync DaemonSet, for example for tainted infra nodes that mount the NAS.
+tolerations: []
+
+certificate:
+  duration: 8760h
+  renewBefore: 720h
+  keySize: 3072
+
+images:
+  # -- Needs bash and oc. Runs privileged, with the host mounted.
+  cli: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+  # -- Serves the metrics file. Runs unprivileged.
+  python: registry.access.redhat.com/ubi9/python-312:latest
+
+kyvernoRBAC:
+  # -- Create the two ClusterRoles that let Kyverno read Nodes and create NNCPs and Certificates.
+  create: true
+
+scc:
+  # -- Bind the privileged SCC to the cert-sync service account (what "oc adm policy add-scc-to-user" does).
+  bind: true
+
+metrics:
+  # -- Headless Service and ServiceMonitor, for Observe. Needs user workload monitoring.
+  serviceMonitor: true
+  # -- The six alert rules.
+  prometheusRule: true
+  # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1").
+  grafanaDashboard: false
+
+prerequisites:
+  # -- Skip the checks in templates/_prerequisites.tpl. For "helm template" without a cluster.
+  skipCheck: false
+  # -- Namespace Kyverno is installed in, to check that it does not filter out Nodes.
+  kyvernoNamespace: kyverno

@@ -1,0 +1,15 @@
+ipsec-nas is installed in namespace {{ .Release.Namespace }}.
+
+What happens next, by itself, for every node with the labels in nodeSelector:
+  1. Kyverno creates a Certificate, and cert-manager issues it from ClusterIssuer "{{ .Values.clusterIssuer }}".
+  2. The cert-sync pod on that node imports it and labels the node ipsec.kcs.io/cert-ready=true.
+  3. Kyverno creates the NNCP, and NMState brings up the tunnel to {{ .Values.nas.ip }} ({{ .Values.ipsec.type }} mode).
+
+Check it:
+  oc get certificate -n {{ .Release.Namespace }}
+  oc get pods -n {{ .Release.Namespace }} -o wide
+  oc get nncp,nnce | grep ipsec-nas
+  oc debug node/<node> -q -- chroot /host ipsec trafficstatus
+
+Kyverno creates the policies' objects a moment after the DaemonSet's pods. A pod that was created
+first notices it has no certificate secret, logs it, and is created again within about a minute.

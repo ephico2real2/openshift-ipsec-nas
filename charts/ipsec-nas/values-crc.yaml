@@ -1,0 +1,12 @@
+# Values for OpenShift Local (CRC) with the lab NAS, as measured in docs/crc-integration-guide.md.
+# Tunnel mode, "%defaultroute" and the NAS IP as "right" are CRC-only settings (NAT, no DNS names).
+# Also pass: --set-file trustCA.pem=enterprise-root.pem
+nodeDomain: crc.testing
+nas:
+  fqdn: crc-nas.lab.internal
+  ip: 192.168.64.8
+clusterIssuer: enterprise-ca
+ipsec:
+  type: tunnel
+  left: "%defaultroute"
+  right: 192.168.64.8

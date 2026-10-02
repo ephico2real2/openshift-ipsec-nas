@@ -1,0 +1,49 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ipsec-nncp-per-node
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  failurePolicy: Ignore
+  rules:
+  - name: nncp-when-cert-ready
+    match:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchLabels:
+              {{- include "ipsec-nas.nodeMatchLabels" . | nindent 14 }}
+              ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
+    generate:
+      generateExisting: true
+      synchronize: true
+      apiVersion: nmstate.io/v1
+      kind: NodeNetworkConfigurationPolicy
+      name: "ipsec-nas-{{ "{{" }} request.object.metadata.name {{ "}}" }}"
+      data:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: '{{ "{{" }} request.object.metadata.labels."kubernetes.io/hostname" {{ "}}" }}'
+          desiredState:
+            interfaces:
+            - name: ipsec-nas
+              type: ipsec
+              libreswan:
+                {{- if .Values.ipsec.left }}
+                left: {{ .Values.ipsec.left | quote }}
+                {{- else }}
+                left: "{{ "{{" }} request.object.metadata.name {{ "}}" }}.{{ .Values.nodeDomain }}"   # matches the Certificate dnsNames
+                {{- end }}
+                leftid: '%fromcert'
+                leftrsasigkey: '%cert'
+                leftcert: left_server
+                leftmodecfgclient: false
+                right: {{ .Values.ipsec.right | default .Values.nas.fqdn }}
+                rightid: '%fromcert'
+                rightrsasigkey: '%cert'
+                rightsubnet: {{ .Values.nas.ip }}/32
+                ikev2: insist
+                type: {{ .Values.ipsec.type }}

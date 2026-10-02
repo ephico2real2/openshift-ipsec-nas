@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["nas", "clusterIssuer", "ipsec", "nodeSelector"],
+  "properties": {
+    "nodeDomain": { "type": "string" },
+    "nas": {
+      "type": "object",
+      "required": ["fqdn", "ip"],
+      "properties": {
+        "fqdn": { "type": "string" },
+        "ip": { "type": "string", "pattern": "^$|^([0-9]{1,3}\\.){3}[0-9]{1,3}$" }
+      }
+    },
+    "clusterIssuer": { "type": "string" },
+    "trustCA": {
+      "type": "object",
+      "properties": {
+        "pem": { "type": "string" },
+        "existingConfigMap": { "type": "string" }
+      }
+    },
+    "ipsec": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["transport", "tunnel"] },
+        "left": { "type": "string" },
+        "right": { "type": "string" }
+      }
+    },
+    "nodeSelector": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } },
+    "tolerations": { "type": "array" },
+    "certificate": {
+      "type": "object",
+      "properties": {
+        "duration": { "type": "string" },
+        "renewBefore": { "type": "string" },
+        "keySize": { "type": "integer", "minimum": 2048 }
+      }
+    },
+    "images": { "type": "object", "properties": { "cli": { "type": "string" }, "python": { "type": "string" } } },
+    "kyvernoRBAC": { "type": "object", "properties": { "create": { "type": "boolean" } } },
+    "scc": { "type": "object", "properties": { "bind": { "type": "boolean" } } },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "serviceMonitor": { "type": "boolean" },
+        "prometheusRule": { "type": "boolean" },
+        "grafanaDashboard": { "type": "boolean" }
+      }
+    },
+    "prerequisites": {
+      "type": "object",
+      "properties": { "skipCheck": { "type": "boolean" }, "kyvernoNamespace": { "type": "string" } }
+    }
+  }
+}

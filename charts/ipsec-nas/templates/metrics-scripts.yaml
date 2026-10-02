@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipsec-metrics-scripts
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  collect.sh: |
+{{ .Files.Get "files/collect.sh" | trimSuffix "\n" | indent 4 }}
+  serve.py: |
+{{ .Files.Get "files/serve.py" | trimSuffix "\n" | indent 4 }}

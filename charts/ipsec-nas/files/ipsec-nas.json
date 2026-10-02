@@ -1,0 +1,740 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "prometheus",
+      "pluginName": "Prometheus"
+    }
+  ],
+  "__requires": [
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Per-node IPsec tunnel to the NAS: tunnel state, traffic, certificate expiry. Metrics come from the ipsec-cert-sync DaemonSet in kcs-ipsec.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Tunnels up",
+      "description": "Workers that have an established IPsec tunnel to the NAS.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(ipsec_nas_tunnel_up{node=~\"$node\"})",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Tunnels down",
+      "description": "Workers that report no tunnel. Anything above 0 needs attention.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(ipsec_nas_tunnel_up{node=~\"$node\"} == 0) or vector(0)",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Workers reporting",
+      "description": "Workers whose ipsec-cert-sync pod is being scraped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Soonest certificate expiry",
+      "description": "Days until the first node certificate expires. cert-manager renews 30 days before expiry.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "min(ipsec_nas_certificate_not_after_timestamp_seconds{node=~\"$node\"} - time()) / 86400",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "suffix: days",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          },
+          "mappings": [],
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Tunnel state per node",
+      "description": "UP when the node has an established tunnel to the NAS.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "ipsec_nas_tunnel_up{node=~\"$node\"}",
+          "legendFormat": "{{node}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "DOWN",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "UP",
+                  "color": "green"
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 6,
+      "type": "bargauge",
+      "title": "Certificate days left per node",
+      "description": "From the certificate in each node's NSS database, which is what libreswan actually uses.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "(ipsec_nas_certificate_not_after_timestamp_seconds{node=~\"$node\"} - time()) / 86400",
+          "legendFormat": "{{node}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: days",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 14
+              },
+              {
+                "color": "green",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Traffic through the tunnel",
+      "description": "Bytes per second sent to and received from the NAS through IPsec. NFS traffic shows up here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "rate(ipsec_nas_tunnel_out_bytes_total{node=~\"$node\"}[5m])",
+          "legendFormat": "{{node}} to NAS",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "rate(ipsec_nas_tunnel_in_bytes_total{node=~\"$node\"}[5m])",
+          "legendFormat": "{{node}} from NAS",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Tunnel age per node",
+      "description": "Time since the current tunnel was established. A small value on one node means it was re-established recently.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "time() - ipsec_nas_tunnel_established_timestamp_seconds{node=~\"$node\"}",
+          "legendFormat": "{{node}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Metrics age per node",
+      "description": "Time since the collector last ran. More than 5 minutes means the collector container stopped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 17,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "time() - ipsec_nas_collect_timestamp_seconds{node=~\"$node\"}",
+          "legendFormat": "{{node}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "libreswan version per node",
+      "description": "The libreswan version installed on each node.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 17,
+        "w": 8,
+        "h": 5
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "ipsec_nas_libreswan_info{node=~\"$node\"}",
+          "legendFormat": "{{node}}: {{version}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "name",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": [
+    "openshift",
+    "ipsec",
+    "nas"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "prometheus",
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "node",
+        "label": "Node",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": {
+          "query": "label_values(ipsec_nas_tunnel_up, node)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 2,
+        "sort": 1,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "IPsec to the NAS",
+  "uid": "ipsec-nas",
+  "version": 1,
+  "weekStart": ""
+}

@@ -2,7 +2,9 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: ipsec-cert-sync
-  namespace: kcs-ipsec
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   selector:
     matchLabels:
@@ -16,11 +18,14 @@ spec:
     spec:
       serviceAccountName: ipsec-cert-sync
       nodeSelector:
-        node-role.kubernetes.io/worker: ""
-      # Add tolerations here if some workers are tainted (e.g. infra nodes that mount the NAS)
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: sync
-        image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+        image: {{ .Values.images.cli }}
         command: ["/bin/bash", "/scripts/sync.sh"]
         env:
         - name: NODE_NAME
@@ -59,7 +64,7 @@ spec:
       # Reads the tunnel and certificate state from the host every 30 seconds and writes it as
       # Prometheus metrics into the shared "metrics" volume. The host is mounted read-only.
       - name: collector
-        image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+        image: {{ .Values.images.cli }}
         command: ["/bin/bash", "/metrics-scripts/collect.sh"]
         env:
         - name: NODE_NAME
@@ -87,7 +92,7 @@ spec:
       # Serves the collector's file on :9754/metrics. Unprivileged: the only network listener in
       # this pod has no access to the host.
       - name: metrics
-        image: registry.access.redhat.com/ubi9/python-312:latest
+        image: {{ .Values.images.python }}
         command: ["python3", "/metrics-scripts/serve.py"]
         ports:
         - name: metrics
@@ -136,7 +141,7 @@ spec:
           optional: true
       - name: trust-ca
         configMap:
-          name: ipsec-trust-ca
+          name: {{ include "ipsec-nas.trustConfigMap" . }}
       - name: script
         configMap:
           name: ipsec-cert-sync-script

@@ -1,0 +1,40 @@
+# Argo CD Application for the ipsec-nas chart.
+# Kyverno, cert-manager and NMState are prerequisites and are NOT part of this Application.
+# The chart's sync waves make Argo CD create the RBAC and ConfigMaps first, then the two Kyverno
+# policies the DaemonSet depends on, then the DaemonSet, then the NNCP policy and the monitoring.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ipsec-nas
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ephico2real2/openshift-ipsec-nas.git
+    targetRevision: main
+    path: charts/ipsec-nas
+    helm:
+      releaseName: ipsec-nas
+      valuesObject:
+        nodeDomain: ocp.example.com
+        nas:
+          fqdn: nas01.example.com
+          ip: 10.0.0.50
+        clusterIssuer: company-issuer-rnd      # the EXISTING enterprise CA issuer
+        trustCA:
+          # The enterprise ROOT CA. Either name a ConfigMap that already exists in the namespace
+          # (key ca.pem), or delete this line and paste the PEM under "pem: |".
+          existingConfigMap: ipsec-trust-ca
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kcs-ipsec
+  syncPolicy:
+    # The cert-sync pod runs privileged, so the namespace needs these labels (main guide, Step B.2)
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/audit: privileged
+        pod-security.kubernetes.io/warn: privileged
+        security.openshift.io/scc.podSecurityLabelSync: "false"
+    syncOptions:
+    - CreateNamespace=true

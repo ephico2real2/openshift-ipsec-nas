@@ -1,0 +1,37 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ipsec-cert-sync-mount
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+    # Only mutate Pods, do not auto-generate rules for DaemonSets/Deployments
+    pod-policies.kyverno.io/autogen-controllers: none
+spec:
+  failurePolicy: Ignore
+  background: false
+  rules:
+  - name: mount-this-nodes-certificate
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          namespaces:
+          - {{ .Release.Namespace }}
+          operations:
+          - CREATE
+          selector:
+            matchLabels:
+              app: ipsec-cert-sync
+    preconditions:
+      all:
+      - key: "{{ "{{" }} request.object.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].values[0] || '' {{ "}}" }}"
+        operator: NotEquals
+        value: ""
+    mutate:
+      patchStrategicMerge:
+        spec:
+          volumes:
+          - name: node-cert
+            secret:
+              secretName: "ipsec-cert-{{ "{{" }} request.object.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].values[0] {{ "}}" }}"

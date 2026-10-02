@@ -1,0 +1,14 @@
+{{- include "ipsec-nas.prerequisites" . -}}
+{{- if .Values.trustCA.pem }}
+# The enterprise ROOT CA, so the nodes trust the NAS certificate
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ipsec-trust-ca
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  ca.pem: |
+{{ .Values.trustCA.pem | trim | indent 4 }}
+{{- end }}
