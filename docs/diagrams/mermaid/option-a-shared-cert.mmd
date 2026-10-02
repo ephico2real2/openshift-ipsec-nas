@@ -1,0 +1,21 @@
+%% Option A: one shared certificate (guide section 2.0).
+%% Text source only. The figure shown in the docs is docs/diagrams/ipsec-nas/option-a-shared-cert.*.png.
+sequenceDiagram
+    participant E as You (workstation)
+    participant CA as Enterprise CA
+    participant MCO as MCO
+    participant N as Worker node
+    participant K as Kyverno
+    participant NM as NMState
+
+    E->>E: Build SAN list of ALL workers, create key + CSR (A.2, A.3)
+    E->>CA: Submit left_server.csr (A.4)
+    CA->>E: Signed left_server.crt + CA chain
+    E->>E: Bundle left_server.p12, write Butane config (A.5 - A.8)
+    E->>MCO: Render + apply MachineConfig 99-worker-import-certs (A.9)
+    MCO->>N: Write cert files + import script, reboot EVERY worker one at a time
+    N->>N: ipsec-import.service imports cert into /var/lib/ipsec/nss as "left_server"
+    E->>K: Apply policy ipsec-nncp-shared-cert (A.10)
+    K->>NM: Generate NNCP ipsec-nas-<node> for every worker
+    NM->>N: libreswan tunnel to the NAS is up
+    Note over E,NM: New worker or renewal = repeat A.2 to A.9 by hand. Every worker reboots again (A.11)

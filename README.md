@@ -6,6 +6,16 @@ automated per node with **Kyverno**.
 
 📖 **Full step-by-step procedure:** [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md)
 
+## How it works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/ipsec-nas/overview.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/ipsec-nas/overview.light.png">
+  <img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="docs/diagrams/ipsec-nas/overview.light.png">
+</picture>
+
+*Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted. The guide has the same figure with a text version, plus one figure for each certificate option.*
+
 ## Choose one certificate option
 
 | | Option A – shared certificate | Option B – per-node certificates (recommended) |
@@ -22,6 +32,9 @@ automated per node with **Kyverno**.
 
 ```
 docs/ipsec-nas-guide.md              the guide (source of truth)
+docs/diagrams/ipsec-nas/             the figures shown in the docs (source.html + rendered PNGs)
+docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
+docs/diagrams/render.py              re-renders the figures from source.html
 manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC
 manifests/option-a-shared-cert/      Part 2: Butane MachineConfig + NNCP generate policy
 manifests/option-b-per-node-certs/   Part 3: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet

@@ -1,0 +1,18 @@
+%% Option B: one certificate per node (guide section 3.0).
+%% Text source only. The figure shown in the docs is docs/diagrams/ipsec-nas/option-b-per-node-certs.*.png.
+sequenceDiagram
+    participant N as Worker node
+    participant K as Kyverno
+    participant CM as cert-manager
+    participant D as ipsec-cert-sync pod (DaemonSet)
+    participant NM as NMState
+
+    N->>K: Node created
+    K->>CM: Generate Certificate ipsec-<node> (policy 1)
+    CM->>CM: Sign with company-issuer-rnd -> Secret ipsec-cert-<node>
+    K->>D: Mutate new pod: mount ONLY Secret ipsec-cert-<node> (policy 2)
+    D->>N: Import cert into /var/lib/ipsec/nss as "left_server"
+    D->>N: Label node ipsec.kcs.io/cert-ready=true
+    N->>K: Node updated (label added)
+    K->>NM: Generate NNCP ipsec-nas-<node> (policy 3)
+    NM->>N: libreswan tunnel to the NAS is up

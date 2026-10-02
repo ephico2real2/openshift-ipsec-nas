@@ -1,0 +1,29 @@
+%% How IPsec from the OpenShift workers to the NAS works (high level).
+%% Text source only. The figure shown in the docs is docs/diagrams/ipsec-nas/overview.*.png.
+flowchart LR
+    subgraph CLUSTER["Cluster: what you apply"]
+        NET["Cluster network settings<br/>ipsecConfig.mode: External<br/>routingViaHost: true"]
+        CERT["Node certificate delivery<br/>A: MachineConfig, one shared cert<br/>B: cert-manager + DaemonSet"]
+        NNCP["Kyverno: one NNCP per worker<br/>ipsec-nas-NODE<br/>NMState applies it on that node"]
+        WL["Workload with an NFS volume<br/>PVC backed by the NAS"]
+    end
+    subgraph NODE["Worker node: RHCOS host"]
+        N1["1. Node is prepared<br/>libreswan added by MachineConfig (reboot)<br/>pod egress uses the host routing table"]
+        N2["2. Certificate in the node's NSS DB<br/>/var/lib/ipsec/nss<br/>left_server (node) + enterprise root CA"]
+        N3["3. libreswan connection ipsec-nas<br/>left = node FQDN, right = NAS FQDN<br/>IKEv2 only, transport mode, cert auth"]
+        N4["4. IKEv2 negotiation<br/>node proves identity with left_server<br/>and checks the NAS cert against the CA"]
+        N5["5. NFS to NAS_IP is encrypted<br/>matches rightsubnet NAS_IP/32<br/>sent as ESP, transport mode"]
+        N1 --> N2 --> N3 --> N4 --> N5
+    end
+    subgraph NAS["NAS: storage team"]
+        S0["Prepared by storage team<br/>key and CSR made on the NAS<br/>IPsec policy: worker subnet"]
+        S1["NAS IPsec endpoint<br/>NAS certificate (right)<br/>same enterprise root CA"]
+        S2["NFS data IP<br/>cleartext NFS is rejected"]
+        S0 --> S1 --> S2
+    end
+    NET --> N1
+    CERT --> N2
+    NNCP --> N3
+    WL --> N5
+    N4 <-->|"IKEv2, UDP 500 / 4500<br/>certificates, both ways"| S1
+    N5 <-->|"ESP, IP protocol 50<br/>NFS inside, encrypted"| S2

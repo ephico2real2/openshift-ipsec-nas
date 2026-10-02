@@ -22,11 +22,53 @@ You will pick **one** of two certificate options:
 
 ## Table of contents
 
+- [Overview – how IPsec to the NAS works](#overview--how-ipsec-to-the-nas-works)
 - [Part 0 – Before you start](#part-0--before-you-start)
 - [Part 1 – Common cluster preparation (both options)](#part-1--common-cluster-preparation-both-options)
 - [Part 2 – Option A: one shared certificate](#part-2--option-a-one-shared-certificate)
 - [Part 3 – Option B: per-node certificates with cert-manager + Kyverno](#part-3--option-b-per-node-certificates-with-cert-manager--kyverno)
 - [Part 4 – NAS side, verification, troubleshooting, teardown](#part-4--nas-side-verification-troubleshooting-teardown)
+- [Diagram sources](#diagram-sources)
+
+---
+
+## Overview – how IPsec to the NAS works
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/overview.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/overview.light.png">
+  <img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="diagrams/ipsec-nas/overview.light.png">
+</picture>
+
+*Figure 1. Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. The figure is drawn from this guide and its manifests; it has not been measured on a running cluster.*
+
+```text
+CLUSTER (what you apply)             WORKER NODE (RHCOS host)                      NAS (storage team)
+
+Cluster network settings        -->  1. Node is prepared
+  ipsecConfig.mode: External           libreswan added by MachineConfig (reboot)
+  routingViaHost: true                 pod egress uses the host routing table
+                                            |
+Node certificate delivery       -->  2. Certificate in the node's NSS DB
+  A: MachineConfig, shared cert        /var/lib/ipsec/nss
+  B: cert-manager + DaemonSet          left_server (node) + enterprise root CA
+                                            |
+Kyverno: one NNCP per worker    -->  3. libreswan connection ipsec-nas            Prepared by storage team
+  ipsec-nas-<node>                     left = node FQDN, right = NAS FQDN           key and CSR made on the NAS
+  NMState applies it on the node       IKEv2 only, transport mode, cert auth        IPsec policy: worker subnet
+                                            |                                            |
+                                     4. IKEv2 negotiation          <-- IKEv2 -->  NAS IPsec endpoint
+                                       node proves identity with    UDP 500/4500    NAS certificate (right)
+                                       left_server, checks the      certificates    same enterprise root CA
+                                       NAS cert against the CA      both ways            |
+                                            |                                            |
+Workload with an NFS volume     -->  5. NFS to NAS_IP is encrypted <--  ESP  -->  NFS data IP ${NAS_IP}
+  PVC backed by the NAS                matches rightsubnet NAS_IP/32  IP proto 50   cleartext NFS is rejected
+                                       sent as ESP, transport mode
+
+Not encrypted: pod-to-pod traffic inside the cluster (External mode covers external hosts only).
+Firewalls must allow UDP 500, UDP 4500 and ESP (IP protocol 50) between every worker and the NAS.
+```
 
 ---
 
@@ -210,30 +252,152 @@ oc get pods -n openshift-nmstate           # nmstate-handler pod on every node, 
 
 ### Step 1.6 – Install Kyverno
 
-Kyverno is installed with Helm. On OpenShift 4.11+ the chart deploys as-is under the `restricted-v2` SCC.
+Kyverno is installed with Helm. There are two ways to run the install (1.6.4 **or** 1.6.5), and both need the OpenShift SCC setting in 1.6.3.
 
 > [!IMPORTANT]
 > Kyverno is a **community project, not Red Hat-supported**. Use the chart version approved by our change process (`--version`), and the internal mirror if the cluster is disconnected. This guide needs **Kyverno 1.13 or later**.
 
+#### 1.6.1 Pick the chart version
+
 ```bash
 helm repo add kyverno https://kyverno.github.io/kyverno/
 helm repo update
+helm search repo kyverno/kyverno --versions | head     # CHART VERSION, and APP VERSION = the Kyverno version
 
+# ---- CHANGE THIS to the approved chart version (chart 3.9.1 = Kyverno v1.19.1) ----
+export KYVERNO_CHART_VERSION="3.9.1"
+```
+
+#### 1.6.2 Export the chart's default values
+
+Save the chart's own `values.yaml` first. It is the basis for every setting we change: find the key in this file, then put **only that key** in our own override file.
+
+```bash
+helm show values kyverno/kyverno --version "${KYVERNO_CHART_VERSION}" > kyverno-values-default.yaml
+# No access to the Helm repository? Read the values from a downloaded chart instead (see 1.6.5):
+#   helm show values "./kyverno-${KYVERNO_CHART_VERSION}.tgz" > kyverno-values-default.yaml
+
+grep -nE 'runAsUser|runAsGroup' kyverno-values-default.yaml     # the fixed IDs that 1.6.3 deals with
+```
+
+✅ **Expected:** a file of about 2,600 lines. For chart 3.8.0 or later, `grep` prints eight `runAsUser: 65534` / `runAsGroup: 65534` pairs.
+
+> [!NOTE]
+> `kyverno-values-default.yaml` is a **reference, not an input**. Do not edit it and do not pass it to `helm install`. Our changes go in the small `kyverno-openshift-values.yaml` in the next step, so a later chart upgrade still picks up the chart's new defaults. Attach the default file to the change ticket: comparing it with the next version's export shows what changed.
+
+#### 1.6.3 OpenShift SCC setting
+
+From chart **3.8.0** (Kyverno 1.18) every Kyverno container is set to run as user and group `65534`. OpenShift's default `restricted-v2` SCC only accepts a user ID from the namespace's own range, so the pods are never created and the ReplicaSet reports `unable to validate against any security context constraint`. Charts before 3.8.0 hardcode the ID only for the Helm hook Jobs and test pods.
+
+**Option 1 (recommended): remove the fixed IDs.** The override file below sets the keys that the `grep` in 1.6.2 found to `null`. OpenShift then assigns the user ID and the pods run under `restricted-v2`. No extra SCC permission is needed.
+
+```bash
+cat <<'EOF' > kyverno-openshift-values.yaml
+# Kyverno on OpenShift: do not hardcode a UID/GID.
+# null removes the chart default (65534) so OpenShift assigns one from the namespace range.
+admissionController:
+  initContainer:
+    securityContext:
+      runAsUser: null
+      runAsGroup: null
+  container:
+    securityContext:
+      runAsUser: null
+      runAsGroup: null
+backgroundController:
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+cleanupController:
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+reportsController:
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+# Helm hook Jobs (upgrade / uninstall) and "helm test" pods
+crds:
+  migration:
+    securityContext:
+      runAsUser: null
+      runAsGroup: null
+webhooksCleanup:
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+test:
+  securityContext:
+    runAsUser: null
+    runAsGroup: null
+EOF
+```
+
+**Option 2: keep the fixed ID and grant an SCC that allows it.** Give Kyverno's service accounts the `nonroot-v2` SCC **before** installing, then leave the `-f kyverno-openshift-values.yaml` line out of the install command.
+
+```bash
+oc create namespace kyverno
+
+for sa in kyverno-admission-controller kyverno-background-controller \
+          kyverno-cleanup-controller kyverno-reports-controller kyverno-migrate-resources; do
+  oc adm policy add-scc-to-user nonroot-v2 -z "${sa}" -n kyverno
+done
+
+oc get rolebinding system:openshift:scc:nonroot-v2 -n kyverno -o jsonpath='{.subjects[*].name}{"\n"}'   # the five names above
+```
+
+> [!WARNING]
+> **Do not grant `anyuid`.** It does not help: `anyuid` rejects any pod that sets a seccomp profile, and every Kyverno container sets one. It would also allow running as root.
+
+#### 1.6.4 Install method 1 – straight from the Helm repository
+
+```bash
 helm install kyverno kyverno/kyverno -n kyverno --create-namespace \
+  --version "${KYVERNO_CHART_VERSION}" \
+  -f kyverno-openshift-values.yaml \
   --set admissionController.replicas=3 \
   --set backgroundController.replicas=2 \
   --set cleanupController.replicas=2 \
   --set reportsController.replicas=2
 ```
 
-Verify:
+#### 1.6.5 Install method 2 – download the chart, then install from the file
+
+Use this when the machine that reaches the cluster cannot reach `kyverno.github.io`, or when the change process wants the exact chart file archived.
+
+On a machine with internet access:
 
 ```bash
-oc get pods -n kyverno                     # all Running
+helm pull kyverno/kyverno --version "${KYVERNO_CHART_VERSION}"     # writes kyverno-${KYVERNO_CHART_VERSION}.tgz here
+helm show chart "kyverno-${KYVERNO_CHART_VERSION}.tgz"             # check version and appVersion
+```
+
+Copy `kyverno-${KYVERNO_CHART_VERSION}.tgz` and `kyverno-openshift-values.yaml` to the machine that is logged in to the cluster, then install from the file:
+
+```bash
+helm install kyverno "./kyverno-${KYVERNO_CHART_VERSION}.tgz" -n kyverno --create-namespace \
+  -f kyverno-openshift-values.yaml \
+  --set admissionController.replicas=3 \
+  --set backgroundController.replicas=2 \
+  --set cleanupController.replicas=2 \
+  --set reportsController.replicas=2
+```
+
+> [!NOTE]
+> The chart file holds **no container images**. The cluster still pulls them from `reg.kyverno.io` and `ghcr.io`, so on a disconnected cluster mirror them first. List what the chart needs:
+>
+> ```bash
+> helm template kyverno "./kyverno-${KYVERNO_CHART_VERSION}.tgz" -n kyverno | grep -E '^ +image: "?[a-z]' | sort -u
+> ```
+
+#### 1.6.6 Verify
+
+```bash
+oc get pods -n kyverno -o custom-columns='POD:.metadata.name,SCC:.metadata.annotations.openshift\.io/scc,STATUS:.status.phase'
 oc get deploy -n kyverno -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.spec.template.spec.containers[0].image}{"\n"}{end}'
 ```
 
-✅ **Expected:** image tags are `v1.13` or later.
+✅ **Expected:** every pod `Running`; `SCC` is `restricted-v2` (Option 1) or `nonroot-v2` (Option 2); image tags are `v1.13` or later.
 
 ### Step 1.7 – Give Kyverno permission to create NNCPs and Certificates
 
@@ -280,26 +444,34 @@ oc apply -f 03-kyverno-rbac.yaml
 
 This is the **Red Hat documented** method. One certificate and private key are copied to **every worker** through a MachineConfig. You create the certificate by hand, so **every worker reboots** each time it changes.
 
-```mermaid
-sequenceDiagram
-    participant E as You (workstation)
-    participant CA as Enterprise CA
-    participant MCO as MCO
-    participant N as Worker node
-    participant K as Kyverno
-    participant NM as NMState
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/option-a-shared-cert.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/option-a-shared-cert.light.png">
+  <img alt="Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker and the tunnel comes up. Adding a worker or renewing the certificate repeats the manual steps and reboots every worker again." src="diagrams/ipsec-nas/option-a-shared-cert.light.png">
+</picture>
 
-    E->>E: Build SAN list of ALL workers, create key + CSR (A.2, A.3)
-    E->>CA: Submit left_server.csr (A.4)
-    CA->>E: Signed left_server.crt + CA chain
-    E->>E: Bundle left_server.p12, write Butane config (A.5 - A.8)
-    E->>MCO: Render + apply MachineConfig 99-worker-import-certs (A.9)
-    MCO->>N: Write cert files + import script, reboot EVERY worker one at a time
-    N->>N: ipsec-import.service imports cert into /var/lib/ipsec/nss as "left_server"
-    E->>K: Apply policy ipsec-nncp-shared-cert (A.10)
-    K->>NM: Generate NNCP ipsec-nas-<node> for every worker
-    NM->>N: libreswan tunnel to the NAS is up
-    Note over E,NM: New worker or renewal = repeat A.2 to A.9 by hand. Every worker reboots again (A.11)
+*Figure 2. Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker. Adding a worker or renewing the certificate repeats steps 1 to 5 by hand and reboots every worker again.*
+
+```text
+YOU (workstation + enterprise CA)        CLUSTER (operators)                  EVERY WORKER NODE
+
+1. Build one certificate request
+   SAN lists ALL current workers
+   key + CSR            (A.2, A.3)
+        |
+2. Enterprise CA signs it
+   left_server.crt + CA chain  (A.4)
+        |
+3. Bundle and render            -->  4. MCO rolls it out             -->  5. Every worker reboots, one at a time
+   left_server.p12 + ca.pem            99-worker-import-certs               ipsec-import.service fills the NSS DB
+   -> MachineConfig  (A.5 - A.9)       files + import script                cert nickname: left_server
+        |                                                                        |
+6. Apply the Kyverno policy     -->  7. One NNCP per worker          -->  8. Tunnel to the NAS is up
+   ipsec-nncp-shared-cert (A.10)       ipsec-nas-<node>                     libreswan connection ipsec-nas
+                                       Kyverno generates, NMState applies   IKEv2, transport mode
+
+New worker, or certificate renewal (A.11): repeat 1 to 5 by hand. Every worker reboots again.
+One certificate and one private key are shared by every worker; a single node cannot be revoked on its own.
 ```
 
 What each piece does:
@@ -587,23 +759,39 @@ Renewal before expiry is the same procedure, steps 2–7.
 
 Each worker gets **its own** certificate, issued automatically by `ClusterIssuer/company-issuer-rnd`. No MachineConfig is used, so **nothing reboots** when nodes are added or certificates renew.
 
-```mermaid
-sequenceDiagram
-    participant N as Worker node
-    participant K as Kyverno
-    participant CM as cert-manager
-    participant D as ipsec-cert-sync pod (DaemonSet)
-    participant NM as NMState
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/option-b-per-node-certs.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/option-b-per-node-certs.light.png">
+  <img alt="Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it into the node's NSS database and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot." src="diagrams/ipsec-nas/option-b-per-node-certs.light.png">
+</picture>
 
-    N->>K: Node created
-    K->>CM: Generate Certificate ipsec-<node> (policy 1)
-    CM->>CM: Sign with company-issuer-rnd -> Secret ipsec-cert-<node>
-    K->>D: Mutate new pod: mount ONLY Secret ipsec-cert-<node> (policy 2)
-    D->>N: Import cert into /var/lib/ipsec/nss as "left_server"
-    D->>N: Label node ipsec.kcs.io/cert-ready=true
-    N->>K: Node updated (label added)
-    K->>NM: Generate NNCP ipsec-nas-<node> (policy 3)
-    NM->>N: libreswan tunnel to the NAS is up
+*Figure 3. Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot. This certificate delivery is the guide's own design, not a Red Hat procedure.*
+
+```text
+KYVERNO + CERT-MANAGER                   cert-sync POD (kcs-ipsec)                WORKER NODE
+
+1. Policy 1: Certificate per worker  <------------ Node created ------------  A worker joins the cluster
+   ipsec-<node>                                                                (no manual step from here on)
+   signed by company-issuer-rnd
+        |
+2. cert-manager writes the Secret    -->  3. cert-sync pod starts on the node
+   ipsec-cert-<node>                         Policy 2 pointed it at ONLY this Secret
+   this node's certificate and key          mounted at /certs, root CA at /ca
+                                                  |
+                                          4. Pod imports the certificate       -->  NSS DB on the node
+                                             into the NSS DB as left_server          /var/lib/ipsec/nss
+                                             then re-checks every 5 minutes          left_server + KCS-IPSEC-CA
+                                                  |
+6. Policy 3: NNCP for this node      <--  5. Pod labels the node
+   ipsec-nas-<node>                          ipsec.kcs.io/cert-ready=true
+   only when the label is present            only after a successful import
+        |
+        +------------------- NMState applies the NNCP -------------------->  7. Tunnel to the NAS is up
+                                                                                libreswan connection ipsec-nas
+
+Renewal is automatic: cert-manager renews 30 days before expiry; the pod re-imports and restarts the tunnel
+for a few seconds. No node reboot.
+If the Secret is missing, the pod waits in ContainerCreating; it never imports another node's certificate.
 ```
 
 What each piece does:
@@ -1226,6 +1414,7 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 
 | Symptom | Likely cause | What to do |
 |---|---|---|
+| No Kyverno pods; `oc get events -n kyverno` shows `unable to validate against any security context constraint` | Chart sets a fixed user ID that `restricted-v2` rejects | Apply the SCC setting in Step 1.6.3, then `helm upgrade` with the same flags |
 | `clusterpolicy` READY = False | Policy syntax or missing RBAC | `oc describe clusterpolicy <name>`; re-check Step 1.7 |
 | No NNCP / Certificate created | Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
 | Certificate not `Ready` (B) | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check `company-issuer-rnd` |
@@ -1293,3 +1482,24 @@ watch oc get mcp worker
 - Red Hat: *Changing the MTU for the cluster network*
 - Kyverno: *Installation, Platform Notes (OpenShift)* and *Generate Rules*
 - cert-manager: *Certificate resource*
+
+---
+
+## Diagram sources
+
+The three figures in this guide are rendered from one hand-authored page, `docs/diagrams/ipsec-nas/source.html` (inline SVG, light and dark palettes). `docs/diagrams/render.py` screenshots each figure in both themes at twice the pixel density and checks the page at phone width. It needs Playwright's Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). From the repository root:
+
+```bash
+python3 docs/diagrams/render.py docs/diagrams/ipsec-nas/source.html docs/diagrams/ipsec-nas \
+  overview,option-a-shared-cert,option-b-per-node-certs
+```
+
+| Figure | Where it is shown | Rendered files (`docs/diagrams/ipsec-nas/`) | Mermaid text source (`docs/diagrams/mermaid/`) |
+|---|---|---|---|
+| 1. How IPsec to the NAS works | Overview, and `README.md` | `overview.light.png`, `overview.dark.png` | `overview.mmd` |
+| 2. Option A: one shared certificate | Section 2.0 | `option-a-shared-cert.light.png`, `.dark.png` | `option-a-shared-cert.mmd` |
+| 3. Option B: one certificate per node | Section 3.0 | `option-b-per-node-certs.light.png`, `.dark.png` | `option-b-per-node-certs.mmd` |
+
+The Mermaid files are plain-text versions of the same flows, kept for editing and diffs. They are not what the documents display.
+
+Each figure has a text twin directly under it. If a step in the guide changes, change the figure in `source.html`, re-render, and update the text twin and the Mermaid file together. The figures are drawn from this guide and its manifests; they have not been measured on a running cluster.

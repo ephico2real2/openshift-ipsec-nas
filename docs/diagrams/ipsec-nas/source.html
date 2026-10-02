@@ -1,0 +1,343 @@
+<title>IPsec NAS Diagrams</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · diagrams · 2026-10-02</div>
+    <h1>IPsec from OpenShift workers to the NAS</h1>
+    <p class="lede">Three figures for <code>docs/ipsec-nas-guide.md</code>: how the tunnel works end to end, and how each certificate option gets a certificate onto the nodes. They are drawn from the guide and its manifests and have not been measured on a running cluster.</p>
+  </header>
+
+  <section>
+    <h2>How IPsec to the NAS works</h2>
+    <figure>
+      <div class="fig-scroll">
+        <!-- Three lanes: what is applied to the cluster, what ends up on the worker node, and the NAS across the network. -->
+        <svg viewBox="0 0 980 566" role="img" aria-label="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted.">
+          <defs>
+            <marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ah1r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="260" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="150" y="34" text-anchor="middle" fill="var(--none)">CLUSTER · what you apply</text>
+            <rect x="290" y="14" width="310" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="445" y="34" text-anchor="middle" fill="var(--host)">WORKER NODE · RHCOS host</text>
+            <rect x="750" y="14" width="210" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="855" y="34" text-anchor="middle" fill="var(--remote)">NAS · storage team</text>
+          </g>
+          <line x1="675" y1="14" x2="675" y2="478" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- row 1: cluster network settings -> node prepared -->
+            <rect x="30" y="64" width="240" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="86" font-weight="600">Cluster network settings</text>
+            <text x="44" y="103" font-family="IBM Plex Mono, monospace" font-size="12">ipsecConfig.mode: External</text>
+            <text x="44" y="119" font-family="IBM Plex Mono, monospace" font-size="12">routingViaHost: true</text>
+            <line x1="270" y1="95" x2="298" y2="95" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="300" y="64" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="314" y="86" font-weight="600" fill="var(--host)">① Node is prepared</text>
+            <text x="314" y="103">libreswan added by MachineConfig (reboot)</text>
+            <text x="314" y="119">pod egress uses the host routing table</text>
+
+            <!-- row 2: certificate delivery -> NSS DB -->
+            <line x1="445" y1="126" x2="445" y2="150" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="30" y="152" width="240" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="174" font-weight="600">Node certificate delivery</text>
+            <text x="44" y="191">A: MachineConfig, one shared cert</text>
+            <text x="44" y="207">B: cert-manager + DaemonSet</text>
+            <line x1="270" y1="183" x2="298" y2="183" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="300" y="152" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="314" y="174" font-weight="600" fill="var(--host)">② Certificate in the node's NSS DB</text>
+            <text x="314" y="191" font-family="IBM Plex Mono, monospace" font-size="12">/var/lib/ipsec/nss</text>
+            <text x="314" y="207">left_server (node) + enterprise root CA</text>
+
+            <!-- row 3: NNCP -> libreswan connection ; storage team prepares the NAS -->
+            <line x1="445" y1="214" x2="445" y2="238" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="30" y="240" width="240" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="262" font-weight="600">Kyverno → one NNCP per worker</text>
+            <text x="44" y="279" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-nas-&lt;node&gt;</text>
+            <text x="44" y="295">NMState applies it on that node</text>
+            <line x1="270" y1="271" x2="298" y2="271" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="300" y="240" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="314" y="262" font-weight="600" fill="var(--host)">③ libreswan connection ipsec-nas</text>
+            <text x="314" y="279">left = node FQDN · right = NAS FQDN</text>
+            <text x="314" y="295">IKEv2 only · transport mode · cert auth</text>
+            <rect x="760" y="240" width="200" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="774" y="262" font-weight="600" fill="var(--remote)">Prepared by storage team</text>
+            <text x="774" y="279">key and CSR made on the NAS</text>
+            <text x="774" y="295">IPsec policy: worker subnet</text>
+
+            <!-- row 4: IKEv2 across the boundary -->
+            <line x1="445" y1="302" x2="445" y2="326" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <line x1="860" y1="302" x2="860" y2="326" stroke="var(--remote)" stroke-width="1.2" marker-end="url(#ah1r)"/>
+            <rect x="300" y="328" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="314" y="350" font-weight="600" fill="var(--host)">④ IKEv2 negotiation</text>
+            <text x="314" y="367">node proves identity with left_server</text>
+            <text x="314" y="383">and checks the NAS cert against the CA</text>
+            <line x1="592" y1="359" x2="758" y2="359" stroke="currentColor" stroke-width="1.2" marker-start="url(#ah1)" marker-end="url(#ah1)"/>
+            <rect x="602" y="338" width="146" height="16" fill="var(--surface)"/>
+            <text x="675" y="350" text-anchor="middle" font-weight="600">IKEv2 · UDP 500 / 4500</text>
+            <rect x="602" y="364" width="146" height="16" fill="var(--surface)"/>
+            <text x="675" y="376" text-anchor="middle" fill="var(--muted)">certificates, both ways</text>
+            <rect x="760" y="328" width="200" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="774" y="350" font-weight="600" fill="var(--remote)">NAS IPsec endpoint</text>
+            <text x="774" y="367">NAS certificate (right)</text>
+            <text x="774" y="383">same enterprise root CA</text>
+
+            <!-- row 5: the encrypted data path -->
+            <line x1="445" y1="390" x2="445" y2="414" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <line x1="860" y1="390" x2="860" y2="414" stroke="var(--remote)" stroke-width="1.2" marker-end="url(#ah1r)"/>
+            <rect x="30" y="416" width="240" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="438" font-weight="600">Workload with an NFS volume</text>
+            <text x="44" y="455">PVC backed by the NAS</text>
+            <text x="44" y="471" fill="var(--muted)">counters rise in trafficstatus</text>
+            <line x1="270" y1="447" x2="298" y2="447" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+            <rect x="300" y="416" width="290" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="314" y="438" font-weight="600" fill="var(--host)">⑤ NFS to NAS_IP is encrypted</text>
+            <text x="314" y="455">matches rightsubnet NAS_IP/32</text>
+            <text x="314" y="471">sent as ESP, transport mode</text>
+            <line x1="592" y1="447" x2="758" y2="447" stroke="var(--remote)" stroke-width="1.8" marker-start="url(#ah1r)" marker-end="url(#ah1r)"/>
+            <rect x="602" y="426" width="146" height="16" fill="var(--surface)"/>
+            <text x="675" y="438" text-anchor="middle" font-weight="600" fill="var(--remote)">ESP · IP protocol 50</text>
+            <rect x="602" y="452" width="146" height="16" fill="var(--surface)"/>
+            <text x="675" y="464" text-anchor="middle" fill="var(--muted)">NFS inside, encrypted</text>
+            <rect x="760" y="416" width="200" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="774" y="438" font-weight="600" fill="var(--remote)">NFS data IP</text>
+            <text x="774" y="455" font-family="IBM Plex Mono, monospace" font-size="12">${NAS_IP}</text>
+            <text x="774" y="471">cleartext NFS is rejected</text>
+
+            <text x="30" y="508" fill="var(--muted)">Pod-to-pod traffic inside the cluster is not encrypted: External mode covers external hosts only.</text>
+            <text x="30" y="528" fill="var(--muted)">Firewalls must allow UDP 500, UDP 4500 and ESP (IP protocol 50) between every worker and the NAS.</text>
+            <text x="30" y="548" fill="var(--host)" font-weight="600">Drawn from this guide and its manifests; not measured on a running cluster.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Option A: one shared certificate</h2>
+    <figure>
+      <div class="fig-scroll">
+        <!-- Three lanes: the manual work, the cluster operators, and what happens on every worker. -->
+        <svg viewBox="0 0 980 566" role="img" aria-label="Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker and the tunnel comes up. Adding a worker or renewing the certificate repeats the manual steps and reboots every worker again.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="170" y="34" text-anchor="middle" fill="var(--none)">YOU · workstation + enterprise CA</text>
+            <rect x="340" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="490" y="34" text-anchor="middle" fill="var(--none)">CLUSTER · operators</text>
+            <rect x="660" y="14" width="300" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="810" y="34" text-anchor="middle" fill="var(--host)">EVERY WORKER NODE</text>
+          </g>
+          <line x1="330" y1="14" x2="330" y2="390" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- manual steps -->
+            <rect x="30" y="64" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="86" font-weight="600">① Build one certificate request</text>
+            <text x="44" y="103">SAN lists ALL current workers; key + CSR</text>
+            <text x="44" y="119" fill="var(--muted)">Steps A.2, A.3</text>
+            <line x1="170" y1="126" x2="170" y2="150" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="30" y="152" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="174" font-weight="600">② Enterprise CA signs it</text>
+            <text x="44" y="191">left_server.crt + CA chain come back</text>
+            <text x="44" y="207" fill="var(--muted)">Step A.4 · manual request</text>
+            <line x1="170" y1="214" x2="170" y2="238" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="30" y="240" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="262" font-weight="600">③ Bundle and render</text>
+            <text x="44" y="279">left_server.p12 + ca.pem → MachineConfig</text>
+            <text x="44" y="295" fill="var(--muted)">Steps A.5 – A.9</text>
+            <line x1="310" y1="271" x2="348" y2="271" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="350" y="240" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="262" font-weight="600">④ MCO rolls it out</text>
+            <text x="364" y="279" font-family="IBM Plex Mono, monospace" font-size="12">99-worker-import-certs</text>
+            <text x="364" y="295">files + import script on each worker</text>
+            <line x1="630" y1="271" x2="668" y2="271" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="670" y="240" width="280" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="684" y="262" font-weight="600" fill="var(--host)">⑤ Every worker reboots, one at a time</text>
+            <text x="684" y="279">ipsec-import.service fills the NSS DB</text>
+            <text x="684" y="295">cert nickname: left_server</text>
+
+            <!-- policy and tunnel -->
+            <line x1="170" y1="302" x2="170" y2="326" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+            <line x1="810" y1="302" x2="810" y2="326" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+            <rect x="30" y="328" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="350" font-weight="600">⑥ Apply the Kyverno policy</text>
+            <text x="44" y="367" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-nncp-shared-cert</text>
+            <text x="44" y="383" fill="var(--muted)">Step A.10</text>
+            <line x1="310" y1="359" x2="348" y2="359" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="350" y="328" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="350" font-weight="600">⑦ One NNCP per worker</text>
+            <text x="364" y="367" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-nas-&lt;node&gt;</text>
+            <text x="364" y="383">generated by Kyverno, applied by NMState</text>
+            <line x1="630" y1="359" x2="668" y2="359" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+
+            <rect x="670" y="328" width="280" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="684" y="350" font-weight="600" fill="var(--remote)">⑧ Tunnel to the NAS is up</text>
+            <text x="684" y="367">libreswan connection ipsec-nas</text>
+            <text x="684" y="383">IKEv2, transport mode</text>
+
+            <!-- the cost: every change repeats the manual path -->
+            <rect x="30" y="416" width="920" height="62" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="44" y="438" font-weight="600" fill="var(--gap)">New worker, or certificate renewal</text>
+            <text x="44" y="455">Repeat ① to ⑤ by hand: new SAN list, new certificate, new MachineConfig. Every worker reboots again.</text>
+            <text x="44" y="471" fill="var(--muted)">Step A.11</text>
+
+            <text x="30" y="508" fill="var(--muted)">One certificate and one private key are shared by every worker, so a single node cannot be revoked on its own.</text>
+            <text x="30" y="528" fill="var(--muted)">This is the Red Hat documented method.</text>
+            <text x="30" y="548" fill="var(--host)" font-weight="600">Drawn from this guide and its manifests; not measured on a running cluster.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker. Adding a worker or renewing the certificate repeats the manual steps and reboots every worker again.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Option B: one certificate per node</h2>
+    <figure>
+      <div class="fig-scroll">
+        <!-- Three lanes: the policy and certificate controllers, the cert-sync pod, and the worker node it runs on. -->
+        <svg viewBox="0 0 980 660" role="img" aria-label="Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it into the node's NSS database and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot.">
+          <defs>
+            <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="170" y="34" text-anchor="middle" fill="var(--none)">KYVERNO + CERT-MANAGER</text>
+            <rect x="340" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="490" y="34" text-anchor="middle" fill="var(--none)">cert-sync POD · kcs-ipsec</text>
+            <rect x="660" y="14" width="300" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="810" y="34" text-anchor="middle" fill="var(--host)">WORKER NODE</text>
+          </g>
+          <line x1="650" y1="14" x2="650" y2="478" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <!-- row 1: node joins -> policy 1 -->
+            <rect x="670" y="64" width="280" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="684" y="86" font-weight="600" fill="var(--host)">A worker joins the cluster</text>
+            <text x="684" y="103">Node object with the worker role label</text>
+            <text x="684" y="119" fill="var(--muted)">no manual step from here on</text>
+            <line x1="668" y1="95" x2="312" y2="95" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="436" y="74" width="108" height="16" fill="var(--surface)"/>
+            <text x="490" y="86" text-anchor="middle" fill="var(--muted)">Node created</text>
+            <rect x="30" y="64" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="86" font-weight="600">① Policy 1: Certificate per worker</text>
+            <text x="44" y="103" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-&lt;node&gt;</text>
+            <text x="44" y="119">signed by company-issuer-rnd</text>
+
+            <!-- row 2: secret -> pod mutated -->
+            <line x1="170" y1="126" x2="170" y2="150" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="30" y="152" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="174" font-weight="600">② cert-manager writes the Secret</text>
+            <text x="44" y="191" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-cert-&lt;node&gt;</text>
+            <text x="44" y="207">holds this node's certificate and key</text>
+            <line x1="310" y1="183" x2="348" y2="183" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="350" y="152" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="174" font-weight="600">③ cert-sync pod starts on the node</text>
+            <text x="364" y="191">Policy 2 pointed it at ONLY this Secret</text>
+            <text x="364" y="207">mounted at /certs · root CA at /ca</text>
+
+            <!-- row 3: import into NSS -->
+            <line x1="490" y1="214" x2="490" y2="238" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="350" y="240" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="262" font-weight="600">④ Pod imports the certificate</text>
+            <text x="364" y="279">into the node's NSS DB as left_server</text>
+            <text x="364" y="295" fill="var(--muted)">then re-checks every 5 minutes</text>
+            <line x1="630" y1="271" x2="668" y2="271" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="670" y="240" width="280" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="684" y="262" font-weight="600" fill="var(--host)">NSS DB on the node</text>
+            <text x="684" y="279" font-family="IBM Plex Mono, monospace" font-size="12">/var/lib/ipsec/nss</text>
+            <text x="684" y="295">left_server + KCS-IPSEC-CA</text>
+
+            <!-- row 4: label -> policy 3 -->
+            <line x1="490" y1="302" x2="490" y2="326" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="350" y="328" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="350" font-weight="600">⑤ Pod labels the node</text>
+            <text x="364" y="367" font-family="IBM Plex Mono, monospace" font-size="12">ipsec.kcs.io/cert-ready=true</text>
+            <text x="364" y="383" fill="var(--muted)">only after a successful import</text>
+            <line x1="350" y1="359" x2="312" y2="359" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="30" y="328" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="350" font-weight="600">⑥ Policy 3: NNCP for this node</text>
+            <text x="44" y="367" font-family="IBM Plex Mono, monospace" font-size="12">ipsec-nas-&lt;node&gt;</text>
+            <text x="44" y="383">only when the label is present</text>
+
+            <!-- row 5: NMState applies -> tunnel up -->
+            <polyline points="170,390 170,447 668,447" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah3)"/>
+            <rect x="330" y="426" width="170" height="16" fill="var(--surface)"/>
+            <text x="415" y="438" text-anchor="middle" fill="var(--muted)">NMState applies the NNCP</text>
+            <rect x="670" y="416" width="280" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="684" y="438" font-weight="600" fill="var(--remote)">⑦ Tunnel to the NAS is up</text>
+            <text x="684" y="455">libreswan connection ipsec-nas</text>
+            <text x="684" y="471">IKEv2, transport mode</text>
+
+            <!-- row 6: what happens later, and the safe failure -->
+            <rect x="30" y="504" width="450" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="44" y="526" font-weight="600" fill="var(--remote)">Renewal is automatic</text>
+            <text x="44" y="543">cert-manager renews 30 days before expiry; the pod re-imports</text>
+            <text x="44" y="559">and restarts the tunnel for a few seconds. No node reboot.</text>
+            <rect x="500" y="504" width="450" height="62" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="514" y="526" font-weight="600" fill="var(--gap)">If the Secret is missing, the pod waits</text>
+            <text x="514" y="543">It stays in ContainerCreating until its own Secret exists;</text>
+            <text x="514" y="559">it never imports another node's certificate.</text>
+
+            <text x="30" y="596" fill="var(--muted)">The cert-sync DaemonSet is privileged: it writes to the host's NSS database.</text>
+            <text x="30" y="616" fill="var(--host)" font-weight="600">This certificate delivery is the guide's own design, not a Red Hat procedure.</text>
+            <text x="30" y="636" fill="var(--host)" font-weight="600">Drawn from this guide and its manifests; not measured on a running cluster.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot.</figcaption>
+    </figure>
+  </section>
+</div>
