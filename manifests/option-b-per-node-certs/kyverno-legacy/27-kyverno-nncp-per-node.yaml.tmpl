@@ -1,0 +1,72 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ipsec-nncp-per-node
+spec:
+  failurePolicy: Ignore
+  rules:
+  - name: nncp-when-cert-ready
+    match:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchLabels:
+              node-role.kubernetes.io/worker: ""
+              ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
+    # exclude-nodes:begin
+    # Nodes with ANY of these labels are left out, even if they also match the labels above.
+    exclude:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/ingress
+              operator: Exists
+    # exclude-nodes:end
+    generate:
+      generateExisting: true
+      synchronize: true
+      apiVersion: nmstate.io/v1
+      kind: NodeNetworkConfigurationPolicy
+      name: "ipsec-nas-{{ request.object.metadata.name }}"
+      data:
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: '{{ request.object.metadata.labels."kubernetes.io/hostname" }}'
+          desiredState:
+            interfaces:
+            - name: ipsec-nas
+              type: ipsec
+              libreswan:
+                left: "${NODE_LEFT}"   # matches the Certificate dnsNames
+                leftid: '%fromcert'
+                leftrsasigkey: '%cert'
+                leftcert: left_server
+                leftmodecfgclient: false
+                right: ${NAS_RIGHT}
+                rightid: '%fromcert'
+                rightrsasigkey: '%cert'
+                rightsubnet: ${NAS_IP}/32
+                ikev2: insist
+                type: ${IPSEC_TYPE}
+                # Uncomment ONLY if the NAS requires specific proposals:
+                # esp: aes_gcm256
+                # ike: aes256-sha2;dh20

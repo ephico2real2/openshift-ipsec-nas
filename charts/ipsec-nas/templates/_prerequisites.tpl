@@ -11,7 +11,14 @@ The checks that read objects only run against a real cluster ("helm template" ha
 {{- if and (not .Values.trustCA.pem) (not .Values.trustCA.existingConfigMap) }}{{ fail "trustCA.pem is required: --set-file trustCA.pem=enterprise-root.pem (or set trustCA.existingConfigMap)" }}{{ end -}}
 {{- if not (has .Values.ipsec.type (list "transport" "tunnel")) }}{{ fail "ipsec.type must be transport or tunnel" }}{{ end -}}
 {{- if not .Values.prerequisites.skipCheck -}}
-{{- $apis := dict "kyverno.io/v1" "Kyverno (docs/ipsec-nas-guide.md, Step 1.6)" "cert-manager.io/v1" "cert-manager" "nmstate.io/v1" "the NMState Operator with an NMState instance (Step 1.5)" -}}
+{{- $apis := dict "cert-manager.io/v1" "cert-manager" "nmstate.io/v1" "the NMState Operator with an NMState instance (Step 1.5)" -}}
+{{- if .Values.kyverno.legacyPolicies -}}
+{{- $_ := set $apis "kyverno.io/v1" "Kyverno (docs/ipsec-nas-guide.md, Step 1.6)" -}}
+{{- if .Values.nodeCleanup.deleteOrphanedSecrets }}{{ $_ := set $apis "kyverno.io/v2" "Kyverno's CleanupPolicy (kyverno.io/v2)" }}{{ end -}}
+{{- else if not (.Capabilities.APIVersions.Has "policies.kyverno.io/v1") -}}
+{{- if .Capabilities.APIVersions.Has "kyverno.io/v1" }}{{ fail "prerequisite missing: Kyverno's CEL policies. The cluster does not serve policies.kyverno.io/v1 (Kyverno 1.19 or later). Upgrade Kyverno, or set kyverno.legacyPolicies=true to use the legacy ClusterPolicy kinds." }}{{ end -}}
+{{- $_ := set $apis "policies.kyverno.io/v1" "Kyverno 1.19 or later (docs/ipsec-nas-guide.md, Step 1.6)" -}}
+{{- end -}}
 {{- range $api, $what := $apis -}}
 {{- if not ($.Capabilities.APIVersions.Has $api) }}{{ fail (printf "prerequisite missing: %s. The cluster does not serve %s. Install it first; this chart does not install it. (Without a cluster, use --set prerequisites.skipCheck=true.)" $what $api) }}{{ end -}}
 {{- end -}}
@@ -74,4 +81,22 @@ exclude:
 {{- if hasPrefix "node-role.kubernetes.io/" . -}}{{- $roles = append $roles (trimPrefix "node-role.kubernetes.io/" .) -}}{{- end -}}
 {{- end -}}
 {{- join "|" $roles -}}
+{{- end -}}
+
+{{/* The Node selection of a CEL policy (objectSelector): the nodeSelector labels, plus "extra"
+     labels, minus the Nodes that carry any excluded label key. */}}
+{{- define "ipsec-nas.nodeObjectSelector" -}}
+matchLabels:
+  {{- include "ipsec-nas.nodeMatchLabels" .root | nindent 2 }}
+  {{- range $k, $v := .extra }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+{{- with .root.Values.excludeNodeLabels }}
+# Nodes with ANY of these labels are left out, even if they also match the labels above.
+matchExpressions:
+{{- range . }}
+- key: {{ . }}
+  operator: DoesNotExist
+{{- end }}
+{{- end }}
 {{- end -}}

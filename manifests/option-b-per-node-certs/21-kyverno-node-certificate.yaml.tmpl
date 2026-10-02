@@ -1,64 +1,53 @@
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+# Kyverno 1.19 and later (policies.kyverno.io/v1). The legacy ClusterPolicy is in kyverno-legacy/.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
 metadata:
   name: ipsec-node-certificate
 spec:
-  failurePolicy: Ignore
-  rules:
-  - name: certificate-per-worker
-    match:
-      any:
-      - resources:
-          kinds:
-          - Node
-          selector:
-            matchLabels:
-              node-role.kubernetes.io/worker: ""
-    # exclude-nodes:begin
-    # Nodes with ANY of these labels are left out, even if they also match the labels above.
-    exclude:
-      any:
-      - resources:
-          kinds:
-          - Node
-          selector:
-            matchExpressions:
-            - key: node-role.kubernetes.io/control-plane
-              operator: Exists
-      - resources:
-          kinds:
-          - Node
-          selector:
-            matchExpressions:
-            - key: node-role.kubernetes.io/master
-              operator: Exists
-      - resources:
-          kinds:
-          - Node
-          selector:
-            matchExpressions:
-            - key: node-role.kubernetes.io/ingress
-              operator: Exists
-    # exclude-nodes:end
-    generate:
-      generateExisting: true
-      synchronize: true          # Certificate is deleted when the Node is deleted
-      apiVersion: cert-manager.io/v1
-      kind: Certificate
-      name: "ipsec-{{ request.object.metadata.name }}"
-      namespace: kcs-ipsec
-      data:
+  evaluation:
+    generateExisting:
+      enabled: true          # nodes that exist before the policy get a Certificate too
+    synchronize:
+      enabled: true          # the Certificate is deleted when the Node is deleted
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["nodes"]
+    objectSelector:
+      matchLabels:
+        node-role.kubernetes.io/worker: ""
+      # exclude-nodes:begin
+      # Nodes with ANY of these labels are left out, even if they also match the labels above.
+      matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist
+      - key: node-role.kubernetes.io/master
+        operator: DoesNotExist
+      - key: node-role.kubernetes.io/ingress
+        operator: DoesNotExist
+      # exclude-nodes:end
+  generate:
+  - template:
+      interpolate: cel
+      value: |
+        apiVersion: cert-manager.io/v1
+        kind: Certificate
+        metadata:
+          name: ipsec-(( object.metadata.name ))
+          namespace: kcs-ipsec
         spec:
-          secretName: "ipsec-cert-{{ request.object.metadata.name }}"
-          commonName: "{{ request.object.metadata.name }}.${NODE_DOMAIN}"   # max 64 chars, must not start with ovs_
+          secretName: ipsec-cert-(( object.metadata.name ))
+          commonName: (( object.metadata.name )).${NODE_DOMAIN}
           dnsNames:
-          - "{{ request.object.metadata.name }}.${NODE_DOMAIN}"           # must equal the NNCP "left" value
-          duration: 8760h          # 1 year (the CA may override this)
-          renewBefore: 720h        # renew 30 days before expiry
+          - (( object.metadata.name )).${NODE_DOMAIN}
+          duration: 8760h
+          renewBefore: 720h
           privateKey:
-            algorithm: RSA         # NNCP uses leftrsasigkey: '%cert'
+            algorithm: RSA
             size: 3072
-            rotationPolicy: Always # new key on every renewal
+            rotationPolicy: Always
           usages:
           - digital signature
           - key encipherment
@@ -67,4 +56,8 @@ spec:
           issuerRef:
             group: cert-manager.io
             kind: ClusterIssuer
-            name: ${CLUSTER_ISSUER}       # the existing enterprise CA issuer
+            name: ${CLUSTER_ISSUER}
+# In the Certificate above: the common name has at most 64 characters and must not start with ovs_;
+# the DNS name must equal the NNCP "left" value; duration 1 year (the CA may override it), renewed
+# 30 days before expiry, with a new RSA key every time (the NNCP uses leftrsasigkey: '%cert');
+# the issuer is the existing enterprise CA ClusterIssuer.

@@ -1,0 +1,28 @@
+# Kyverno's cleanup controller runs the policy in 32-cleanup-orphaned-secrets.yaml (either kind).
+# It gets the rights for it in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kyverno-cleanup-ipsec-secrets
+  namespace: kcs-ipsec
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: ["cert-manager.io"]
+  resources: ["certificates"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kyverno-cleanup-ipsec-secrets
+  namespace: kcs-ipsec
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kyverno-cleanup-ipsec-secrets
+subjects:
+- kind: ServiceAccount
+  name: kyverno-cleanup-controller
+  namespace: kyverno

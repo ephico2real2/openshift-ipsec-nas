@@ -17,8 +17,13 @@ metadata:
   annotations:
     {{- include "ipsec-nas.uninstallHook" (dict "weight" "-10" "root" $) | nindent 4 }}
 rules:
+{{- if .Values.kyverno.legacyPolicies }}
 - apiGroups: ["kyverno.io"]
   resources: ["clusterpolicies"]
+{{- else }}
+- apiGroups: ["policies.kyverno.io"]
+  resources: ["generatingpolicies"]
+{{- end }}
   resourceNames: ["ipsec-nncp-per-node", "ipsec-node-certificate"]
   verbs: ["get", "delete"]
 - apiGroups: ["nmstate.io"]
@@ -116,6 +121,8 @@ spec:
               fieldPath: metadata.namespace
         - name: REMOVE_CERTIFICATES
           value: {{ .Values.uninstallCleanup.removeCertificates | quote }}
+        - name: POLICY_KIND
+          value: {{ ternary "clusterpolicy" "generatingpolicy" .Values.kyverno.legacyPolicies }}
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true

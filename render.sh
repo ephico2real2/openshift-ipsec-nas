@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renders every *.tmpl under manifests/ into rendered/, substituting ONLY
 # NODE_DOMAIN, NAS_FQDN, NAS_IP, NAS_EXPORT, CLUSTER_ISSUER, OCP_VERSION and the four overrides below
-# (Kyverno {{ }} expressions are left untouched).
+# (Kyverno's {{ }} and CEL (( )) expressions are left untouched).
 # Non-template manifests are copied as-is so rendered/ is a complete, apply-ready set.
 set -euo pipefail
 : "${NODE_DOMAIN:?set NODE_DOMAIN (e.g. ocp.example.com)}"
@@ -18,8 +18,15 @@ export OCP_VERSION
 export MCP_ROLE="${MCP_ROLE:-worker}"
 export IPSEC_TYPE="${IPSEC_TYPE:-transport}"
 export NAS_RIGHT="${NAS_RIGHT:-${NAS_FQDN}}"
-[[ -n "${NODE_LEFT:-}" ]] || NODE_LEFT="{{ request.object.metadata.name }}.${NODE_DOMAIN}"
-export NODE_LEFT
+# Left unset, "left" is the node's FQDN, written in the syntax of each policy set: CEL for the
+# default policies, Kyverno's {{ }} for kyverno-legacy/.
+if [[ -n "${NODE_LEFT:-}" ]]; then
+  NODE_LEFT_LEGACY="${NODE_LEFT}"
+else
+  NODE_LEFT="(( object.metadata.name )).${NODE_DOMAIN}"
+  NODE_LEFT_LEGACY="{{ request.object.metadata.name }}.${NODE_DOMAIN}"
+fi
+export NODE_LEFT NODE_LEFT_LEGACY
 # Which nodes are left out is written in the manifests between "# exclude-nodes:begin" and
 # "# exclude-nodes:end" (control-plane, master and ingress nodes). EXCLUDE_NODES=none takes those
 # blocks out, for a cluster whose only node is control plane and worker at once (CRC).
@@ -30,7 +37,8 @@ rm -rf rendered
 while IFS= read -r f; do
   out="rendered/${f#manifests/}"; mkdir -p "$(dirname "$out")"
   if [[ "$f" == *.tmpl ]]; then
-    perl -pe 's/\$\{(NODE_DOMAIN|NAS_FQDN|NAS_IP|NAS_EXPORT|CLUSTER_ISSUER|OCP_VERSION|MCP_ROLE|IPSEC_TYPE|NAS_RIGHT|NODE_LEFT)\}/$ENV{$1}/g' "$f" > "${out%.tmpl}"
+    left=NODE_LEFT; [[ "$f" == */kyverno-legacy/* ]] && left=NODE_LEFT_LEGACY
+    LEFT_VAR="${left}" perl -pe 's/\$\{(NODE_DOMAIN|NAS_FQDN|NAS_IP|NAS_EXPORT|CLUSTER_ISSUER|OCP_VERSION|MCP_ROLE|IPSEC_TYPE|NAS_RIGHT)\}/$ENV{$1}/g; s/\$\{NODE_LEFT\}/$ENV{$ENV{LEFT_VAR}}/g' "$f" > "${out%.tmpl}"
   else
     cp "$f" "$out"
   fi

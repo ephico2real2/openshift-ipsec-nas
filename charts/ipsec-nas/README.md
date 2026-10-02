@@ -11,7 +11,7 @@ These must **already be on the cluster**. They are prerequisites, not dependenci
 | Prerequisite | Why | Main guide | Checked by the chart |
 |---|---|---|---|
 | **cert-manager**, with a `ClusterIssuer` for the enterprise CA | Issues one certificate per node. The chart never creates an issuer | Step B.1 | The API `cert-manager.io/v1` is served; the `ClusterIssuer` named in `clusterIssuer` exists |
-| **Kyverno** 1.13 or later, which does **not** filter out Nodes | Creates the Certificate and the NNCP for each node, and gives each pod its node's secret | Steps 1.6 and 1.6.3 | The API `kyverno.io/v1` is served; `[Node,*,*]` is not in Kyverno's `resourceFilters` |
+| **Kyverno** 1.19 or later (or 1.13 or later with `kyverno.legacyPolicies: true`), which does **not** filter out Nodes | Creates the Certificate and the NNCP for each node, gives each pod its node's secret, removes a deleted node's Secret | Steps 1.6 and 1.6.3 | The API `policies.kyverno.io/v1` is served (`kyverno.io/v1`, and `kyverno.io/v2` for the cleanup, with the legacy policies); `[Node,*,*]` is not in Kyverno's `resourceFilters` |
 | **NMState Operator** with an `NMState` instance | Builds the tunnel on the node from the NNCP | Step 1.5 | The API `nmstate.io/v1` is served |
 | **libreswan on the nodes** | The tunnel itself | Steps 1.3 and 1.4 (`routingViaHost`, `ipsecConfig.mode: External`) | Not checked |
 | **The namespace**, with the privileged pod-security labels | The cert-sync pod runs privileged | Step B.2 | Not checked: create it before installing |
@@ -85,6 +85,7 @@ Argo CD renders the chart without a cluster connection, so the checks that read 
 | `tolerations` | `[]` | For the cert-sync DaemonSet |
 | `certificate.duration` / `renewBefore` / `keySize` | `8760h` / `720h` / `3072` | The per-node certificate |
 | `images.cli`, `images.python` | OpenShift `cli`, UBI 9 Python 3.12 | Mirror them on a disconnected cluster |
+| `kyverno.legacyPolicies` | `false` | `false`: Kyverno's CEL policies (`policies.kyverno.io/v1`), `templates/kyverno/`. `true`: the legacy `ClusterPolicy` and `CleanupPolicy`, `templates/kyverno-legacy/`, deprecated in Kyverno 1.19. See [Kyverno policies: CEL or legacy](#kyverno-policies-cel-or-legacy) |
 | `kyvernoRBAC.create` | `true` | The two ClusterRoles of the main guide's Step 1.7 |
 | `scc.bind` | `true` | Binds the `privileged` SCC to the cert-sync service account |
 | `metrics.serviceMonitor` / `prometheusRule` / `grafanaDashboard` | `true` / `true` / `false` | Observe, the six alerts, the dashboard ConfigMap |
@@ -100,11 +101,26 @@ Argo CD renders the chart without a cluster connection, so the checks that read 
 | Event | What happens | Controlled by |
 |---|---|---|
 | A node **reboots** | Nothing is removed. The Node object stays, so its `Certificate`, its Secret and the certificate on the node stay; the tunnel comes back by itself (measured) | – |
-| A Node is **deleted** | Kyverno deletes that node's `Certificate`. A Kyverno `CleanupPolicy` then deletes the Secret that cert-manager leaves behind (measured with a stand-in Node) | `nodeCleanup.deleteCertificate`, `nodeCleanup.deleteOrphanedSecrets`, `nodeCleanup.schedule` |
+| A Node is **deleted** | Kyverno deletes that node's `Certificate`. A Kyverno `NamespacedDeletingPolicy` (legacy: `CleanupPolicy`) then deletes the Secret that cert-manager leaves behind, in this namespace only (measured with a stand-in Node) | `nodeCleanup.deleteCertificate`, `nodeCleanup.deleteOrphanedSecrets`, `nodeCleanup.schedule` |
 | `helm uninstall` | `files/uninstall.sh` runs first, as a pre-delete hook: tunnels off the nodes, node labels, the certificate and key on each node, the `Certificate` objects, then the Secrets (measured: 12 seconds, nothing left) | `uninstallCleanup.enabled`, `uninstallCleanup.removeCertificates` |
 | An Argo CD Application is deleted | **Nothing is cleaned up** on Argo CD 3.4.7: it ran no hook (measured). Use the three steps below | `uninstallCleanup.hook: argocd` is there for an Argo CD that runs `PreDelete` hooks; not seen working |
 
 To keep the certificates through a node deletion **and** an uninstall, set `nodeCleanup.deleteCertificate`, `nodeCleanup.deleteOrphanedSecrets` and `uninstallCleanup.removeCertificates` to `false`. The `false` settings were not tested on a cluster.
+
+## Kyverno policies: CEL or legacy
+
+Kyverno 1.19 deprecates the `kyverno.io/v1 ClusterPolicy` and `kyverno.io/v2 CleanupPolicy` kinds and plans to remove them in 1.20 ([migration guide](https://kyverno.io/docs/guides/migration-to-cel/)). The chart therefore creates the CEL kinds by default; `kyverno.legacyPolicies: true` creates the legacy ones. Both sets have the same names and make the same objects:
+
+| Policy | CEL (default), `templates/kyverno/` | Legacy, `templates/kyverno-legacy/` |
+|---|---|---|
+| `ipsec-node-certificate`: a Certificate per node | `GeneratingPolicy` | `ClusterPolicy`, generate rule |
+| `ipsec-cert-sync-mount`: the pod gets its node's secret | `MutatingPolicy` | `ClusterPolicy`, mutate rule |
+| `ipsec-nncp-per-node`: an NNCP per node | `GeneratingPolicy` | `ClusterPolicy`, generate rule |
+| `ipsec-orphaned-node-secrets`: a deleted node's Secret | `NamespacedDeletingPolicy` | `CleanupPolicy` |
+
+Nothing here changes cert-manager or any other Certificate on the cluster: the deleting policy lists the Certificates of this namespace only and deletes only `ipsec-cert-*` Secrets in it. One difference: a legacy generate rule cannot change its node selection in place, so changing `nodeSelector` or `excludeNodeLabels` needs its policies deleted first; a `GeneratingPolicy` accepts the change (measured on Kyverno 1.19.1, `docs/evidence/crc/31-kyverno-cel-trial.txt`).
+
+Switching from one to the other: Argo CD prunes the old kind only when the sync prunes. With `automated: {}` (no `prune`), sync once with prune, or delete the four old policies by name.
 
 ## Uninstall
 

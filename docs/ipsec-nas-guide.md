@@ -1432,11 +1432,12 @@ oc apply -f 31-grafana-dashboard-cr.yaml
 
 ### Step B.13 – Clean up after a deleted node
 
-When a Node is deleted, Kyverno deletes that node's `Certificate` (policy 1 has `synchronize: true`). cert-manager leaves the Certificate's Secret behind, with the node's private key in it. This Kyverno `CleanupPolicy` deletes the cert-manager Secrets in the namespace whose Certificate no longer exists, every 5 minutes. Kyverno's cleanup controller gets the rights for it in this namespace only.
+When a Node is deleted, Kyverno deletes that node's `Certificate` (policy 1 has `synchronize: true`). cert-manager leaves the Certificate's Secret behind, with the node's private key in it. This Kyverno `NamespacedDeletingPolicy` deletes the cert-manager Secrets in the namespace whose Certificate no longer exists, every 5 minutes. Kyverno's cleanup controller gets the rights for it in this namespace only. (With the legacy policies, `kyverno-legacy/32-cleanup-orphaned-secrets.yaml` is a `CleanupPolicy` that does the same.)
 
 ```bash
-oc apply -f manifests/option-b-per-node-certs/31-cleanup-orphaned-secrets.yaml
-oc get cleanuppolicy -n kcs-ipsec
+oc apply -f manifests/option-b-per-node-certs/31-cleanup-rbac.yaml
+oc apply -f manifests/option-b-per-node-certs/32-cleanup-orphaned-secrets.yaml
+oc get namespaceddeletingpolicy -n kcs-ipsec
 oc auth can-i delete secrets -n kcs-ipsec --as=system:serviceaccount:kyverno:kyverno-cleanup-controller   # yes
 oc auth can-i delete secrets -n default   --as=system:serviceaccount:kyverno:kyverno-cleanup-controller   # no
 ```

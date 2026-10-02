@@ -1,9 +1,12 @@
-# Kyverno 1.19 and later (policies.kyverno.io/v1). The legacy ClusterPolicy is in kyverno-legacy/.
-# A node gets its NNCP once ipsec-cert-sync has imported its certificate and labelled it.
+{{- if not .Values.kyverno.legacyPolicies }}
+# One NNCP per Node, once ipsec-cert-sync has imported the node's certificate and labelled it.
+# Kyverno 1.19 and later; the legacy ClusterPolicy is in templates/kyverno-legacy/.
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
   name: ipsec-nncp-per-node
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   evaluation:
     generateExisting:
@@ -17,19 +20,7 @@ spec:
       operations: ["CREATE", "UPDATE"]
       resources: ["nodes"]
     objectSelector:
-      matchLabels:
-        node-role.kubernetes.io/worker: ""
-        ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
-      # exclude-nodes:begin
-      # Nodes with ANY of these labels are left out, even if they also match the labels above.
-      matchExpressions:
-      - key: node-role.kubernetes.io/control-plane
-        operator: DoesNotExist
-      - key: node-role.kubernetes.io/master
-        operator: DoesNotExist
-      - key: node-role.kubernetes.io/ingress
-        operator: DoesNotExist
-      # exclude-nodes:end
+      {{- include "ipsec-nas.nodeObjectSelector" (dict "root" $ "extra" (dict "ipsec.kcs.io/cert-ready" "true")) | nindent 6 }}
   generate:
   - template:
       interpolate: cel
@@ -46,16 +37,15 @@ spec:
             - name: ipsec-nas
               type: ipsec
               libreswan:
-                left: "${NODE_LEFT}"
+                left: "{{ .Values.ipsec.left | default (printf "(( object.metadata.name )).%s" .Values.nodeDomain) }}"
                 leftid: '%fromcert'
                 leftrsasigkey: '%cert'
                 leftcert: left_server
                 leftmodecfgclient: false
-                right: ${NAS_RIGHT}
+                right: {{ .Values.ipsec.right | default .Values.nas.fqdn }}
                 rightid: '%fromcert'
                 rightrsasigkey: '%cert'
-                rightsubnet: ${NAS_IP}/32
+                rightsubnet: {{ .Values.nas.ip }}/32
                 ikev2: insist
-                type: ${IPSEC_TYPE}
-# "left" must match the Certificate's DNS name. Add esp: aes_gcm256 and ike: aes256-sha2;dh20 to
-# libreswan above ONLY if the NAS requires specific proposals.
+                type: {{ .Values.ipsec.type }}
+{{- end }}

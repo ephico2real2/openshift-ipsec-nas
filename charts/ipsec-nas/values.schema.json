@@ -40,6 +40,7 @@
       }
     },
     "images": { "type": "object", "properties": { "cli": { "type": "string" }, "python": { "type": "string" } } },
+    "kyverno": { "type": "object", "properties": { "legacyPolicies": { "type": "boolean" } } },
     "kyvernoRBAC": { "type": "object", "properties": { "create": { "type": "boolean" } } },
     "scc": { "type": "object", "properties": { "bind": { "type": "boolean" } } },
     "metrics": {

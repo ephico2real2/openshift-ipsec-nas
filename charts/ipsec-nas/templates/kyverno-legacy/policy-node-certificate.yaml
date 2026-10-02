@@ -1,3 +1,5 @@
+{{- if .Values.kyverno.legacyPolicies }}
+# Legacy kind (kyverno.io/v1 ClusterPolicy), deprecated in Kyverno 1.19. The default is templates/kyverno/.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -45,3 +47,4 @@ spec:
             group: cert-manager.io
             kind: ClusterIssuer
             name: {{ .Values.clusterIssuer }}       # the existing enterprise CA issuer
+{{- end }}

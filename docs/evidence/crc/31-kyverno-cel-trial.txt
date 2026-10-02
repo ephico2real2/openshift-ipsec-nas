@@ -92,3 +92,32 @@ MutatingPolicy cel-trial-secret-owner (matches Secrets in kcs-ipsec):
   Role+RoleBinding in kcs-ipsec for kyverno-reports-controller: still False (oc auth can-i -n kcs-ipsec: yes; --all-namespaces: no)
   ClusterRole get/list/watch secrets, label rbac.kyverno.io/aggregate-to-reports-controller=true: True within 10 s
 The JSON-patch mutation above (23:20) ran while RBACPermissionsGranted was still False: the condition is about reporting, not admission.
+$ # mutateExisting: does the owner policy reach a Secret that existed before the policy?
+2026-10-02T23:28:00Z
+== a Secret that exists BEFORE the policy
+owner before: 
+clusterrole.rbac.authorization.k8s.io/cel-trial-reports-read-secrets created
+mutatingpolicy.policies.kyverno.io/cel-trial-secret-owner created
+t+90s owner: 
+$ # NamespacedDeletingPolicy, resource.Get with an explicit namespace (the cluster-scope form)
+2026-10-02T23:30:14Z
+== two Secrets: cel-trial-cert-pre (its Certificate ipsec-crc exists), cel-trial-cert-orphan (Certificate cel-trial-gone does not)
+namespaceddeletingpolicy.policies.kyverno.io/cel-trial-orphaned-secrets created
+2026-10-02T23:31:54Z
+last run: 
+secret: cel-trial-cert-orphan
+secret: cel-trial-cert-pre
+secret: ipsec-cert-crc
+2026-10-02T23:30:15Z ERR github.com/kyverno/kyverno/pkg/controllers/deleting/controller.go:270 > unable to get the policy from policy informer error="[<nil>: Internal error: deleting policy compiler 1.18 error: failed to compile policy, spec.conditions[1].expression: Invalid value: \"resource.Get(\\\"cert-manager.io/v1\\\", \\\"
+$ # In a namespaced policy the resource library is confined to the policy's namespace: List(apiVersion, resource), Get(apiVersion, resource, name)
+$ # (kyverno/sdk extensions/cel/libs/resource/lib.go, namespacedEnv). The 2-argument List compiles; its .items is typed 'any':
+ERROR: <input>:1:52: expression of type 'any' cannot be range of a comprehension (must be list, map, or dynamic)
+$ # the same policy with dyn(resource.List("cert-manager.io/v1", "certificates").items).map(c, c.metadata.name)
+2026-10-02T23:38:06Z
+== cel-trial-cert-pre (its Certificate ipsec-crc exists), cel-trial-cert-orphan (its Certificate does not)
+namespaceddeletingpolicy.policies.kyverno.io/cel-trial-orphaned-secrets created
+2026-10-02T23:39:41Z
+last run: 2026-10-02T23:39:00Z
+secret: cel-trial-cert-pre
+secret: ipsec-cert-crc
+2026-10-02T23:38:06Z TRC github.com/kyverno/kyverno/pkg/controllers/deleting/controller.go:89 > added kind=NamespacedDeletingPolicy logger=deleting-controller name=cel-trial-orphaned-secrets namespace=kcs-ipsec operation=added v=2

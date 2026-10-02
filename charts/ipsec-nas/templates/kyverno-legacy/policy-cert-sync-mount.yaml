@@ -1,3 +1,5 @@
+{{- if .Values.kyverno.legacyPolicies }}
+# Legacy kind (kyverno.io/v1 ClusterPolicy), deprecated in Kyverno 1.19. The default is templates/kyverno/.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -35,3 +37,4 @@ spec:
           - name: node-cert
             secret:
               secretName: "ipsec-cert-{{ "{{" }} request.object.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[0].matchFields[0].values[0] {{ "}}" }}"
+{{- end }}

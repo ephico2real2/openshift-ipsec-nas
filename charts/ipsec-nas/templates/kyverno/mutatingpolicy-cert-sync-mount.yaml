@@ -1,10 +1,13 @@
-# Kyverno 1.19 and later (policies.kyverno.io/v1). The legacy ClusterPolicy is in kyverno-legacy/.
-# The DaemonSet controller pins each pod to its node with a matchFields term on metadata.name;
-# this gives the pod that node's Secret as its node-cert volume.
+{{- if not .Values.kyverno.legacyPolicies }}
+# Gives each cert-sync pod its node's Secret. The DaemonSet controller pins each pod to its node with
+# a matchFields term on metadata.name. Kyverno 1.19 and later; the legacy ClusterPolicy is in
+# templates/kyverno-legacy/.
 apiVersion: policies.kyverno.io/v1
 kind: MutatingPolicy
 metadata:
   name: ipsec-cert-sync-mount
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
 spec:
   failurePolicy: Ignore
   autogen:
@@ -18,7 +21,7 @@ spec:
       resources: ["pods"]
     namespaceSelector:
       matchLabels:
-        kubernetes.io/metadata.name: kcs-ipsec
+        kubernetes.io/metadata.name: {{ .Release.Namespace }}
     objectSelector:
       matchLabels:
         app: ipsec-cert-sync
@@ -46,3 +49,4 @@ spec:
             ]
           }
         }
+{{- end }}

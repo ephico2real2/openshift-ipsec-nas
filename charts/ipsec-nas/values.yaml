@@ -55,6 +55,16 @@ images:
   # -- Serves the metrics file. Runs unprivileged.
   python: registry.access.redhat.com/ubi9/python-312:latest
 
+kyverno:
+  # -- Which kind of Kyverno policies to create. Both make the same Certificates, NNCPs and pod volume.
+  # false (the default): the CEL policies, policies.kyverno.io/v1 (GeneratingPolicy, MutatingPolicy,
+  #   NamespacedDeletingPolicy), templates/kyverno/. Needs Kyverno 1.19 or later.
+  # true: the legacy kinds, kyverno.io/v1 ClusterPolicy and kyverno.io/v2 CleanupPolicy,
+  #   templates/kyverno-legacy/. Kyverno 1.19 deprecates them, and plans to remove them in 1.20.
+  # Switching deletes the policies of one kind and creates the other: Kyverno then deletes and
+  # creates the Certificates and NNCPs again (docs/30-option-b-automated-helm-argocd.md).
+  legacyPolicies: false
+
 kyvernoRBAC:
   # -- Create the two ClusterRoles that let Kyverno read Nodes and create NNCPs and Certificates.
   create: true
