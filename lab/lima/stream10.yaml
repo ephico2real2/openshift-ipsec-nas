@@ -1,0 +1,21 @@
+# Lab VM for the IPsec NAS tests: CentOS Stream 10, the public upstream of RHEL 10.
+#   limactl create --name=lab-nas lab/lima/stream10.yaml
+minimumLimaVersion: 2.0.0
+
+base:
+- template:_images/centos-stream-10
+
+# Apple's Virtualization.framework: fast, and needs no extra install on macOS 13 or later
+vmType: vz
+cpus: 2
+memory: 2GiB
+disk: 10GiB
+
+# A plain server: no host directories mounted, no port forwarding, no containerd.
+# Files go in and out with "limactl copy".
+plain: true
+
+# user-v2 puts every lab VM on one network (192.168.104.0/24) where they reach each other
+# directly and resolve each other as lima-<name>.internal. It needs no sudo on the Mac.
+networks:
+- lima: user-v2

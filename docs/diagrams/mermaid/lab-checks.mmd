@@ -1,0 +1,18 @@
+%% The Lima lab: a test NAS and two stand-in workers, and the three things the lab checks.
+%% Text source only. The figure shown in the docs is docs/diagrams/lima-lab/lab-checks.*.png.
+flowchart LR
+    subgraph WORKERS["Stand-in workers: 2 Lima VMs"]
+        W0["A worker with no tunnel yet<br/>mount -t nfs4 lima-lab-nas.internal:/export<br/>tried before libreswan is set up"]
+        W1["lab-worker1, lab-worker2<br/>libreswan conn ipsec-nas: the NNCP's settings<br/>certificate left_server, one per worker"]
+        W2["Mount and write<br/>lima-lab-nas.internal:/export on /mnt/nas<br/>5 MiB of random data, then fsync"]
+        W1 --> W2
+    end
+    subgraph NAS["Test NAS: 1 Lima VM"]
+        N0["1. Dropped by the NAS firewall<br/>nftables: NFS only when it arrived through IPsec<br/>the mount gets no answer"]
+        N1["2. One tunnel per worker<br/>libreswan conn workers: answers any peer<br/>with a certificate from the test CA"]
+        N2["3. Counted on the tunnel<br/>NFSv4 server shares /export<br/>tunnel byte counter grows by at least 5 MiB"]
+        N1 --> N2
+    end
+    W0 -->|"NFS in cleartext, tcp/2049"| N0
+    W1 <-->|"IKEv2, UDP 500<br/>certificates, both ways"| N1
+    W2 <-->|"ESP, IP protocol 50<br/>NFS inside, encrypted"| N2

@@ -1315,6 +1315,9 @@ Then **revoke** that node's certificate at the CA, following our CA process. Opt
 
 ### 4.1 NAS configuration (storage team, not us)
 
+> [!TIP]
+> **No NAS to test against yet?** [`test-nas-rhel-guide.md`](test-nas-rhel-guide.md) builds a test NAS on RHEL 10, and [`lab-lima-guide.md`](lab-lima-guide.md) runs it in a lab on a Mac.
+
 The NAS needs its **own** certificate (the `right` side), and the **storage team** creates it. The key and CSR are generated on the NAS and the enterprise CA signs it. We never generate, hold or transfer the NAS private key. The only thing we install from that side is the **enterprise root CA**, so the nodes can trust the NAS.
 
 > [!IMPORTANT]
