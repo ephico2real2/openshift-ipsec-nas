@@ -1,0 +1,125 @@
+# Demo consumer of the NAS: one pod, two containers, one NFS volume.
+#   writer  appends a line to a file on the NAS every INTERVAL_SECONDS and rebuilds a small page
+#   web     serves that directory over HTTP, so the Route shows what is on the NAS
+# The node mounts the NFS share for the pod, so the image needs no NFS client and no privileges.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nas-demo
+  namespace: ipsec-nas-demo
+  labels:
+    app: nas-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nas-demo
+  template:
+    metadata:
+      labels:
+        app: nas-demo
+    spec:
+      containers:
+      - name: writer
+        image: registry.access.redhat.com/ubi9/python-312:latest
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          dir=/data/ipsec-nas-demo
+          mkdir -p "${dir}"
+          n=0
+          while true; do
+            n=$((n + 1))
+            echo "$(date -u +%FT%TZ) pod=${POD_NAME} node=${NODE_NAME} line=${n}" >> "${dir}/data.log"
+            {
+              echo "<!doctype html><meta charset=utf-8><meta http-equiv=refresh content=${INTERVAL_SECONDS}>"
+              echo "<title>NAS demo</title><h1>Data on the NAS</h1>"
+              echo "<p>Written by pod ${POD_NAME} on node ${NODE_NAME} to the NFS volume. Page built $(date -u +%FT%TZ).</p>"
+              echo "<p>$(wc -l < "${dir}/data.log") lines in <a href=data.log>data.log</a>. The newest 20:</p><pre>"
+              tail -n 20 "${dir}/data.log"
+              echo "</pre>"
+            } > "${dir}/.index.html.tmp"
+            # rename, so the web container never serves a half-written page
+            mv "${dir}/.index.html.tmp" "${dir}/index.html"
+            sleep "${INTERVAL_SECONDS}"
+          done
+        env:
+        - name: INTERVAL_SECONDS
+          value: "10"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        volumeMounts:
+        - name: nas
+          mountPath: /data
+      - name: web
+        image: registry.access.redhat.com/ubi9/python-312:latest
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          mkdir -p /data/ipsec-nas-demo
+          exec python3 -m http.server 8080 --directory /data/ipsec-nas-demo
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /data.log
+            port: http
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 10m
+            memory: 48Mi
+          limits:
+            memory: 128Mi
+        volumeMounts:
+        - name: nas
+          mountPath: /data
+          readOnly: true
+      volumes:
+      - name: nas
+        persistentVolumeClaim:
+          claimName: nas-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nas-demo
+  namespace: ipsec-nas-demo
+  labels:
+    app: nas-demo
+spec:
+  selector:
+    app: nas-demo
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http

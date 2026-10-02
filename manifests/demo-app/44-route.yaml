@@ -1,0 +1,16 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nas-demo
+  namespace: ipsec-nas-demo
+  labels:
+    app: nas-demo
+spec:
+  to:
+    kind: Service
+    name: nas-demo
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1420,7 +1420,7 @@ oc debug node/${NODE} -- chroot /host ipsec trafficstatus
 
 ✅ **Expected:** `trafficstatus` lists the `ipsec-nas` connection with `inBytes`/`outBytes`.
 
-Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), run `ipsec trafficstatus` again, and confirm the byte counters **increased**.
+Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), run `ipsec trafficstatus` again, and confirm the byte counters **increased**. [`nas-consumer-app-guide.md`](nas-consumer-app-guide.md) has a ready-made demo application for this, with a web page that shows the data on the NAS.
 
 ### 4.3 Troubleshooting
 

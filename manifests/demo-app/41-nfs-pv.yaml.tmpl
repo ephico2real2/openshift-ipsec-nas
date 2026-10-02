@@ -1,0 +1,25 @@
+# Static PersistentVolume for the NAS share. Cluster-wide object.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ipsec-nas-demo
+spec:
+  # Advisory only for NFS: the NAS decides the real limit. Used to match the claim.
+  capacity:
+    storage: 1Gi
+  accessModes:
+  - ReadWriteMany            # several pods, on several nodes, may mount it at once
+  persistentVolumeReclaimPolicy: Retain   # deleting the claim never deletes data on the NAS
+  storageClassName: ipsec-nas-static
+  # Only the claim nas-data in ipsec-nas-demo may bind this volume
+  claimRef:
+    namespace: ipsec-nas-demo
+    name: nas-data
+  mountOptions:
+  - nfsvers=4.1
+  - hard                     # retry forever instead of returning I/O errors to the app
+  - noatime
+  nfs:
+    # The NAS IP, not its name: it is the address the IPsec tunnel protects (rightsubnet in the NNCP)
+    server: ${NAS_IP}
+    path: ${NAS_EXPORT}

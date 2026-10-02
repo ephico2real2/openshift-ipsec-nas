@@ -244,7 +244,7 @@ The lab stays up until you run `lab/lab.sh down`. These commands show its state 
 | The VMs | `limactl list` | `lab-nas`, `lab-worker1`, `lab-worker2`, all `Running` |
 | The tunnel, from a worker | `limactl shell lab-worker1 sudo ipsec trafficstatus` | one `"ipsec-nas"` line with `id='CN=lima-lab-nas.internal, ...'` |
 | The tunnels, from the NAS | `limactl shell lab-nas sudo ipsec trafficstatus` | one `"workers"` line per worker, each with that worker's `id=` |
-| That it is ESP in transport mode | `limactl shell lab-worker1 sudo ip xfrm state` | two entries with `proto esp ... mode transport`, and no `encap` line |
+| That it is ESP in transport mode | `limactl shell lab-worker1 sudo ip xfrm state \| grep -E '^src\|proto\|encap'` | two `src ... dst ...` lines, each followed by `proto esp ... mode transport`, and no `encap` line. The filter matters: unfiltered, this command also prints the session keys. |
 | The NFS mount | `limactl shell lab-worker1 grep /mnt/nas /proc/mounts` | `lima-lab-nas.internal:/export /mnt/nas nfs4 ...` |
 | The files on the NAS | `limactl shell lab-nas sudo ls -la /export` | `verify-lima-lab-worker1.bin` and `...worker2.bin`, 5242880 bytes each |
 | The firewall counters | `limactl shell lab-nas sudo nft list table inet nas_ipsec_only` | `nfs-over-ipsec` in the thousands of packets; `nfs-cleartext-dropped` only the few packets from check 1 |

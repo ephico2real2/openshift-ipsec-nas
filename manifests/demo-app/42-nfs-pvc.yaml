@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nas-data
+  namespace: ipsec-nas-demo
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: ipsec-nas-static
+  volumeName: ipsec-nas-demo
+  resources:
+    requests:
+      storage: 1Gi
