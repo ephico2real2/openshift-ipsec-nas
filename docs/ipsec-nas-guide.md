@@ -1440,6 +1440,13 @@ chmod +x butane && sudo mv butane /usr/local/bin/
 butane --version
 ```
 
+That file is the **Linux x86-64** binary. On a Mac, install it with Homebrew instead (measured on an Apple Silicon Mac: `Butane 0.29.0`); the mirror has no build for Apple Silicon.
+
+```bash
+brew install butane
+butane --version
+```
+
 ### Step A.2 – Build the SAN list from the current workers
 
 ```bash

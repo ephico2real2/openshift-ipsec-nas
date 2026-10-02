@@ -11,9 +11,10 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | A | Measure the network path from the CRC node to a Lima VM | **Done**, measured |
 | B | A NAS VM that CRC can reach, and a tunnel that works through the NAT in between | **Done**, measured with a stand-in VM behind the same kind of NAT |
 | C | The NAS side for CRC: a NAS certificate signed by the cluster's enterprise CA, and the NAS configured for the CRC node | **Done**, measured |
-| D | Change the CRC cluster (IPsec mode, NMState, node certificates, NNCP) and run the demo app | **Not run yet**, with one exception: the NMState Operator subscription is applied, and its result is not confirmed yet. The cluster's network settings are unchanged. |
+| D | Change the CRC cluster: `routingViaHost`, NMState, Kyverno RBAC, IPsec `External` mode | `routingViaHost`, NMState and the Kyverno RBAC are **done**, measured. IPsec `External` mode **fails on CRC**: the node cannot install libreswan. It was reverted and the cluster is healthy. |
+| – | The node's own tunnel, Appendix A, Part 2 from Step B.5, the demo app, metrics in Observe | **Not run on CRC.** They all need libreswan on the node. |
 
-Everything in Parts A to C was run and the outputs shown are real. Part D is a plan: it will be filled in with measured output as each step is run.
+Everything in this guide was run and the outputs shown are real, including the step that failed. Nothing is shown as working that was not measured.
 
 ---
 
@@ -24,9 +25,10 @@ Everything in Parts A to C was run and the outputs shown are real. Part D is a p
 | Nodes | Many workers in the `worker` pool | One node, `crc`, with roles `control-plane,master,worker`, in the **`master`** MachineConfigPool. The `worker` pool has 0 machines. |
 | Path to the NAS | Routed, no NAT | **Through NAT.** The node's packets leave through the Mac and reach the NAS from `192.168.64.1`. |
 | IPsec mode on the tunnel | `transport`, bare ESP | **`tunnel`**, ESP wrapped in UDP 4500. Transport mode is refused behind NAT (Part B). |
-| The node's address toward the NAS | `<node>.<NODE_DOMAIN>` resolves to it | `192.168.127.2`. No `crc.<domain>` name resolves to it, so the NNCP uses `left: '%defaultroute'`. The node's other address, `192.168.126.11`, cannot reach the NAS. |
+| The node's address toward the NAS | `<node>.<NODE_DOMAIN>` resolves to it | `192.168.127.2`. No `crc.<domain>` name resolves to it, so the NNCP would use `left: '%defaultroute'` (not applied on CRC, see Step D.4). The node's other address, `192.168.126.11`, cannot reach the NAS. |
 | Enterprise CA issuer | The placeholder `company-issuer-rnd` stands for yours | `enterprise-ca`, a root CA valid to 2031 |
-| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: false`, libreswan not installed on the node, no `NMState` instance |
+| Installing libreswan on the nodes | `ipsecConfig.mode: External` adds it as an OS extension and reboots each node | **Fails.** The CRC image carries three extra packages that the extension install cannot find again (Step D.4). |
+| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: true`, libreswan not installed on the node, NMState installed |
 | Kyverno, cert-manager | Installed by the guide | Already installed (Kyverno chart 3.9.1, cert-manager running) |
 
 > [!IMPORTANT]
@@ -357,12 +359,19 @@ The first line also shows that the node's default route leaves through `br-ex` f
 
 ---
 
-## Part D – Change the CRC cluster (prepared; only the first command of Step D.3 has been run)
+## Part D – Change the CRC cluster
 
 > [!WARNING]
-> These steps change cluster-wide network settings on CRC and **reboot its only node** at least once. While the node reboots, everything on CRC is down for several minutes. If an OS-level change fails on a single-node cluster, CRC may need to be rebuilt.
+> These steps change cluster-wide settings on CRC. Step D.4 is meant to reboot its only node. If an OS-level change fails on a single-node cluster, CRC may need to be rebuilt.
 
 The baseline before any change was recorded on 2026-10-02: OpenShift 4.22.7, all cluster operators healthy, the `master` pool updated, 196 pods, none failing.
+
+| Step | Result on 2026-10-02 |
+|---|---|
+| D.1 `routingViaHost` | **Done.** OVN restarted in under a minute, no reboot. |
+| D.2 NMState Operator and instance | **Done.** |
+| D.3 Kyverno RBAC | **Done.** |
+| D.4 IPsec `External` mode | **Fails on CRC.** The node cannot install libreswan. Reverted; the cluster is healthy again. |
 
 ### Step D.1 – Enable `routingViaHost` (main guide, Step 1.3)
 
@@ -370,55 +379,190 @@ The baseline before any change was recorded on 2026-10-02: OpenShift 4.22.7, all
 oc patch networks.operator.openshift.io cluster --type=merge -p \
 '{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"gatewayConfig":{"routingViaHost":true}}}}}'
 
-oc get pods -n openshift-ovn-kubernetes -w     # wait until the ovnkube-node pod is Running again, then Ctrl+C
+oc get networks.operator.openshift.io cluster -o jsonpath='{.spec.defaultNetwork.ovnKubernetesConfig.gatewayConfig}{"\n"}'
+oc get pods -n openshift-ovn-kubernetes        # repeat until ovnkube-node shows 8/8
 oc get co network                              # AVAILABLE=True, PROGRESSING=False, DEGRADED=False
 ```
 
-### Step D.2 – Enable IPsec in `External` mode (main guide, Step 1.4)
+✅ **Expected** (measured). The patch was applied at 20:48:28 UTC. The two OVN pods were replaced, and within 62 seconds of the patch `ovnkube-node` was back to `8/8`. The node did not reboot.
 
-This installs libreswan on the node through a MachineConfig and reboots it.
+```text
+network.operator.openshift.io/cluster patched
+{"ipv4":{},"ipv6":{},"routingViaHost":true}
 
-```bash
-oc patch networks.operator.openshift.io cluster --type=merge -p \
-'{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"ipsecConfig":{"mode":"External"}}}}}'
-
-oc get mc | grep ipsec           # 80-ipsec-master-extensions appears
-watch oc get mcp master          # wait for UPDATED=True, UPDATING=False, DEGRADED=False
-oc debug node/crc -q -- chroot /host rpm -q libreswan
+NAME                                     READY   STATUS    RESTARTS   AGE
+ovnkube-control-plane-6dc8ffb6bf-v2g66   2/2     Running   0          44s
+ovnkube-node-dgn5x                       8/8     Running   0          42s
+NAME      VERSION   AVAILABLE   PROGRESSING   DEGRADED   SINCE   MESSAGE
+network   4.22.7    True        False         False      65d
 ```
 
-### Step D.3 – NMState Operator and instance (main guide, Step 1.5)
+### Step D.2 – NMState Operator and instance (main guide, Step 1.5)
 
-The subscription was applied on 2026-10-02. CRC's `redhat-operators` catalog offers the package in the `stable` channel (`kubernetes-nmstate-operator.4.22.0-202609230131`).
+CRC's `redhat-operators` catalog offers the package in the `stable` channel.
 
 ```bash
 oc apply -f manifests/common/01-nmstate-operator.yaml
+oc get csv -n openshift-nmstate | grep -i -E 'NAME|nmstate'    # wait for PHASE=Succeeded
 ```
+
+✅ **Expected** (measured, columns shortened):
 
 ```text
 namespace/openshift-nmstate created
 operatorgroup.operators.coreos.com/openshift-nmstate created
 subscription.operators.coreos.com/kubernetes-nmstate-operator created
+
+NAME                                              DISPLAY                       VERSION               PHASE
+kubernetes-nmstate-operator.4.22.0-202609230131   Kubernetes NMState Operator   4.22.0-202609230131   Succeeded
 ```
 
-**Not confirmed yet:** that the operator reached `Succeeded`. Check it, and only then create the instance:
+Then the instance, which starts the handler on the node:
 
 ```bash
-oc get csv -n openshift-nmstate | grep -i -E 'NAME|nmstate'    # PHASE must be Succeeded
 oc apply -f manifests/common/02-nmstate-instance.yaml
-oc get pods -n openshift-nmstate                               # an nmstate-handler pod, Running
+oc get pods -n openshift-nmstate
+oc get nns
 ```
 
-### What follows, in order
+✅ **Expected** (measured, 25 seconds after the instance was created): every pod `1/1`, and a `NodeNetworkState` for the node.
 
-Each of these will be written up with its measured output when it is run.
+```text
+nmstate.nmstate.io/nmstate created
 
-1. **Kyverno RBAC** (main guide, Step 1.7). Kyverno itself is already installed.
-2. **Option A, documented and then removed**: the shared certificate through a MachineConfig. On CRC the MachineConfig role is `master`, not `worker`, and it reboots the node again. Record the installation, verify the tunnel, then clean it off the cluster.
-3. **Option B, the standard**: per-node certificate from `enterprise-ca`, the cert-sync DaemonSet, and the NNCP with the CRC settings (`type: tunnel`, `left: '%defaultroute'`, `right: ${NAS_IP}`).
-4. **The demo application** from [`nas-consumer-app-guide.md`](nas-consumer-app-guide.md), with its Route.
+nmstate-console-plugin-c7d695d6c-wvq75   1/1   Running   0     24s
+nmstate-handler-5jzth                    1/1   Running   0     25s
+nmstate-metrics-9cbc858c-mv48q           1/1   Running   0     25s
+nmstate-operator-5894554fdb-pn6lp        1/1   Running   0     12m
+nmstate-webhook-6cd895856c-9hg5h         1/1   Running   0     25s
 
-To undo Steps D.1 and D.2: set `ipsecConfig.mode` back to `Disabled` (the node reboots again) and `routingViaHost` back to `false`.
+NAME   AGE
+crc    3s
+```
+
+### Step D.3 – Kyverno RBAC (main guide, Step 1.7)
+
+Kyverno itself is already installed on CRC. This gives it permission to create NNCPs and Certificates.
+
+```bash
+oc apply -f manifests/common/03-kyverno-rbac.yaml
+
+for sa in kyverno-background-controller kyverno-admission-controller; do
+  for r in nodenetworkconfigurationpolicies.nmstate.io certificates.cert-manager.io; do
+    printf '%s create %s: ' "$sa" "$r"
+    oc auth can-i create "$r" --as="system:serviceaccount:kyverno:${sa}" -n kcs-ipsec
+  done
+done
+```
+
+✅ **Expected** (measured): four times `yes`. The warning that NNCPs are not namespace scoped is harmless.
+
+```text
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-generate created
+
+kyverno-background-controller create nodenetworkconfigurationpolicies.nmstate.io: yes
+kyverno-background-controller create certificates.cert-manager.io: yes
+kyverno-admission-controller create nodenetworkconfigurationpolicies.nmstate.io: yes
+kyverno-admission-controller create certificates.cert-manager.io: yes
+```
+
+### Step D.4 – IPsec in `External` mode (main guide, Step 1.4): fails on CRC
+
+> [!CAUTION]
+> **Do not run this step on CRC.** It was run here to find out, it failed, and it was undone. It is recorded so that nobody has to repeat it.
+
+What was run, at 20:50:14 UTC:
+
+```bash
+oc patch networks.operator.openshift.io cluster --type=merge -p \
+'{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"ipsecConfig":{"mode":"External"}}}}}'
+```
+
+The Cluster Network Operator created the two MachineConfigs, as the main guide says:
+
+```text
+80-ipsec-master-extensions                                                                    3.2.0             8s
+80-ipsec-worker-extensions                                                                    3.2.0             8s
+```
+
+`80-ipsec-master-extensions` asks for the `ipsec` extension and enables `ipsecenabler.service`. The node then tried to install the extension and could not. Within 55 seconds of the patch, the `master` pool was degraded:
+
+```bash
+oc get mcp master -o jsonpath='{range .status.conditions[*]}{.type}={.status} msg={.message}{"\n"}{end}'
+```
+
+```text
+Updating=True msg=All nodes are updating to MachineConfig rendered-master-b3f2e397f8d74fba1e653fbe4392558d
+NodeDegraded=True msg=Node crc is reporting: "Node crc upgrade failure. error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86\n: exit status 1"
+```
+
+The node **did not reboot** and stayed `Ready`. The `network` cluster operator went `DEGRADED=True` with `master machine config pool in degraded state`.
+
+#### Why it fails
+
+The three packages in the error are not libreswan's. They are packages the CRC image already has installed on top of the base operating system:
+
+```bash
+oc debug node/crc -q -- chroot /host bash -c 'rpm-ostree status; ls -A /etc/yum.repos.d/'
+```
+
+```text
+* ostree-unverified-registry:quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:fdab859490948a296e4d04353360f3834150630ec02e30a176edea52c191701d
+                  Version: 9.8.20260721-0 (2026-07-22T05:28:57Z)
+          LayeredPackages: cloud-init gvisor-tap-vsock-gvforwarder qemu-user-static-x86
+```
+
+`/etc/yum.repos.d/` is empty. The machine-config-daemon's log shows the only repository in use during the install, and that the install is retried about once a minute:
+
+```bash
+oc logs -n openshift-machine-config-operator ds/machine-config-daemon -c machine-config-daemon --since=10m | grep -i -E 'extension|rpm-ostree|Packages not found'
+```
+
+```text
+Running: rpm-ostree update --install NetworkManager-libreswan --install libreswan
+Enabled rpm-md repositories: coreos-extensions
+rpm-md repo 'coreos-extensions' (cached); generated: 2026-07-22T05:32:31Z solvables: 136
+Rolling back applied changes to OS due to error: error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86
+Error syncing node crc (retries 11): error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86
+```
+
+So: to add libreswan, `rpm-ostree` must also find the three packages that are already layered, and the only repository it is given (`coreos-extensions`, the OpenShift extensions) does not contain them. Removing the three packages from the node was **not tried**. They come with the CRC image: `cloud-init`, the gvisor-tap-vsock forwarder (not running on this Mac: `gv-user-network@tap0.service` is inactive) and x86 emulation, which is registered on the node (`qemu-x86_64` in `/proc/sys/fs/binfmt_misc/`). Removing them changes the node's operating system and needs a reboot.
+
+This was measured on CRC 2.63.0 with the OpenShift 4.22.7 bundle on an Apple Silicon Mac. Other CRC versions were not tested. A production cluster's nodes have no such extra packages, so the main guide's Step 1.4 is not affected.
+
+#### How it was undone
+
+```bash
+oc patch networks.operator.openshift.io cluster --type=merge -p \
+'{"spec":{"defaultNetwork":{"ovnKubernetesConfig":{"ipsecConfig":{"mode":"Disabled"}}}}}'
+
+oc get mc | grep ipsec      # no output: both MachineConfigs are gone
+oc get mcp master
+oc get co network machine-config
+```
+
+✅ **Expected** (measured). The patch was applied at 20:53:25 UTC. The two MachineConfigs were removed at once, and within 38 seconds the pool and both operators were healthy, with no reboot:
+
+```text
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True      False      False      1              1                   1                     0                      65d
+state=Done
+NAME             VERSION   AVAILABLE   PROGRESSING   DEGRADED   SINCE   MESSAGE
+network          4.22.7    True        False         False      65d
+machine-config   4.22.7    True        False         False      65d
+cluster operators not healthy: 0
+```
+
+### What this means for the rest
+
+Without libreswan and `NetworkManager-libreswan` on the node, an NMState `ipsec` interface cannot be created, and there is no `certutil` or `/var/lib/ipsec/nss` for the certificate import. That stops, on CRC:
+
+- **Appendix A (shared certificate)**: its MachineConfig imports into the NSS database that libreswan would have created.
+- **Part 2 (per-node certificates)** from Step B.5 on: the cert-sync DaemonSet and the NNCP. Steps B.1 to B.4 (the certificate itself, issued by `enterprise-ca`) do not need libreswan.
+
+Not run on CRC, and still open: the node's own tunnel, the demo application through that tunnel, and the metrics in Observe.
+
+State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, and the `kcs-ipsec` namespace with the NAS `CertificateRequest`. To put `routingViaHost` back: the patch of Step D.1 with `false`.
 
 ---
 
