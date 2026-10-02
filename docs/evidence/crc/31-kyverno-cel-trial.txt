@@ -1,0 +1,94 @@
+$ oc apply --dry-run=server -f trial-policies.yaml   # GeneratingPolicy x2, MutatingPolicy, Kyverno 1.19.1
+generatingpolicy.policies.kyverno.io/cel-trial-node-certificate created (server dry run)
+generatingpolicy.policies.kyverno.io/cel-trial-nncp created (server dry run)
+mutatingpolicy.policies.kyverno.io/cel-trial-mount created (server dry run)
+$ oc apply -f trial-policies.yaml; two stand-in nodes, cel-trial-b also has the ingress label
+generatingpolicy.policies.kyverno.io/cel-trial-node-certificate created
+generatingpolicy.policies.kyverno.io/cel-trial-nncp created
+mutatingpolicy.policies.kyverno.io/cel-trial-mount created
+KIND               NAME                         READY
+GeneratingPolicy   cel-trial-nncp               true
+GeneratingPolicy   cel-trial-node-certificate   true
+MutatingPolicy     cel-trial-mount              true
+== stand-in nodes: one with the trial label, one also with the ingress label
+node/cel-trial-a created
+node/cel-trial-b created
+2026-10-02T23:13:44Z
+certificate: cel-trial-cel-trial-a True
+certificate: ipsec-crc True
+labels: {"app.kubernetes.io/managed-by":"kyverno","generate.kyverno.io/policy-name":"cel-trial-node-certificate","generate.kyverno.io/trigger-group":"","generate.kyverno.io/trigger-kind":"Node","generate.kyverno.io/trigger-name":"cel-trial-a","generate.kyverno.io/trigger-namespace":"","generate.kyverno.io/trigger-uid":"4035dd26-5d07-4c1d-b95c-04f0275c004f","generate.kyverno.io/trigger-version":"v1
+$ oc label node cel-trial-a ipsec.kcs.io/cert-ready=true; then a pod pinned to cel-trial-a
+== a label that arrives later (UPDATE) triggers the NNCP policy
+node/cel-trial-a labeled
+2026-10-02T23:13:59Z
+NNCP: cel-trial-nas-cel-trial-a nodeSelector={"kubernetes.io/hostname":"cel-trial-a"} type=tunnel left=%defaultroute
+== the pod mutation: a pod pinned to cel-trial-a the way the DaemonSet controller pins its pods
+pod/cel-trial-pod created
+mounted secret after admission: cel-trial-cert-cel-trial-a (optional=true)
+pod "cel-trial-pod" deleted from kcs-ipsec namespace
+$ oc patch generatingpolicy cel-trial-node-certificate ...   # change the selection in place; then a NamespacedDeletingPolicy; then delete the nodes
+== change the selection of a GeneratingPolicy in place
+generatingpolicy.policies.kyverno.io/cel-trial-node-certificate patched
+excluded now: node-role.kubernetes.io/ingress node-role.kubernetes.io/master
+== the deleting policy (every minute for this trial)
+namespaceddeletingpolicy.policies.kyverno.io/cel-trial-orphaned-secrets created
+== delete the stand-in node
+secret before: cel-trial-cert-cel-trial-a
+secret before: ipsec-cert-crc
+secret before: ipsec-cert-ipsec-test-worker
+node "cel-trial-a" deleted
+node "cel-trial-b" deleted
+2026-10-02T23:14:24Z
+certificate after: ipsec-crc
+nncp after: ipsec-nas-crc
+secret after: cel-trial-cert-cel-trial-a
+secret after: ipsec-cert-crc
+secret after: ipsec-cert-ipsec-test-worker
+$ # 3 minutes later
+2026-10-02T23:17:07Z
+CEL deleting policy last run: 
+legacy cleanup policy last run: 2026-10-02T23:15:00Z
+secret: cel-trial-cert-cel-trial-a
+secret: ipsec-cert-crc
+pod: ipsec-cert-sync-2mkl4 Running
+$ oc logs -n kyverno deploy/kyverno-cleanup-controller --since=10m | grep -m1 'failed to compile policy'
+spec.variables[0].expression: Invalid value: "resource.List(\"cert-manager.io/v1\", \"certificates\", \"kcs-ipsec\").items.map(c, c.metadata.name)": ERROR: <input>:1:14: found no matching overload for 'List' applied to 'resource.Context.(string, string, string)'
+$ # MutatingPolicy cel-trial-secret-owner: give each node Secret its Certificate as owner (ApplyConfiguration)
+mutatingpolicy.policies.kyverno.io/cel-trial-secret-owner created
+ready=false
+== a stand-in node, so that a Certificate and its Secret are made
+node/cel-trial-c created
+2026-10-02T23:18:42Z
+secret owner: 
+certificate uid: ec8f8219-4f87-4f1a-8e92-a071d9471b78
+== delete the node: Kyverno deletes the Certificate, Kubernetes the Secret
+node "cel-trial-c" deleted
+2026-10-02T23:19:14Z
+certificate: ipsec-crc
+secret: cel-trial-cert-cel-trial-c
+secret: ipsec-cert-crc
+secret/cel-trial-cert-manual created
+owner after a plain create: 
+$ # the same mutation as a JSON patch
+secret/cel-trial-cert-manual created
+owner with a JSON patch: [{"apiVersion":"cert-manager.io/v1","kind":"Certificate","name":"ipsec-crc","uid":"a320bc15-0220-4536-8591-9fcdf4f27a1a"}]
+secret "cel-trial-cert-manual" deleted from kcs-ipsec namespace
+90s         Warning   PolicyViolation      secret/cel-trial-cert-cel-trial-c              policy cel-trial-secret-owner/evaluation error: failed to evaluate policy: error applying patch: invalid ApplyConfiguration: may not mutate atomic arrays, maps 
+22s         Warning   PolicyViolation      secret/cel-trial-cert-manual                   policy cel-trial-secret-owner/evaluation error: failed to evaluate policy: error applying patch: invalid ApplyConfiguration: may not mutate atomic arrays, maps 
+$ # with the JSON patch: a stand-in node, its Secret, then delete the node
+2026-10-02T23:20:28Z
+node/cel-trial-d created
+2026-10-02T23:20:38Z
+secret owner: [{"apiVersion":"cert-manager.io/v1","kind":"Certificate","name":"cel-trial-cel-trial-d","uid":"f445b571-d15e-41b3-a84e-3c4b5511469d"}]
+certificate uid: f445b571-d15e-41b3-a84e-3c4b5511469d ready=True
+== delete the node
+node "cel-trial-d" deleted
+2026-10-02T23:20:38Z
+certificate: ipsec-crc
+secret: ipsec-cert-crc
+$ # the policy's reporting readiness, by RBAC given to kyverno-reports-controller
+MutatingPolicy cel-trial-secret-owner (matches Secrets in kcs-ipsec):
+  without RBAC:            RBACPermissionsGranted=False: Policy is not ready for reporting, missing permissions: get/list/watch /v1 secrets
+  Role+RoleBinding in kcs-ipsec for kyverno-reports-controller: still False (oc auth can-i -n kcs-ipsec: yes; --all-namespaces: no)
+  ClusterRole get/list/watch secrets, label rbac.kyverno.io/aggregate-to-reports-controller=true: True within 10 s
+The JSON-patch mutation above (23:20) ran while RBACPermissionsGranted was still False: the condition is about reporting, not admission.

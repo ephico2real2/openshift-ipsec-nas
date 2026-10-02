@@ -1,0 +1,61 @@
+$ # excludeNodeLabels: [node-role.kubernetes.io/ingress] pushed to Git; the legacy generate rules refuse a changed selection, so the two Node policies are deleted and Argo CD creates them again
+== before: the node's certificate
+revision=1 notAfter=2027-10-02T22:32:22Z
+== delete the two Node policies so that they can be created again with the new selection
+clusterpolicy.kyverno.io "ipsec-node-certificate" deleted
+clusterpolicy.kyverno.io "ipsec-nncp-per-node" deleted
+2026-10-02T22:52:04Z
+sync=Synced health=Healthy operation=Succeeded
+policy 1 excludes: node-role.kubernetes.io/ingress
+policy 3 excludes: node-role.kubernetes.io/ingress
+DaemonSet keeps off nodes with: node-role.kubernetes.io/ingress
+kube_node_role{role="worker"}
+# exclude-nodes:begin
+unless on (node) kube_node_role{role=~"ingress"}
+# exclude-nodes:end
+unless on (node) ipsec_nas_collect_timestamp_seconds
+$ # two stand-in Node objects: one worker, one worker that is also an ingress node
+2026-10-02T23:10:59Z
+== two stand-in Node objects (no machine behind them)
+node/ipsec-test-worker created
+node/ipsec-test-ingress created
+2026-10-02T23:11:08Z
+crc Ready control-plane,master,worker
+ipsec-test-ingress Unknown ingress,worker
+ipsec-test-worker Unknown worker
+-- Certificates
+ipsec-crc True
+ipsec-ipsec-test-worker True
+-- cert-sync pods, and the node each one is for
+ipsec-cert-sync-2mkl4   Running   crc
+ipsec-cert-sync-qkttt   Pending   ipsec-test-worker
+-- NNCPs
+ipsec-nas-crc Available
+$ oc label node ipsec-test-worker node-role.kubernetes.io/ingress=   # a node that was included gets an excluded label
+== a node that was included gets an excluded label
+node/ipsec-test-worker labeled
+2026-10-02T23:11:50Z
+-- Certificates
+ipsec-crc True
+-- cert-sync pods
+ipsec-cert-sync-2mkl4   Running   crc
+ipsec-cert-sync-qkttt   Pending   ipsec-test-worker
+-- Secrets
+ipsec-cert-crc
+ipsec-cert-ipsec-test-worker
+== remove the stand-ins
+node "ipsec-test-worker" deleted
+node "ipsec-test-ingress" deleted
+left: ipsec-crc True
+secret left: ipsec-cert-crc
+secret left: ipsec-cert-ipsec-test-worker
+pod: ipsec-cert-sync-2mkl4 Running
+pod: ipsec-cert-sync-qkttt Pending
+$ # after the cleanup policy's next run
+== after the cleanup policy's run at 23:15
+last run: 2026-10-02T23:15:00Z
+secret: cel-trial-cert-cel-trial-a
+secret: ipsec-cert-crc
+certificate: ipsec-crc True
+pod: ipsec-cert-sync-2mkl4 Running
+node: crc

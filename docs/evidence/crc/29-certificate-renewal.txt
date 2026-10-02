@@ -1,0 +1,46 @@
+$ # Before the fix (commit c2314f9): a new certificate is imported, but the tunnel is not restarted
+$ oc logs -n kcs-ipsec ds/ipsec-cert-sync -c sync | tail -4
+2026-10-02T22:51:52Z [crc] Import OK
+2026-10-02T22:51:52Z [crc] Restarting ipsec-nas to load the new certificate
+Error: Connection activation failed: Connection 'ipsec-nas' is already active
+2026-10-02T22:51:52Z [crc] WARNING: restart of ipsec-nas failed
+$ # on the node: ipsec trafficstatus; nmcli -g NAME,TYPE,STATE connection show --active | grep ipsec-nas
+2026-10-02T22:52:40Z
+trafficstatus: []
+ipsec-nas:vpn:activated
+$ # on the NAS: journalctl -u ipsec | grep pluto | tail -1
+pluto[7038]: "workers"[10] 192.168.64.1 #21: deleting IKE SA (established IKE SA)
+$ # by hand on the node: nmcli connection down ipsec-nas; nmcli connection up ipsec-nas
+Connection 'ipsec-nas' successfully deactivated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/10)
+Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/11)
+trafficstatus: [#5: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790981575, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=]
+ipsec-nas:vpn:activated
+pluto[7038]: "workers"[10] 192.168.64.1 #24: responder established IKE SA; authenticated peer certificate 'CN=crc.crc.testing' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise POC, CN=Enterprise Root CA'
+pluto[7038]: "workers"[10] 192.168.64.1 #25: responder established Child SA using #24; IPsec tunnel [192.168.64.8/32===192.168.127.2/32] {ESPinUDP/ESN=>0x911c1320 <0x1c555236 xfrm=AES_GCM_16_256 NATD=192.168.64.1:51685 DPD=passive}
+$ # After the fix (commit e525adf): force a new key and certificate by deleting the node's Secret
+2026-10-02T23:10:36Z
+== before
+Certificate revision= notAfter=2027-10-02T22:51:18Z
+            Not After : Sat Oct 02 22:51:18 2027
+17678fb26e9a73a2
+#5: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790981575, inBytes=495632, outBytes=1244948, m
+ 350 lines in  data.log . The newest 20:  
+== force a new certificate: delete the node's Secret
+secret "ipsec-cert-crc" deleted from kcs-ipsec namespace
+$ # 4 minutes later: the Certificate, the sync log, the node's NSS database, the tunnel, the NAS and the demo app
+2026-10-02T23:14:58Z
+== after
+Certificate revision=1 notAfter=2027-10-02T23:10:38Z
+Secret created=2026-10-02T23:10:38Z
+-- the sync container's log
+2026-10-02T23:14:41Z [crc] New or renewed certificate detected - importing into NSS
+pk12util: PKCS12 IMPORT SUCCESSFUL
+2026-10-02T23:14:41Z [crc] Import OK
+2026-10-02T23:14:41Z [crc] Restarting ipsec-nas to load the new certificate
+            Not After : Sat Oct 02 23:10:38 2027
+40189e00b3a25637
+#7: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790982881, inBytes=8940, outBytes=21604, maxBy
+pluto[7038]: "workers"[10] 192.168.64.1 #26: responder established IKE SA; authenticated peer certificate 'CN=crc.crc.testing' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise POC, CN=Enterp
+pluto[7038]: "workers"[10] 192.168.64.1 #27: responder established Child SA using #26; IPsec tunnel [192.168.64.8/32===192.168.127.2/32] {ESPinUDP/ESN=>0x8960bfb2 <0x2f4b688f xfrm=AES_GCM_16_256 NATD=192.168.64.1:51685 DP
+ 377 lines in  data.log . The newest 20:  
+2026-10-02T23:14:58Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=236
