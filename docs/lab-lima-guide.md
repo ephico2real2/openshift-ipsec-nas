@@ -235,6 +235,21 @@ PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPs
 | `lab/lab.sh option-a` | The shared-certificate scenario, see [7.2](#72-the-shared-certificate-scenario-option-a) |
 | `lab/lab.sh down` | Delete the three VMs |
 
+### Check a lab that is already up
+
+The lab stays up until you run `lab/lab.sh down`. These commands show its state at any time; none of them changes anything except `verify`, which writes a new 5 MiB test file.
+
+| What you want to see | Command | What a healthy lab shows |
+|---|---|---|
+| The VMs | `limactl list` | `lab-nas`, `lab-worker1`, `lab-worker2`, all `Running` |
+| The tunnel, from a worker | `limactl shell lab-worker1 sudo ipsec trafficstatus` | one `"ipsec-nas"` line with `id='CN=lima-lab-nas.internal, ...'` |
+| The tunnels, from the NAS | `limactl shell lab-nas sudo ipsec trafficstatus` | one `"workers"` line per worker, each with that worker's `id=` |
+| That it is ESP in transport mode | `limactl shell lab-worker1 sudo ip xfrm state` | two entries with `proto esp ... mode transport`, and no `encap` line |
+| The NFS mount | `limactl shell lab-worker1 grep /mnt/nas /proc/mounts` | `lima-lab-nas.internal:/export /mnt/nas nfs4 ...` |
+| The files on the NAS | `limactl shell lab-nas sudo ls -la /export` | `verify-lima-lab-worker1.bin` and `...worker2.bin`, 5242880 bytes each |
+| The firewall counters | `limactl shell lab-nas sudo nft list table inet nas_ipsec_only` | `nfs-over-ipsec` in the thousands of packets; `nfs-cleartext-dropped` only the few packets from check 1 |
+| Everything again, with a verdict | `lab/lab.sh verify` | two `PASS` lines |
+
 ---
 
 ## 6. The same thing by hand, step by step
@@ -365,6 +380,32 @@ PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPs
 ```
 
 On the NAS: one `"workers"` line per worker with `inBytes` above 5,000,000, the `esp-in` and `nfs-over-ipsec` counters in the thousands of packets, and no `encap` line in the kernel SAs (native ESP).
+
+### Step 10 – See the encryption on the wire (optional)
+
+Capture the packets arriving at the NAS while a worker writes a file. Use **two Terminal windows**.
+
+Terminal 1, start the capture (it waits up to 60 seconds for 8 packets):
+
+```bash
+limactl shell lab-nas sudo dnf -y -q install tcpdump
+W1_IP="$(limactl shell lab-nas getent hosts lima-lab-worker1.internal | awk '{print $1}')"
+limactl shell lab-nas sudo timeout 60 tcpdump -ni eth0 -c 8 "host ${W1_IP} and (esp or tcp port 2049)"
+```
+
+Terminal 2, write a file from the worker:
+
+```bash
+limactl shell lab-worker1 sudo dd if=/dev/urandom of=/mnt/nas/capture-test.bin bs=1M count=2 conv=fsync status=none
+```
+
+✅ **Expected** in Terminal 1: every line is `ESP(spi=0x...)`. The filter would also show cleartext NFS (`tcp port 2049`), and there is none.
+
+```text
+19:02:27.388950 IP 192.168.104.3 > 192.168.104.1: ESP(spi=0xacca1e67,seq=0xe9f), length 260
+19:02:27.389076 IP 192.168.104.1 > 192.168.104.3: ESP(spi=0x0dc4a7c7,seq=0x283), length 240
+19:02:27.392646 IP 192.168.104.3 > 192.168.104.1: ESP(spi=0xacca1e67,seq=0xea2), length 1480
+```
 
 ---
 
