@@ -30,17 +30,17 @@ spec:
             - name: ipsec-nas
               type: ipsec
               libreswan:
-                left: "{{ request.object.metadata.name }}.${NODE_DOMAIN}"   # matches the Certificate dnsNames
+                left: "${NODE_LEFT}"   # matches the Certificate dnsNames
                 leftid: '%fromcert'
                 leftrsasigkey: '%cert'
                 leftcert: left_server
                 leftmodecfgclient: false
-                right: ${NAS_FQDN}
+                right: ${NAS_RIGHT}
                 rightid: '%fromcert'
                 rightrsasigkey: '%cert'
                 rightsubnet: ${NAS_IP}/32
                 ikev2: insist
-                type: transport
+                type: ${IPSEC_TYPE}
                 # Uncomment ONLY if the NAS requires specific proposals:
                 # esp: aes_gcm256
                 # ike: aes256-sha2;dh20

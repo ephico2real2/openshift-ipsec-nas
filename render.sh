@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Renders every *.tmpl under manifests/ into rendered/, substituting ONLY
-# NODE_DOMAIN, NAS_FQDN, NAS_IP, NAS_EXPORT, CLUSTER_ISSUER and OCP_VERSION (Kyverno {{ }} expressions are left untouched).
+# NODE_DOMAIN, NAS_FQDN, NAS_IP, NAS_EXPORT, CLUSTER_ISSUER, OCP_VERSION and the four overrides below
+# (Kyverno {{ }} expressions are left untouched).
 # Non-template manifests are copied as-is so rendered/ is a complete, apply-ready set.
 set -euo pipefail
 : "${NODE_DOMAIN:?set NODE_DOMAIN (e.g. ocp.example.com)}"
@@ -12,13 +13,20 @@ set -euo pipefail
 export NAS_EXPORT="${NAS_EXPORT:-/export}"
 OCP_VERSION="${OCP_VERSION:-$(oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2).0}"
 export OCP_VERSION
+# Overrides for a cluster that differs from the guide's (docs/crc-integration-guide.md uses all four).
+# Left unset, they give the guide's values: worker pool, transport mode, left = the node's FQDN, right = the NAS FQDN.
+export MCP_ROLE="${MCP_ROLE:-worker}"
+export IPSEC_TYPE="${IPSEC_TYPE:-transport}"
+export NAS_RIGHT="${NAS_RIGHT:-${NAS_FQDN}}"
+[[ -n "${NODE_LEFT:-}" ]] || NODE_LEFT="{{ request.object.metadata.name }}.${NODE_DOMAIN}"
+export NODE_LEFT
 command -v perl >/dev/null || { echo "perl not found"; exit 1; }
 
 rm -rf rendered
 while IFS= read -r f; do
   out="rendered/${f#manifests/}"; mkdir -p "$(dirname "$out")"
   if [[ "$f" == *.tmpl ]]; then
-    perl -pe 's/\$\{(NODE_DOMAIN|NAS_FQDN|NAS_IP|NAS_EXPORT|CLUSTER_ISSUER|OCP_VERSION)\}/$ENV{$1}/g' "$f" > "${out%.tmpl}"
+    perl -pe 's/\$\{(NODE_DOMAIN|NAS_FQDN|NAS_IP|NAS_EXPORT|CLUSTER_ISSUER|OCP_VERSION|MCP_ROLE|IPSEC_TYPE|NAS_RIGHT|NODE_LEFT)\}/$ENV{$1}/g' "$f" > "${out%.tmpl}"
   else
     cp "$f" "$out"
   fi

@@ -187,6 +187,11 @@ oc patch networks.operator.openshift.io cluster --type=merge -p \
 
 This makes the Cluster Network Operator add the libreswan extension to every node (`80-ipsec-*-extensions` MachineConfigs), which **reboots each node once**.
 
+> [!NOTE]
+> libreswan is **not** in the node's base image. It is the `ipsec` OS extension (`libreswan` and `NetworkManager-libreswan`) that ships inside the OpenShift release, so the nodes download nothing from outside. The extension is defined the same way in 4.19, 4.20, 4.21 and 4.22 (checked in the Machine Config Operator source; details and links in [`crc-integration-guide.md`](crc-integration-guide.md#is-libreswan-built-into-a-full-openshift-cluster-419-and-later)).
+>
+> **OpenShift Local (CRC) cannot install this extension**, because its node image carries extra packages that the install cannot find again. The same guide shows the failure and a CRC-only way around it.
+
 Watch the rollout:
 
 ```bash

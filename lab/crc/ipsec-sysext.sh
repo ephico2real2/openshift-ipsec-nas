@@ -7,10 +7,12 @@
 #   ipsec-sysext.sh fetch      copy the RPMs out of the extensions image, work out which are needed, unpack
 #   ipsec-sysext.sh stage      build /var/lib/extensions/ipsec and install libreswan's /etc files (nothing active)
 #   ipsec-sysext.sh activate   merge the extension into /usr and start ipsec.service (not persistent)
+#   ipsec-sysext.sh persist    make it survive a reboot: merge at boot, then start ipsec.service
 #   ipsec-sysext.sh status     show what is merged and whether libreswan answers
 #   ipsec-sysext.sh remove     stop ipsec, unmerge, and delete everything stage and activate created
 #
-# Until "activate" has been made persistent, a reboot of the node also undoes the merge.
+# Until "persist" has been run, a reboot of the node also undoes the merge.
+# No sudo on the Mac: everything runs through "oc debug node".
 # A production cluster never needs this: there, ipsecConfig.mode External installs libreswan.
 set -euo pipefail
 
@@ -124,11 +126,42 @@ systemd-tmpfiles --create /usr/lib/tmpfiles.d/libreswan.conf
 systemctl daemon-reload
 systemctl reload dbus-broker.service 2>/dev/null || systemctl reload dbus.service
 
-echo "== 3. start libreswan (not enabled: a reboot undoes all of this)"
+echo "== 3. start libreswan (a reboot undoes all of this until persist is run)"
 systemctl start ipsec.service
 systemctl is-active ipsec.service
-ipsec status | head -5
+ipsec status | sed -n "1,5p"
 certutil -L -d /var/lib/ipsec/nss
+'
+}
+
+persist() {
+  on_node '
+set -euo pipefail
+U=/etc/systemd/system/ipsec-sysext-start.service
+# systemd reads its unit files before the extension is merged, so at boot it does not know
+# ipsec.service yet. This unit reloads systemd after the merge and then starts libreswan.
+cat > "$U" <<UNIT
+[Unit]
+Description=Start libreswan from the ipsec system extension (CRC only)
+After=systemd-sysext.service network-online.target ipsec-import.service
+Wants=network-online.target
+ConditionPathExists='"${EXT}"'
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl daemon-reload
+ExecStart=/usr/bin/systemd-tmpfiles --create /usr/lib/tmpfiles.d/libreswan.conf
+ExecStart=/usr/lib/systemd/systemd-sysctl 50-libreswan.conf
+ExecStart=/usr/bin/systemctl start --no-block ipsec.service
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+restorecon -F "$U"
+ls -Z "$U"
+systemctl daemon-reload
+systemctl enable systemd-sysext.service ipsec-sysext-start.service
+systemctl is-enabled systemd-sysext.service ipsec-sysext-start.service
 '
 }
 
@@ -148,7 +181,8 @@ set -uo pipefail
 W='"${WORK}"'
 E='"${EXT}"'
 systemctl stop ipsec.service 2>/dev/null
-systemctl disable systemd-sysext.service 2>/dev/null
+systemctl disable systemd-sysext.service ipsec-sysext-start.service 2>/dev/null
+rm -f /etc/systemd/system/ipsec-sysext-start.service
 systemctl stop systemd-sysext.service
 rm -rf "$E"
 rmdir /var/lib/extensions 2>/dev/null
@@ -162,6 +196,6 @@ command -v ipsec >/dev/null && echo "ipsec is still on the PATH" || echo "libres
 }
 
 case "${1:-}" in
-  fetch|stage|activate|status|remove) "$1" ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  fetch|stage|activate|persist|status|remove) "$1" ;;
+  *) sed -n '2,16p' "$0"; exit 2 ;;
 esac

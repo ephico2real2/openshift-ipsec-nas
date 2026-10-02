@@ -1,9 +1,9 @@
 variant: openshift
 version: ${OCP_VERSION}
 metadata:
-  name: 99-worker-import-certs
+  name: 99-${MCP_ROLE}-import-certs
   labels:
-    machineconfiguration.openshift.io/role: worker
+    machineconfiguration.openshift.io/role: ${MCP_ROLE}
 systemd:
   units:
   - name: ipsec-import.service

@@ -12,10 +12,11 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | B | A NAS VM that CRC can reach, and a tunnel that works through the NAT in between | **Done**, measured with a stand-in VM behind the same kind of NAT |
 | C | The NAS side for CRC: a NAS certificate signed by the cluster's enterprise CA, and the NAS configured for the CRC node | **Done**, measured |
 | D | Change the CRC cluster: `routingViaHost`, NMState, Kyverno RBAC, IPsec `External` mode | `routingViaHost`, NMState and the Kyverno RBAC are **done**, measured. IPsec `External` mode **fails on CRC**: the node cannot install libreswan. It was reverted and the cluster is healthy. |
-| D.5 | libreswan on the node as a system extension, from OpenShift's own extension RPMs | **Prepared, not installed.** The RPMs are unpacked under `/var/tmp` on the node; staging and activating are not run yet. |
-| – | The node's own tunnel, Appendix A, Part 2 from Step B.5, the demo app, metrics in Observe | **Not run on CRC.** They all need libreswan on the node. |
+| D.5, D.6 | libreswan on the node as a system extension, from OpenShift's own extension RPMs, because CRC cannot install it the supported way | **Done**, measured. It runs in its own SELinux domain and survives a reboot. A reboot on CRC needs `crc stop` and `crc start` afterwards. |
+| E | The shared certificate (Appendix A) on CRC | Certificate, MachineConfig and import on the node are **done**, measured. The NNCP policy is **not applied yet**, so there is no tunnel from the node. |
+| – | Removing the shared certificate, the standard installation (Part 2), the demo app, metrics in Observe | **Not run on CRC yet.** |
 
-Everything in this guide was run and the outputs shown are real, including the step that failed. Nothing is shown as working that was not measured.
+Everything in this guide was run and the outputs shown are real, including the step that failed, unless a step says it is not run yet. Nothing is shown as working that was not measured.
 
 ---
 
@@ -29,7 +30,8 @@ Everything in this guide was run and the outputs shown are real, including the s
 | The node's address toward the NAS | `<node>.<NODE_DOMAIN>` resolves to it | `192.168.127.2`. No `crc.<domain>` name resolves to it, so the NNCP would use `left: '%defaultroute'` (not applied on CRC, see Step D.4). The node's other address, `192.168.126.11`, cannot reach the NAS. |
 | Enterprise CA issuer | The placeholder `company-issuer-rnd` stands for yours | `enterprise-ca`, a root CA valid to 2031 |
 | Installing libreswan on the nodes | `ipsecConfig.mode: External` adds it as an OS extension and reboots each node | **Fails.** The CRC image carries three extra packages that the extension install cannot find again (Step D.4). |
-| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: true`, libreswan not installed on the node, NMState installed |
+| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: true`, libreswan on the node as a system extension (Step D.5), NMState installed |
+| After a reboot of the node | The kubelet starts by itself | The kubelet is disabled; OpenShift stays down until `crc stop` and `crc start` (Step D.6) |
 | Kyverno, cert-manager | Installed by the guide | Already installed (Kyverno chart 3.9.1, cert-manager running) |
 
 > [!IMPORTANT]
@@ -373,7 +375,8 @@ The baseline before any change was recorded on 2026-10-02: OpenShift 4.22.7, all
 | D.2 NMState Operator and instance | **Done.** |
 | D.3 Kyverno RBAC | **Done.** |
 | D.4 IPsec `External` mode | **Fails on CRC.** The node cannot install libreswan. Reverted; the cluster is healthy again. |
-| D.5 libreswan as a system extension | **Prepared.** The needed files are unpacked on the node; nothing is installed or active. |
+| D.5 libreswan as a system extension | **Done.** libreswan 5.3 runs on the node and survives a reboot. |
+| D.6 What a reboot does on CRC | **Measured.** libreswan comes back; OpenShift needs `crc stop` and `crc start`. |
 
 ### Step D.1 – Enable `routingViaHost` (main guide, Step 1.3)
 
@@ -532,6 +535,29 @@ So: to add libreswan, `rpm-ostree` must also find the three packages that are al
 
 This was measured on CRC 2.63.0 with the OpenShift 4.22.7 bundle on an Apple Silicon Mac. Other CRC versions were not tested. A production cluster's nodes have no such extra packages, so the main guide's Step 1.4 is not affected.
 
+#### Is libreswan built into a full OpenShift cluster (4.19 and later)?
+
+No. On a full cluster libreswan is **not part of the node's base image** either. It ships inside the OpenShift release as an **OS extension** named `ipsec`, and the Machine Config Operator installs it on each node when IPsec is switched on. Nothing has to be downloaded from outside the release.
+
+What was checked, and where:
+
+| Version | Evidence | Result |
+|---|---|---|
+| 4.19, 4.20, 4.21, 4.22 | Machine Config Operator source, `SupportedExtensions()` in [`pkg/controller/common/helpers.go`](https://github.com/openshift/machine-config-operator/blob/release-4.19/pkg/controller/common/helpers.go), read on each `release-4.x` branch | The same line in all four: `"ipsec": {"NetworkManager-libreswan", "libreswan"}` |
+| 4.19 | The node image definition, [`extensions-ocp-rhel-9.6.yaml`](https://github.com/openshift/os/blob/release-4.19/extensions-ocp-rhel-9.6.yaml) in `openshift/os` | `ipsec:` lists `libreswan` and `NetworkManager-libreswan` as an extension, not as base packages |
+| 4.22.7 | This CRC node, measured | `rpm -q libreswan` on the base image: `package libreswan is not installed`. The extensions image holds 136 RPMs, among them `libreswan-5.3-5.el9fdp` and `NetworkManager-libreswan-1.2.30-1.el9` |
+
+So the main guide's Step 1.4 is the same on every one of these versions: `ipsecConfig.mode: External` makes the Cluster Network Operator create the `80-ipsec-*-extensions` MachineConfigs, and each node installs the extension and reboots once. The reference is Red Hat's [Configuring IPsec encryption](https://docs.redhat.com/en/documentation/openshift_container_platform/4.19/html/network_security/configuring-ipsec-ovn) chapter.
+
+Why that works on a full cluster and not on CRC: the install is the same `rpm-ostree` command, but a full cluster's nodes carry no extra layered packages, so there is nothing for `rpm-ostree` to look for besides libreswan itself. The failure here names only the three packages that CRC adds. **This was not run on a full cluster in this work**; it rests on the two source files above and on the cause measured on CRC.
+
+Watch out for one thing when a release moves the nodes to RHEL 10: in the 4.19 branch of `openshift/os`, the RHEL 10.1 extensions file has the `ipsec` entry commented out, with the note `Uncomment once fast-datapath repo exists for RHEL 10`. Before relying on external IPsec on a RHEL 10 based node image, check that the `ipsec` extension is offered:
+
+```bash
+oc get mc | grep ipsec                                  # after setting the mode: both 80-ipsec-* MachineConfigs
+oc debug node/<node> -q -- chroot /host rpm -q libreswan NetworkManager-libreswan    # after the reboot
+```
+
 #### How it was undone
 
 ```bash
@@ -555,20 +581,34 @@ machine-config   4.22.7    True        False         False      65d
 cluster operators not healthy: 0
 ```
 
-### Step D.5 – libreswan as a system extension (CRC only; `fetch` run, the rest not run yet)
+### Step D.5 – libreswan as a system extension (CRC only)
 
-A way around Step D.4 that leaves `rpm-ostree` and the three layered packages alone: take the libreswan files from OpenShift's **own** extensions image and merge them into `/usr` with `systemd-sysext`, which the node already has (systemd 252). `lab/crc/ipsec-sysext.sh` does it in separate steps:
+**Why this step exists.** Everything in the main guide from the NNCP onward needs libreswan on the node: NMState creates the tunnel through `NetworkManager-libreswan`, and the certificate import needs `certutil` and the NSS database. CRC does not have libreswan, and Step D.4 showed that CRC cannot install it the supported way. To go on testing on a laptop, libreswan has to reach the node some other way.
+
+Four ways were considered:
+
+| Option | What it means | Decision |
+|---|---|---|
+| libreswan in a pod | A privileged, host-network DaemonSet runs libreswan. No change to the node's operating system | Not chosen: NMState could not create the tunnel, so the guide's NNCP and cert-sync steps would stay untested |
+| **System extension (`systemd-sysext`)** | Merge the libreswan files from OpenShift's own extension RPMs into `/usr`, without `rpm-ostree` | **Chosen**: the node ends up with the same files in the same places as a real install, so the guide's own manifests can run |
+| Remove the three layered packages | Uninstall them, reboot, retry Step D.4 | Not chosen: three processes on the node were running under x86 emulation, so workloads would stop |
+| Stop on CRC | Verify the rest on a full cluster later | Not chosen |
+
+How it works: take the libreswan files from OpenShift's **own** extensions image and merge them into `/usr` with `systemd-sysext`, which the node already has (systemd 252). `rpm-ostree` and the three layered packages are left alone. `lab/crc/ipsec-sysext.sh` does it in separate steps. It runs on the Mac and needs no `sudo`: everything goes through `oc debug node`, so it needs a cluster-admin login.
 
 | Step | What it does on the node | Status |
 |---|---|---|
-| `fetch` | Copies the RPMs out of the extensions image into `/var/tmp/ipsec-sysext`, works out which ones are needed, and unpacks them there | **Run**, output below |
-| `stage` | Builds `/var/lib/extensions/ipsec` with SELinux labels, and copies libreswan's configuration files into `/etc` | **Not run yet** |
-| `activate` | Merges the extension into `/usr` and starts `ipsec.service`. Not persistent: a reboot undoes it | **Not run yet** |
-| `status` | Shows what is merged and whether libreswan answers | **Not run yet** |
-| `remove` | Stops libreswan, unmerges, and deletes what `stage` and `activate` created | **Not run yet** |
+| `fetch` | Copies the RPMs out of the extensions image into `/var/tmp/ipsec-sysext`, works out which ones are needed, and unpacks them there | **Run** |
+| `stage` | Builds `/var/lib/extensions/ipsec` with SELinux labels, and copies libreswan's configuration files into `/etc` | **Run** |
+| `activate` | Merges the extension into `/usr` and starts `ipsec.service` | **Run** |
+| `persist` | Enables the merge at boot, and a small unit that starts libreswan after it | **Run** |
+| `status` | Shows what is merged and whether libreswan answers | **Run** |
+| `remove` | Stops libreswan, unmerges, and deletes what the other steps created | **Not run yet** |
 
 > [!WARNING]
-> `stage` and `activate` change the node's operating system. They have not been run, so their commands are untested. Read the script before running them.
+> This changes the node's operating system by hand. It is for a CRC laptop cluster only. A production cluster gets libreswan from `ipsecConfig.mode: External` (main guide, Step 1.4), which is supported; this is not.
+
+#### `fetch`
 
 ```bash
 lab/crc/ipsec-sysext.sh fetch
@@ -599,18 +639,371 @@ nss-util-3.112.0-8.el9_4.aarch64.rpm
 files that already exist on the node: 0
 ```
 
-The files outside `usr/` are why `stage` also writes to `/etc`: a system extension can only add to `/usr`. The node is RHCOS 9.8 with SELinux `Enforcing`, so `stage` labels the extension directory as if it were `/`; whether libreswan then starts in the right SELinux domain is the first thing `activate` will show.
+The files outside `usr/` are why `stage` also writes to `/etc`: a system extension can only add to `/usr`.
 
-### What this means for the rest
+#### `stage` and `activate`
 
-Without libreswan and `NetworkManager-libreswan` on the node, an NMState `ipsec` interface cannot be created, and there is no `certutil` or `/var/lib/ipsec/nss` for the certificate import. That stops, on CRC:
+```bash
+lab/crc/ipsec-sysext.sh stage
+lab/crc/ipsec-sysext.sh activate
+```
 
-- **Appendix A (shared certificate)**: its MachineConfig imports into the NSS database that libreswan would have created.
-- **Part 2 (per-node certificates)** from Step B.5 on: the cert-sync DaemonSet and the NNCP. Steps B.1 to B.4 (the certificate itself, issued by `enterprise-ca`) do not need libreswan.
+✅ **Expected** (measured, `activate` at 21:06:21 UTC): the extension shows under `/usr`, and libreswan answers.
 
-Not run on CRC, and still open: the node's own tunnel, the demo application through that tunnel, and the metrics in Observe.
+```text
+== 1. merge the extension into /usr
+HIERARCHY EXTENSIONS SINCE
+/opt      none       -
+/usr      ipsec      Fri 2026-10-02 21:06:21 UTC
+Libreswan 5.3
+== 2. what the RPM scriptlets would have done
+== 3. start libreswan (not enabled: a reboot undoes all of this)
+active
+using kernel interface: xfrm
+```
 
-State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, the `kcs-ipsec` namespace with the NAS `CertificateRequest`, and the unpacked RPMs in `/var/tmp/ipsec-sysext` on the node (delete that directory to remove them). To put `routingViaHost` back: the patch of Step D.1 with `false`.
+On that first run `activate` then ended with `error: non-zero exit code from debug container`. That was a fault in the script (a `head` that closed a pipe early), not on the node; it is fixed, and the check below was run separately.
+
+#### Check what is on the node
+
+The node runs SELinux in `Enforcing` mode, so the question was whether libreswan would start in its own SELinux domain from files that live under `/var/lib/extensions`. `stage` labels that directory as if it were `/`, and it does:
+
+```bash
+oc debug node/crc -q -- chroot /host bash -c '
+ps -eo label,pid,args | grep "[p]luto"
+ls -Z /usr/libexec/ipsec/pluto
+findmnt -no FSTYPE,OPTIONS /usr | cut -c1-160
+ls -Zd /var/lib/ipsec/nss; certutil -L -d /var/lib/ipsec/nss
+ipsec status | grep -E "using kernel|Total IPsec connections"
+rpm -q libreswan; rpm-ostree status | grep -E "State|LayeredPackages"
+ausearch -m avc -ts recent | grep -c "comm=\"pluto\""'
+oc get nodes; oc get mcp master
+```
+
+```text
+system_u:system_r:ipsec_t:s0     255598 /usr/libexec/ipsec/pluto --leak-detective --config /etc/ipsec.conf --nofork
+system_u:object_r:ipsec_exec_t:s0 /usr/libexec/ipsec/pluto
+overlay ro,relatime,seclabel,lowerdir=/run/systemd/sysext/meta/usr:/run/systemd/sysext/extensions/ipsec/usr:/usr
+system_u:object_r:ipsec_key_file_t:s0 /var/lib/ipsec/nss
+Certificate Nickname                                         Trust Attributes
+using kernel interface: xfrm
+Total IPsec connections: loaded 0, routed 0, active 0
+package libreswan is not installed
+State: idle
+          LayeredPackages: cloud-init gvisor-tap-vsock-gvforwarder qemu-user-static-x86
+0
+crc    Ready    control-plane,master,worker   65d   v1.35.6
+master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True   False   False   1     1     1     0     65d
+```
+
+What this shows:
+
+- `pluto` runs in the `ipsec_t` domain, and SELinux logged no denial for it.
+- `/usr` is now a read-only overlay with the extension on top of the original `/usr`.
+- The NSS database exists and is empty. Certificates go in later, exactly as on a production node.
+- `rpm -q libreswan` still says **not installed**: a system extension adds files, not RPM database entries. `rpm-ostree` is untouched, so the machine-config-daemon sees no change (`mco state=Done`, pool `UPDATED=True`).
+
+SELinux did log denials for the `ipsec` helper script (`ipsec_mgmt_t` asking for the `sys_admin` and `sys_resource` capabilities). They did not stop the service.
+
+#### `persist`
+
+Without this, a reboot of the node undoes the merge. systemd reads its unit files before the extension is merged, so at boot it does not know `ipsec.service` yet; `persist` adds a unit that reloads systemd after the merge and then starts libreswan.
+
+```bash
+lab/crc/ipsec-sysext.sh persist
+```
+
+✅ **Expected** (measured):
+
+```text
+system_u:object_r:ipsec_mgmt_unit_file_t:s0 /etc/systemd/system/ipsec-sysext-start.service
+Created symlink /etc/systemd/system/sysinit.target.wants/systemd-sysext.service → /usr/lib/systemd/system/systemd-sysext.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/ipsec-sysext-start.service → /etc/systemd/system/ipsec-sysext-start.service.
+enabled
+enabled
+```
+
+### Step D.6 – What a reboot does on CRC
+
+Two things had to be found out with a real reboot: does libreswan come back, and does OpenShift come back. The reboot came from the MachineConfig in Step E.3, applied at 21:10:21 UTC.
+
+**libreswan comes back.** The node was up again at about 21:13. Its journal for that boot shows the extension merged first, then Option A's certificate import, then the start unit from `persist` (output shortened):
+
+```bash
+ssh -i ~/.crc/machines/crc/id_ed25519 -p 2222 core@127.0.0.1 \
+  'sudo journalctl -b -u systemd-sysext -u ipsec-import -u ipsec-sysext-start --no-pager; systemctl is-active ipsec'
+```
+
+```text
+Oct 02 21:13:18 crc systemd[1]: Finished Merge System Extension Images into /usr/ and /opt/.
+Oct 02 21:13:18 crc systemd[1]: Starting Import external certs into ipsec NSS...
+Oct 02 21:13:18 crc ipsec-addcert.sh[1027]: pk12util: PKCS12 IMPORT SUCCESSFUL
+Oct 02 21:13:19 crc systemd[1]: Finished Import external certs into ipsec NSS.
+Oct 02 21:13:20 crc systemd[1]: Finished Start libreswan from the ipsec system extension (CRC only).
+active
+```
+
+**OpenShift does not come back by itself.** Fourteen minutes after the MachineConfig was applied, the API was still unreachable. The VM was fine (`systemctl is-system-running` said `running`, no failed units), but nothing had started the kubelet (output shortened):
+
+```bash
+ssh -i ~/.crc/machines/crc/id_ed25519 -p 2222 core@127.0.0.1 \
+  'uptime; systemctl is-enabled kubelet crio; systemctl is-active kubelet crio; systemctl list-dependencies --reverse kubelet.service'
+```
+
+```text
+ 21:24:29 up 11 min,  0 users,  load average: 0.01, 0.03, 0.00
+disabled
+disabled
+inactive
+inactive
+kubelet.service
+○ ├─crc-wait-apiserver-up.service
+○ └─crc-wait-node-ready.service
+```
+
+On CRC the kubelet is **disabled on purpose**: `crc start` starts it, after its own checks. A reboot that OpenShift triggers from inside (every MachineConfig change) therefore leaves the cluster down until CRC is restarted with its own tool. Do **not** enable the kubelet by hand; restart CRC instead:
+
+```bash
+crc stop
+crc start
+```
+
+✅ **Expected** (measured: stop at 21:24:59, start finished at 21:28:30, about three and a half minutes):
+
+```text
+level=info msg="Verifying validity of the kubelet certificates..."
+level=info msg="Starting kubelet service"
+level=info msg="Waiting for kube-apiserver availability... [takes around 2min]"
+level=info msg="Starting openshift instance... [waiting for the cluster to stabilize]"
+level=info msg="Operators are stable (3/3)..."
+Started the OpenShift cluster.
+```
+
+`crc stop` also removes the `crc-admin` context from your kubeconfig; `oc` says `current-context is not set` until `crc start` has finished and put it back.
+
+> [!IMPORTANT]
+> On CRC, after **every** step that reboots the node (applying or deleting a MachineConfig), wait until the API stops answering, give the node about three minutes to boot, then run `crc stop` and `crc start`. A production cluster needs none of this: its kubelet starts at boot.
+
+After the restart (boot at 21:25:04), everything was in place:
+
+```bash
+oc get mcp master
+oc debug node/crc -q -- chroot /host bash -c 'systemd-sysext status | tail -1; systemctl is-active ipsec.service; ps -eo label,args | grep "[p]luto --" | cut -c1-90'
+```
+
+```text
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-74d9ff048e8f4b33d6227c68e6442930   True      False      False      1              1                   1                     0                      65d
+/usr      ipsec      Fri 2026-10-02 21:25:07 UTC
+active
+system_u:system_r:ipsec_t:s0    /usr/libexec/ipsec/pluto --leak-detective --config /etc/ip
+```
+
+All cluster operators were healthy (0 not healthy).
+
+---
+
+## Part E – The shared certificate (Appendix A) on CRC
+
+Appendix A of the main guide is **not our standard**. It is installed here once, to document it on a real node, and is then removed (Part F) before the standard, per-node installation.
+
+Three things differ from the main guide on CRC, and `render.sh` takes them as variables. Left unset, each one gives the main guide's value.
+
+| Variable | CRC value | Main guide (default) | Why |
+|---|---|---|---|
+| `MCP_ROLE` | `master` | `worker` | The CRC node is in the `master` pool |
+| `IPSEC_TYPE` | `tunnel` | `transport` | NAT between the node and the NAS (Part B) |
+| `NODE_LEFT` | `%defaultroute` | `<node>.<NODE_DOMAIN>` | No DNS name resolves to the node's address toward the NAS |
+| `NAS_RIGHT` | the NAS IP | `NAS_FQDN` | The node cannot resolve the lab NAS name |
+
+```bash
+export NODE_DOMAIN=crc.testing NAS_FQDN=crc-nas.lab.internal NAS_IP=192.168.64.8 CLUSTER_ISSUER=enterprise-ca
+export MCP_ROLE=master IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 NODE_LEFT='%defaultroute'
+./render.sh
+```
+
+```text
+Rendered into ./rendered (NODE_DOMAIN=crc.testing NAS=crc-nas.lab.internal/192.168.64.8 Issuer=enterprise-ca Butane=4.22.0)
+```
+
+Work in a directory **outside** the repository for the next steps: it will hold a private key.
+
+### Step E.1 – SAN list, key and CSR (main guide, Steps A.2 and A.3)
+
+```bash
+SAN_LIST=$(oc get nodes -l node-role.kubernetes.io/worker \
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+  | sed "s/.*/DNS:&.${NODE_DOMAIN}/" | paste -sd, -)
+echo "${SAN_LIST}"
+
+openssl req -new -newkey rsa:3072 -nodes \
+  -keyout left_server.key -out left_server.csr \
+  -subj "/CN=ocp-ipsec-workers/O=KCS" \
+  -addext "subjectAltName=${SAN_LIST}"
+openssl req -in left_server.csr -noout -text | grep -A1 "Subject Alternative Name"
+```
+
+✅ **Expected** (measured): one name, because CRC has one node.
+
+```text
+DNS:crc.crc.testing
+                X509v3 Subject Alternative Name:
+                    DNS:crc.crc.testing
+```
+
+### Step E.2 – Sign, bundle and verify (main guide, Steps A.4 to A.7)
+
+The enterprise CA signs the CSR through the existing `ClusterIssuer`, the same way as the NAS certificate in Step C.2.
+
+```bash
+cat <<EOF > shared-certificaterequest.yaml
+apiVersion: cert-manager.io/v1
+kind: CertificateRequest
+metadata:
+  name: ipsec-shared-workers
+  namespace: kcs-ipsec
+spec:
+  request: $(base64 < left_server.csr | tr -d '\n')
+  duration: 2160h
+  isCA: false
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+  - client auth
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: enterprise-ca
+EOF
+oc apply -f shared-certificaterequest.yaml
+oc wait -n kcs-ipsec certificaterequest/ipsec-shared-workers --for=condition=Ready --timeout=60s
+oc get certificaterequest -n kcs-ipsec ipsec-shared-workers -o jsonpath='{.status.certificate}' | base64 -d > left_server.crt
+oc get certificaterequest -n kcs-ipsec ipsec-shared-workers -o jsonpath='{.status.ca}' | base64 -d > enterprise-root.pem
+
+cp enterprise-root.pem ca.pem
+openssl x509 -in ca.pem -noout -subject -issuer
+
+# this CA has no intermediate, so no -certfile
+openssl pkcs12 -export -in left_server.crt -inkey left_server.key -name left_server -out left_server.p12 -passout pass:
+
+openssl pkcs12 -in left_server.p12 -nokeys -passin pass: | grep friendlyName
+openssl x509 -in left_server.crt -noout -subject -ext subjectAltName
+openssl x509 -in left_server.crt -noout -dates
+openssl verify -CAfile ca.pem left_server.crt
+```
+
+✅ **Expected** (measured):
+
+```text
+certificaterequest.cert-manager.io/ipsec-shared-workers created
+certificaterequest.cert-manager.io/ipsec-shared-workers condition met
+subject=O=Enterprise POC, CN=Enterprise Root CA
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+    friendlyName: left_server
+subject=CN=ocp-ipsec-workers, O=KCS
+X509v3 Subject Alternative Name:
+    DNS:crc.crc.testing
+notBefore=Oct  2 21:09:33 2026 GMT
+notAfter=Dec 31 21:09:33 2026 GMT
+left_server.crt: OK
+```
+
+### Step E.3 – The MachineConfig (main guide, Steps A.8 and A.9)
+
+`brew install butane` first (main guide, Step A.1). Copy the rendered Butane file next to `ca.pem` and `left_server.p12`, then build and apply:
+
+```bash
+cp <repo>/rendered/option-a-shared-cert/99-ipsec-worker-endpoint-config.bu 99-ipsec-master-endpoint-config.bu
+butane -d . 99-ipsec-master-endpoint-config.bu -o 99-ipsec-master-endpoint-config.yaml
+oc apply --dry-run=server -f 99-ipsec-master-endpoint-config.yaml
+oc apply -f 99-ipsec-master-endpoint-config.yaml
+```
+
+✅ **Expected** (measured, applied at 21:10:21 UTC): the name and the role say `master`.
+
+```text
+machineconfig.machineconfiguration.openshift.io/99-master-import-certs created (server dry run)
+machineconfig.machineconfiguration.openshift.io/99-master-import-certs created
+```
+
+The node reboots within seconds. **Then do Step D.6**: wait, `crc stop`, `crc start`. After that, check the pool and the certificates on the node:
+
+```bash
+oc get mcp master
+oc get node crc -o jsonpath='mco state={.metadata.annotations.machineconfiguration\.openshift\.io/state}{"\n"}'
+oc debug node/crc -q -- chroot /host bash -c '
+journalctl -b -u ipsec-import --no-pager | tail -4
+certutil -L -d /var/lib/ipsec/nss
+certutil -L -n left_server -d /var/lib/ipsec/nss | grep -E "Subject:|Issuer:|Not After"
+ls -l /etc/pki/certs/'
+```
+
+✅ **Expected** (measured): the pool is on a new rendered configuration, and the NSS database holds `CA` with trust `CT,C,C` and `left_server` with `u,u,u`.
+
+```text
+master   rendered-master-74d9ff048e8f4b33d6227c68e6442930   True      False      False      1              1                   1                     0                      65d
+mco state=Done
+Oct 02 21:25:07 crc ipsec-addcert.sh[995]: importing cert to NSS
+Oct 02 21:25:07 crc ipsec-addcert.sh[1038]: pk12util: PKCS12 IMPORT SUCCESSFUL
+Oct 02 21:25:07 crc systemd[1]: Finished Import external certs into ipsec NSS.
+
+CA                                                           CT,C,C
+left_server                                                  u,u,u
+        Issuer: "CN=Enterprise Root CA,O=Enterprise POC"
+            Not After : Thu Dec 31 21:09:33 2026
+        Subject: "O=KCS,CN=ocp-ipsec-workers"
+-r--------. 1 root root 1874 Oct  2 21:10 ca.pem
+-r--------. 1 root root 3682 Oct  2 21:10 left_server.p12
+```
+
+The import ran at both boots (21:13:18 and 21:25:07) and succeeded both times, so running it again over the same certificate is harmless.
+
+### Step E.4 – The NNCP policy (main guide, Step A.10): not applied yet
+
+The policy is rendered with the CRC values, and a server-side dry run accepts it. It has **not** been applied, so there is no tunnel from the node yet.
+
+```bash
+sed -n '/desiredState/,$p' rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
+oc apply --dry-run=server -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
+```
+
+```text
+                left: "%defaultroute"   # must be in the cert SAN
+                leftid: '%fromcert'
+                leftrsasigkey: '%cert'
+                leftcert: left_server
+                leftmodecfgclient: false
+                right: 192.168.64.8
+                rightid: '%fromcert'
+                rightrsasigkey: '%cert'
+                rightsubnet: 192.168.64.8/32
+                ikev2: insist
+                type: tunnel
+clusterpolicy.kyverno.io/ipsec-nncp-shared-cert created (server dry run)
+```
+
+The dry run also printed two warnings from Kyverno 1.19 on CRC: `kyverno.io/v1 ClusterPolicy is deprecated`, and `kyverno-reports-controller requires permissions get,list,watch for resource Node`. Neither stops the policy.
+
+To apply it:
+
+```bash
+oc apply -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
+oc get clusterpolicy ipsec-nncp-shared-cert
+oc get nncp,nnce
+```
+
+---
+
+## What is still open on CRC
+
+- **Step E.4**: apply the NNCP policy and measure the tunnel from the node to the NAS. Whether NMState can build a `tunnel`-mode connection with `left: '%defaultroute'` through the NAT is not known yet.
+- **Part F** (not written yet): remove the shared certificate from CRC.
+- **The standard installation** (main guide, Part 2), the demo application and the metrics in Observe.
+
+State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, libreswan 5.3 as a system extension (persistent), the MachineConfig `99-master-import-certs` with the shared certificate in the node's NSS database, and the `kcs-ipsec` namespace with two `CertificateRequest`s (`crc-nas`, `ipsec-shared-workers`).
+
+To undo, in this order: `oc delete mc 99-master-import-certs` (reboot, then Step D.6), `lab/crc/ipsec-sysext.sh remove` (not run yet), and the patch of Step D.1 with `false`.
 
 ---
 
