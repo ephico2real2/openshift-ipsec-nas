@@ -63,6 +63,7 @@ lab/lima/                            Lima templates: lab VMs, and a NAS VM that 
 lab/pki/                             throwaway test CA and certificates
 lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
 lab/container/                       the test NAS as a container image
+lab/crc/                             CRC only: libreswan on the node as a system extension (fetch tested, the rest not run yet)
 tests/                               unit tests: metrics parser, alert rules (promtool)
 docs/images/                         screenshots
 ```

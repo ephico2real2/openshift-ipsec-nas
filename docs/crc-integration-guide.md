@@ -12,6 +12,7 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | B | A NAS VM that CRC can reach, and a tunnel that works through the NAT in between | **Done**, measured with a stand-in VM behind the same kind of NAT |
 | C | The NAS side for CRC: a NAS certificate signed by the cluster's enterprise CA, and the NAS configured for the CRC node | **Done**, measured |
 | D | Change the CRC cluster: `routingViaHost`, NMState, Kyverno RBAC, IPsec `External` mode | `routingViaHost`, NMState and the Kyverno RBAC are **done**, measured. IPsec `External` mode **fails on CRC**: the node cannot install libreswan. It was reverted and the cluster is healthy. |
+| D.5 | libreswan on the node as a system extension, from OpenShift's own extension RPMs | **Prepared, not installed.** The RPMs are unpacked under `/var/tmp` on the node; staging and activating are not run yet. |
 | – | The node's own tunnel, Appendix A, Part 2 from Step B.5, the demo app, metrics in Observe | **Not run on CRC.** They all need libreswan on the node. |
 
 Everything in this guide was run and the outputs shown are real, including the step that failed. Nothing is shown as working that was not measured.
@@ -372,6 +373,7 @@ The baseline before any change was recorded on 2026-10-02: OpenShift 4.22.7, all
 | D.2 NMState Operator and instance | **Done.** |
 | D.3 Kyverno RBAC | **Done.** |
 | D.4 IPsec `External` mode | **Fails on CRC.** The node cannot install libreswan. Reverted; the cluster is healthy again. |
+| D.5 libreswan as a system extension | **Prepared.** The needed files are unpacked on the node; nothing is installed or active. |
 
 ### Step D.1 – Enable `routingViaHost` (main guide, Step 1.3)
 
@@ -526,7 +528,7 @@ Rolling back applied changes to OS due to error: error running rpm-ostree update
 Error syncing node crc (retries 11): error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86
 ```
 
-So: to add libreswan, `rpm-ostree` must also find the three packages that are already layered, and the only repository it is given (`coreos-extensions`, the OpenShift extensions) does not contain them. Removing the three packages from the node was **not tried**. They come with the CRC image: `cloud-init`, the gvisor-tap-vsock forwarder (not running on this Mac: `gv-user-network@tap0.service` is inactive) and x86 emulation, which is registered on the node (`qemu-x86_64` in `/proc/sys/fs/binfmt_misc/`). Removing them changes the node's operating system and needs a reboot.
+So: to add libreswan, `rpm-ostree` must also find the three packages that are already layered, and the only repository it is given (`coreos-extensions`, the OpenShift extensions) does not contain them. Removing the three packages from the node was **not tried**. They come with the CRC image: `cloud-init`, the gvisor-tap-vsock forwarder (not running on this Mac: `gv-user-network@tap0.service` is inactive) and x86 emulation, which is registered on the node (`qemu-x86_64` in `/proc/sys/fs/binfmt_misc/`) and in use: three processes on the node were running under `qemu-x86_64-static` when checked. Removing them changes the node's operating system, needs a reboot, and would stop those workloads.
 
 This was measured on CRC 2.63.0 with the OpenShift 4.22.7 bundle on an Apple Silicon Mac. Other CRC versions were not tested. A production cluster's nodes have no such extra packages, so the main guide's Step 1.4 is not affected.
 
@@ -553,6 +555,52 @@ machine-config   4.22.7    True        False         False      65d
 cluster operators not healthy: 0
 ```
 
+### Step D.5 – libreswan as a system extension (CRC only; `fetch` run, the rest not run yet)
+
+A way around Step D.4 that leaves `rpm-ostree` and the three layered packages alone: take the libreswan files from OpenShift's **own** extensions image and merge them into `/usr` with `systemd-sysext`, which the node already has (systemd 252). `lab/crc/ipsec-sysext.sh` does it in separate steps:
+
+| Step | What it does on the node | Status |
+|---|---|---|
+| `fetch` | Copies the RPMs out of the extensions image into `/var/tmp/ipsec-sysext`, works out which ones are needed, and unpacks them there | **Run**, output below |
+| `stage` | Builds `/var/lib/extensions/ipsec` with SELinux labels, and copies libreswan's configuration files into `/etc` | **Not run yet** |
+| `activate` | Merges the extension into `/usr` and starts `ipsec.service`. Not persistent: a reboot undoes it | **Not run yet** |
+| `status` | Shows what is merged and whether libreswan answers | **Not run yet** |
+| `remove` | Stops libreswan, unmerges, and deletes what `stage` and `activate` created | **Not run yet** |
+
+> [!WARNING]
+> `stage` and `activate` change the node's operating system. They have not been run, so their commands are untested. Read the script before running them.
+
+```bash
+lab/crc/ipsec-sysext.sh fetch
+```
+
+✅ **Expected** (measured; the list outside `usr/` is shortened here): the extensions image holds 136 RPMs, the same number the machine-config-daemon reported. libreswan and `NetworkManager-libreswan` need eight more of them, because the node has no NSS libraries. Nothing is unresolved, and none of the unpacked files already exists on the node.
+
+```text
+extensions image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3ae2c94227672e1f0cddab9e47ab90b071b6a25e2a17d8e6fe2df31e135f14a9
+rpms in the extensions image: 136
+== rpms needed that the node does not have
+NetworkManager-libreswan-1.2.30-1.el9.aarch64.rpm
+ldns-1.7.1-12.el9.aarch64.rpm
+libreswan-5.3-5.el9fdp.aarch64.rpm
+nspr-4.36.0-8.el9_4.aarch64.rpm
+nss-3.112.0-8.el9_4.aarch64.rpm
+nss-softokn-3.112.0-8.el9_4.aarch64.rpm
+nss-softokn-freebl-3.112.0-8.el9_4.aarch64.rpm
+nss-sysinit-3.112.0-8.el9_4.aarch64.rpm
+nss-tools-3.112.0-8.el9_4.aarch64.rpm
+nss-util-3.112.0-8.el9_4.aarch64.rpm
+== outside usr/
+./etc/dbus-1/system.d/nm-libreswan-service.conf
+./etc/ipsec.conf
+./etc/ipsec.d/policies/block
+...
+./etc/ipsec.secrets
+files that already exist on the node: 0
+```
+
+The files outside `usr/` are why `stage` also writes to `/etc`: a system extension can only add to `/usr`. The node is RHCOS 9.8 with SELinux `Enforcing`, so `stage` labels the extension directory as if it were `/`; whether libreswan then starts in the right SELinux domain is the first thing `activate` will show.
+
 ### What this means for the rest
 
 Without libreswan and `NetworkManager-libreswan` on the node, an NMState `ipsec` interface cannot be created, and there is no `certutil` or `/var/lib/ipsec/nss` for the certificate import. That stops, on CRC:
@@ -562,7 +610,7 @@ Without libreswan and `NetworkManager-libreswan` on the node, an NMState `ipsec`
 
 Not run on CRC, and still open: the node's own tunnel, the demo application through that tunnel, and the metrics in Observe.
 
-State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, and the `kcs-ipsec` namespace with the NAS `CertificateRequest`. To put `routingViaHost` back: the patch of Step D.1 with `false`.
+State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, the `kcs-ipsec` namespace with the NAS `CertificateRequest`, and the unpacked RPMs in `/var/tmp/ipsec-sysext` on the node (delete that directory to remove them). To put `routingViaHost` back: the patch of Step D.1 with `false`.
 
 ---
 
