@@ -15,5 +15,5 @@ flowchart LR
     end
     T1 --> N1 --> R1
     T2 <--> N2 <--> R2
-    P["Proposed for the CRC node 192.168.127.2, not built yet:<br/>the same tunnel-mode connection"]
-    T2 -.-> P
+    P["The CRC node itself, 192.168.127.2, measured:<br/>NMState built the same tunnel-mode connection<br/>5 MiB NFS write counted on the tunnel"]
+    T2 --> P

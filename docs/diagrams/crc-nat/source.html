@@ -53,7 +53,7 @@ figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
     <figure>
       <div class="fig-scroll">
         <!-- Three lanes: the client behind NAT, the NAT on the Mac, the NAS VM. Two rows: the refused transport attempt and the working tunnel. -->
-        <svg viewBox="0 0 980 414" role="img" aria-label="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address.">
+        <svg viewBox="0 0 980 414" role="img" aria-label="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address. The CRC node itself was then measured with the same tunnel-mode connection.">
           <defs>
             <marker id="ahn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
             <marker id="ahnr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
@@ -103,19 +103,19 @@ figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
             <text x="684" y="211">NFS arrives from the client's own</text>
             <text x="684" y="227">address; 5 MiB write check passed</text>
 
-            <!-- row 3: what this means for CRC, not built yet -->
-            <rect x="30" y="260" width="920" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5" stroke-dasharray="5 4"/>
-            <text x="44" y="282" font-weight="600" fill="var(--host)">Proposed for the CRC node (192.168.127.2), not built yet</text>
-            <text x="44" y="299">The same tunnel-mode connection, with the NAS told that one client behind NAT has the address 192.168.127.2.</text>
-            <text x="44" y="315">Probed so far: the node reaches the NAS VM on TCP and on UDP 500 and 4500, and arrives as 192.168.64.1.</text>
+            <!-- row 3: the CRC node itself, measured -->
+            <rect x="30" y="260" width="920" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="44" y="282" font-weight="600" fill="var(--host)">The CRC node itself (192.168.127.2): measured</text>
+            <text x="44" y="299">NMState built the same tunnel-mode connection on the node; the NAS logged the tunnel 192.168.64.8/32 === 192.168.127.2/32.</text>
+            <text x="44" y="315">A 5 MiB NFS write from the node was counted on the tunnel (5,477,144 bytes out) and on the NAS rule for NFS through IPsec.</text>
 
-            <text x="30" y="354" fill="var(--muted)">Measured 2026-10-02 with a stand-in VM on Lima's default network, which leaves through the Mac the same way a CRC node does.</text>
+            <text x="30" y="354" fill="var(--muted)">Measured 2026-10-02: rows 1 and 2 with a stand-in VM on Lima's default network, row 3 from the CRC node with the shared certificate.</text>
             <text x="30" y="374" fill="var(--muted)">A cluster on a routed network keeps transport mode and bare ESP, as measured in the Lima lab.</text>
-            <text x="30" y="394" fill="var(--host)" font-weight="600">Dashed = proposed, not built: the CRC node's own tunnel.</text>
+            <text x="30" y="394" fill="var(--muted)">On CRC, libreswan is on the node as a system extension; CRC cannot install it the supported way.</text>
           </g>
         </svg>
       </div>
-      <figcaption>Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. The CRC node's own tunnel is proposed, not built.</figcaption>
+      <figcaption>Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. The CRC node itself was then measured with the same tunnel-mode connection.</figcaption>
     </figure>
   </section>
 </div>

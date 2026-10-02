@@ -13,7 +13,7 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | C | The NAS side for CRC: a NAS certificate signed by the cluster's enterprise CA, and the NAS configured for the CRC node | **Done**, measured |
 | D | Change the CRC cluster: `routingViaHost`, NMState, Kyverno RBAC, IPsec `External` mode | `routingViaHost`, NMState and the Kyverno RBAC are **done**, measured. IPsec `External` mode **fails on CRC**: the node cannot install libreswan. It was reverted and the cluster is healthy. |
 | D.5, D.6 | libreswan on the node as a system extension, from OpenShift's own extension RPMs, because CRC cannot install it the supported way | **Done**, measured. It runs in its own SELinux domain and survives a reboot. A reboot on CRC needs `crc stop` and `crc start` afterwards. |
-| E | The shared certificate (Appendix A) on CRC | Certificate, MachineConfig and import on the node are **done**, measured. The NNCP policy is **not applied yet**, so there is no tunnel from the node. |
+| E | The shared certificate (Appendix A) on CRC, end to end | **Done**, measured: certificate, MachineConfig, NNCP through Kyverno, the tunnel from the node, and a 5 MiB NFS write through it. Two gaps in the Kyverno setup were found and fixed in the main guide. |
 | – | Removing the shared certificate, the standard installation (Part 2), the demo app, metrics in Observe | **Not run on CRC yet.** |
 
 Everything in this guide was run and the outputs shown are real, including the step that failed, unless a step says it is not run yet. Nothing is shown as working that was not measured.
@@ -91,10 +91,10 @@ IP 192.168.64.1.58166 > 192.168.64.6.isakmp:  [|isakmp]
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="diagrams/crc-nat/nat-tunnel-mode.dark.png">
   <source media="(prefers-color-scheme: light)" srcset="diagrams/crc-nat/nat-tunnel-mode.light.png">
-  <img alt="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address." src="diagrams/crc-nat/nat-tunnel-mode.light.png">
+  <img alt="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address. The CRC node itself was then measured with the same tunnel-mode connection." src="diagrams/crc-nat/nat-tunnel-mode.light.png">
 </picture>
 
-*Figure 1. Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. Measured with a stand-in VM; the CRC node's own tunnel (dashed) is proposed, not built.*
+*Figure 1. Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. Measured first with a stand-in VM, then from the CRC node itself (Part E).*
 
 ```text
 CLIENT (behind NAT)                    NAT (on the Mac)                        NAS VM (192.168.64.8)
@@ -107,7 +107,8 @@ Tunnel mode                       <->  ESP wrapped in UDP 4500            <->  A
   selector: client/32 to NAS/32         forwarded like any UDP flow             NFS arrives from the client's
   rest of the NNCP unchanged            (bare ESP would not pass)               own address; write check passed
 
-Proposed, not built yet: the same tunnel-mode connection for the CRC node (192.168.127.2).
+The CRC node itself (192.168.127.2), measured: NMState built the same tunnel-mode connection; the NAS logged the tunnel
+192.168.64.8/32 === 192.168.127.2/32; a 5 MiB NFS write from the node was counted on the tunnel and on the NAS.
 ```
 
 ### What was measured
@@ -959,33 +960,7 @@ left_server                                                  u,u,u
 
 The import ran at both boots (21:13:18 and 21:25:07) and succeeded both times, so running it again over the same certificate is harmless.
 
-### Step E.4 – The NNCP policy (main guide, Step A.10): not applied yet
-
-The policy is rendered with the CRC values, and a server-side dry run accepts it. It has **not** been applied, so there is no tunnel from the node yet.
-
-```bash
-sed -n '/desiredState/,$p' rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
-oc apply --dry-run=server -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
-```
-
-```text
-                left: "%defaultroute"   # must be in the cert SAN
-                leftid: '%fromcert'
-                leftrsasigkey: '%cert'
-                leftcert: left_server
-                leftmodecfgclient: false
-                right: 192.168.64.8
-                rightid: '%fromcert'
-                rightrsasigkey: '%cert'
-                rightsubnet: 192.168.64.8/32
-                ikev2: insist
-                type: tunnel
-clusterpolicy.kyverno.io/ipsec-nncp-shared-cert created (server dry run)
-```
-
-The dry run also printed two warnings from Kyverno 1.19 on CRC: `kyverno.io/v1 ClusterPolicy is deprecated`, and `kyverno-reports-controller requires permissions get,list,watch for resource Node`. Neither stops the policy.
-
-To apply it:
+### Step E.4 – The NNCP policy (main guide, Step A.10)
 
 ```bash
 oc apply -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
@@ -993,17 +968,174 @@ oc get clusterpolicy ipsec-nncp-shared-cert
 oc get nncp,nnce
 ```
 
+The first attempt, at 21:31:18 UTC, gave a policy with `READY=True` and **no NNCP**. Two things in the Kyverno installation were in the way. Both are now fixed in the main guide, because they affect every cluster, not only CRC.
+
+**1. Kyverno could not read Nodes.** Its log said so:
+
+```bash
+oc logs -n kyverno deploy/kyverno-background-controller --since=5m | grep -i forbidden
+oc auth can-i list nodes --as=system:serviceaccount:kyverno:kyverno-background-controller
+```
+
+```text
+ERR ... failed to list matched resource error="nodes is forbidden: User \"system:serviceaccount:kyverno:kyverno-background-controller\" cannot list resource \"nodes\" in API group \"\" at the cluster scope"
+no
+```
+
+Fix: the second ClusterRole now in `manifests/common/03-kyverno-rbac.yaml` (main guide, Step 1.7).
+
+```bash
+oc apply -f manifests/common/03-kyverno-rbac.yaml
+```
+
+```text
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-generate unchanged
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-read-nodes created
+kyverno-background-controller list nodes: yes
+kyverno-reports-controller list nodes: yes
+```
+
+**2. Kyverno ignores Nodes by default.** With the permission fixed and the policy re-created, there was still no NNCP, and this time no error either: the log stopped at `policy created`. The reason is in Kyverno's own configuration:
+
+```bash
+oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[Node[^]]*\]'
+```
+
+```text
+[Node,*,*]
+[Node/?*,*,*]
+```
+
+`[Node,*,*]` tells Kyverno to skip every Node. Fix: the chart setting in the main guide's Step 1.6.3, added to the running release. The four other policies on this CRC match only Groups and Namespaces, so nothing else changes.
+
+```bash
+cat <<'EOF' > kyverno-node-values.yaml
+config:
+  resourceFiltersExclude:
+  - '[Node,*,*]'
+EOF
+helm upgrade kyverno kyverno/kyverno -n kyverno --version 3.9.1 --reuse-values -f kyverno-node-values.yaml
+oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[Node[^]]*\]'
+```
+
+```text
+Release "kyverno" has been upgraded. Happy Helming!
+STATUS: deployed
+REVISION: 2
+[Node/?*,*,*]
+```
+
+The Kyverno pods were not restarted; they read the new configuration by themselves.
+
+**Then it works.** The policy was deleted and applied again at 21:34:07 UTC:
+
+```bash
+oc delete clusterpolicy ipsec-nncp-shared-cert
+oc apply -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
+oc logs -n kyverno deploy/kyverno-background-controller --since=1m | grep -E 'start processing UR|created generate target'
+oc get nncp,nnce
+```
+
+✅ **Expected** (measured): Kyverno created the NNCP one second later, and NMState reported it `Available` within 12 seconds of the policy.
+
+```text
+TRC ... start processing UR logger=background name=ur-t4lt9 policy=ipsec-nncp-shared-cert
+TRC ... created generate target resource ... rule=nncp-per-worker target=nmstate.io/v1/NodeNetworkConfigurationPolicy//ipsec-nas-crc trigger=/crc
+
+NAME            STATUS      REASON
+ipsec-nas-crc   Available   SuccessfullyConfigured
+NAME                STATUS      STATUS AGE   REASON
+crc.ipsec-nas-crc   Available   2s           SuccessfullyConfigured
+```
+
+### Step E.5 – The tunnel from the CRC node
+
+```bash
+oc debug node/crc -q -- chroot /host bash -c '
+ipsec trafficstatus
+ipsec status | grep -E "Total IPsec connections|IKE SAs|IPsec SAs"
+nmcli -t -f NAME,TYPE,STATE connection show --active | grep -i vpn
+ip xfrm policy | grep -A3 "192.168.64.8" | grep -E "src|dir|tmpl|mode"
+ip xfrm state | grep -E "^src|mode|encap"'
+limactl shell crc-nas sudo bash -c 'ipsec trafficstatus; journalctl -u ipsec --since "-3min" --no-pager | grep -E "established"'
+```
+
+The last `ip xfrm state` filter prints no keys. Do not paste the unfiltered output anywhere.
+
+✅ **Expected** (measured). On the node: one connection loaded and active, NetworkManager shows `ipsec-nas` as an activated VPN, and the kernel has it in `tunnel` mode with ESP wrapped in UDP 4500.
+
+```text
+#2: "c5ccbae6-1377-43d4-8a6b-ae155d137023", type=ESP, add_time=1790976853, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+Total IPsec connections: loaded 1, routed 1, active 1
+IKE SAs: total(1), half-open(0), open(0), authenticated(1), anonymous(0)
+IPsec SAs: total(1), authenticated(1), anonymous(0)
+ipsec-nas:vpn:activated
+src 192.168.127.2/32 dst 192.168.64.8/32
+	dir out priority 1753281 ptype main
+	tmpl src 192.168.127.2 dst 192.168.64.8
+		proto esp reqid 16389 mode tunnel
+src 192.168.127.2 dst 192.168.64.8
+	proto esp spi 0x1df57e56 reqid 16389 mode tunnel
+	encap type espinudp sport 4500 dport 4500 addr 0.0.0.0
+```
+
+On the NAS: the node's shared certificate was checked against the enterprise CA, and the tunnel is the one Part B predicted, between the NAS and the node's own address, seen through the NAT as `192.168.64.1`.
+
+```text
+"workers"[1] 192.168.64.1 #1: responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise POC, CN=Enterprise Root CA'
+"workers"[1] 192.168.64.1 #2: responder established Child SA using #1; IPsec tunnel [192.168.64.8/32===192.168.127.2/32] {ESPinUDP/ESN=>0xbb28a9f5 <0x1df57e56 xfrm=AES_GCM_16_256 NATD=192.168.64.1:59351 DPD=passive}
+```
+
+> [!NOTE]
+> On a real node, libreswan knows the connection by NetworkManager's **UUID** (`"c5ccbae6-..."` above), not by the name `ipsec-nas`. In the Lima lab the stand-ins named it `ipsec-nas`. Anything that looks for the connection by name in `ipsec trafficstatus` has to allow for this; the metrics collector of the standard installation is the place to check.
+
+### Step E.6 – NFS through the tunnel
+
+The node mounts the NAS export, writes 5 MiB, and unmounts. The tunnel's byte counter is read before and after.
+
+```bash
+limactl shell crc-nas sudo nft list table inet nas_ipsec_only | grep counter
+oc debug node/crc -q -- chroot /host bash -c '
+set -euo pipefail
+out() { ipsec trafficstatus | sed -n "s/.*outBytes=\([0-9]*\).*/\1/p"; }
+m=/var/tmp/nas-test; mkdir -p "$m"
+before=$(out)
+mount -t nfs4 -o nfsvers=4.1 192.168.64.8:/export "$m"
+dd if=/dev/urandom of="$m/verify-crc-option-a.bin" bs=1M count=5 conv=fsync status=none
+sha256sum "$m/verify-crc-option-a.bin" | cut -c1-64
+umount "$m"; rmdir "$m"
+after=$(out)
+echo "tunnel outBytes: before=$before after=$after grew=$((after-before)) (wrote 5242880)"
+[ $((after-before)) -ge 5242880 ] && echo "PASS: the 5 MiB write went through the IPsec tunnel"'
+limactl shell crc-nas sudo bash -c 'sha256sum /export/verify-crc-option-a.bin | cut -c1-64; ipsec trafficstatus; nft list table inet nas_ipsec_only | grep counter'
+```
+
+✅ **Expected** (measured): the same checksum on both sides, the tunnel counter grew by more than the file size, and on the NAS only the "through IPsec" rule counted NFS. The cleartext drop rule stayed at 11 packets before and after.
+
+```text
+0c0d5a66e0cf381a59f094a7e92c8136868d9ad72148b26f2d0b36487e76b64a
+tunnel outBytes: before=0 after=5477144 grew=5477144 (wrote 5242880)
+PASS: the 5 MiB write went through the IPsec tunnel
+
+0c0d5a66e0cf381a59f094a7e92c8136868d9ad72148b26f2d0b36487e76b64a
+#2: "workers"[1] 192.168.64.1, type=ESP, add_time=1790976853, inBytes=5451260, outBytes=34492, maxBytes=2^63B, id='CN=ocp-ipsec-workers, O=KCS'
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 725 bytes 5290060 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 11 bytes 688 drop comment "nfs-cleartext-dropped"
+```
+
+This answers the open question from Part B: NMState builds a `tunnel`-mode connection with `left: '%defaultroute'` on a real OpenShift node, and it works through the NAT.
+
 ---
 
 ## What is still open on CRC
 
-- **Step E.4**: apply the NNCP policy and measure the tunnel from the node to the NAS. Whether NMState can build a `tunnel`-mode connection with `left: '%defaultroute'` through the NAT is not known yet.
 - **Part F** (not written yet): remove the shared certificate from CRC.
-- **The standard installation** (main guide, Part 2), the demo application and the metrics in Observe.
+- **The standard installation** (main guide, Part 2), the demo application and the metrics in Observe. The metrics collector has to be checked against the connection name noted in Step E.5.
+- `lab/crc/ipsec-sysext.sh remove` has not been run.
 
-State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRole, libreswan 5.3 as a system extension (persistent), the MachineConfig `99-master-import-certs` with the shared certificate in the node's NSS database, and the `kcs-ipsec` namespace with two `CertificateRequest`s (`crc-nas`, `ipsec-shared-workers`).
+State of CRC now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), the MachineConfig `99-master-import-certs` with the shared certificate in the node's NSS database, the policy `ipsec-nncp-shared-cert` with its NNCP `ipsec-nas-crc` and an established tunnel to the NAS, and the `kcs-ipsec` namespace with two `CertificateRequest`s (`crc-nas`, `ipsec-shared-workers`).
 
-To undo, in this order: `oc delete mc 99-master-import-certs` (reboot, then Step D.6), `lab/crc/ipsec-sysext.sh remove` (not run yet), and the patch of Step D.1 with `false`.
+To undo, in this order: the teardown in the main guide's section 3.4 (policy, then an NNCP with `state: absent`), `oc delete mc 99-master-import-certs` (reboot, then Step D.6), `lab/crc/ipsec-sysext.sh remove` (not run yet), and the patch of Step D.1 with `false`.
 
 ---
 
@@ -1015,4 +1147,4 @@ Figure 1 is rendered from `docs/diagrams/crc-nat/source.html` by `docs/diagrams/
 python3 docs/diagrams/render.py docs/diagrams/crc-nat/source.html docs/diagrams/crc-nat nat-tunnel-mode
 ```
 
-The Mermaid text version is `docs/diagrams/mermaid/nat-tunnel-mode.mmd`; it is not what this document displays. The dashed box in the figure marks the part that is proposed and not built; redraw it solid once the CRC node's tunnel is measured.
+The Mermaid text version is `docs/diagrams/mermaid/nat-tunnel-mode.mmd`; it is not what this document displays.

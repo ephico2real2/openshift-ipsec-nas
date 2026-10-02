@@ -11,7 +11,7 @@ automated per node with **Kyverno**.
 | [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
 | [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
 | [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
-| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, a NAS certificate signed by the cluster's enterprise CA, the cluster steps that work on CRC, and the one that does not (CRC cannot install libreswan on its node) |
+| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, a NAS certificate signed by the cluster's enterprise CA, why CRC cannot install libreswan the supported way and the system-extension way around it, and the shared-certificate tunnel measured from the CRC node |
 | [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
 
 ## How it works
@@ -63,7 +63,7 @@ lab/lima/                            Lima templates: lab VMs, and a NAS VM that 
 lab/pki/                             throwaway test CA and certificates
 lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
 lab/container/                       the test NAS as a container image
-lab/crc/                             CRC only: libreswan on the node as a system extension (fetch tested, the rest not run yet)
+lab/crc/                             CRC only: libreswan on the node as a system extension (remove is not run yet)
 tests/                               unit tests: metrics parser, alert rules (promtool)
 docs/images/                         screenshots
 ```

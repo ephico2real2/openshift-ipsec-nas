@@ -264,7 +264,7 @@ oc get pods -n openshift-nmstate           # nmstate-handler pod on every node, 
 
 ### Step 1.6 – Install Kyverno
 
-Kyverno is installed with Helm. There are two ways to run the install (1.6.4 **or** 1.6.5), and both need the OpenShift SCC setting in 1.6.3.
+Kyverno is installed with Helm. There are two ways to run the install (1.6.4 **or** 1.6.5), and both need the two settings in 1.6.3: the OpenShift SCC setting, and the setting that lets Kyverno see Nodes.
 
 > [!IMPORTANT]
 > Kyverno is a **community project, not Red Hat-supported**. Use the chart version approved by our change process (`--version`), and the internal mirror if the cluster is disconnected. This guide needs **Kyverno 1.13 or later**.
@@ -345,7 +345,7 @@ test:
 EOF
 ```
 
-**Option 2: keep the fixed ID and grant an SCC that allows it.** Give Kyverno's service accounts the `nonroot-v2` SCC **before** installing, then leave the `-f kyverno-openshift-values.yaml` line out of the install command.
+**Option 2: keep the fixed ID and grant an SCC that allows it.** Give Kyverno's service accounts the `nonroot-v2` SCC **before** installing, then leave the `-f kyverno-openshift-values.yaml` line out of the install command (keep `-f kyverno-node-values.yaml`).
 
 ```bash
 oc create namespace kyverno
@@ -361,12 +361,39 @@ oc get rolebinding system:openshift:scc:nonroot-v2 -n kyverno -o jsonpath='{.sub
 > [!WARNING]
 > **Do not grant `anyuid`.** It does not help: `anyuid` rejects any pod that sets a seccomp profile, and every Kyverno container sets one. It would also allow running as root.
 
+**Both options: let Kyverno see Nodes.** Out of the box Kyverno **ignores every Node object**: its `resourceFilters` list contains `[Node,*,*]`. Every policy in this guide is triggered by a Node, so with the default they are accepted, show `READY=True`, and never create anything. The chart has a setting that takes one entry out of that list:
+
+```bash
+cat <<'EOF' > kyverno-node-values.yaml
+config:
+  # Kyverno ignores Node objects by default; the IPsec policies are triggered by Nodes.
+  resourceFiltersExclude:
+  - '[Node,*,*]'
+EOF
+
+# Check what it changes before installing: the first command prints two Node filters, the second only one
+helm template kyverno kyverno/kyverno --version "${KYVERNO_CHART_VERSION}" -n kyverno | grep -o '\[Node[^]]*\]' | sort | uniq -c
+helm template kyverno kyverno/kyverno --version "${KYVERNO_CHART_VERSION}" -n kyverno -f kyverno-node-values.yaml | grep -o '\[Node[^]]*\]' | sort | uniq -c
+```
+
+✅ **Expected** (measured with chart 3.9.1): `[Node,*,*]` and `[Node/?*,*,*]` without the file, only `[Node/?*,*,*]` with it. That second entry covers Node sub-resources such as the status a node reports every few seconds; it stays filtered on purpose.
+
+Kyverno is **already installed**? Add the setting to the running release and keep everything else as it is:
+
+```bash
+helm upgrade kyverno kyverno/kyverno -n kyverno --version "${KYVERNO_CHART_VERSION}" --reuse-values -f kyverno-node-values.yaml
+oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[Node[^]]*\]'      # only [Node/?*,*,*]
+```
+
+Kyverno then also looks at Nodes for every other policy on the cluster. Check first that no existing policy matches Nodes by accident: `oc get clusterpolicy -o yaml | grep -n -A3 'kinds:'`.
+
 #### 1.6.4 Install method 1 – straight from the Helm repository
 
 ```bash
 helm install kyverno kyverno/kyverno -n kyverno --create-namespace \
   --version "${KYVERNO_CHART_VERSION}" \
   -f kyverno-openshift-values.yaml \
+  -f kyverno-node-values.yaml \
   --set admissionController.replicas=3 \
   --set backgroundController.replicas=2 \
   --set cleanupController.replicas=2 \
@@ -384,11 +411,12 @@ helm pull kyverno/kyverno --version "${KYVERNO_CHART_VERSION}"     # writes kyve
 helm show chart "kyverno-${KYVERNO_CHART_VERSION}.tgz"             # check version and appVersion
 ```
 
-Copy `kyverno-${KYVERNO_CHART_VERSION}.tgz` and `kyverno-openshift-values.yaml` to the machine that is logged in to the cluster, then install from the file:
+Copy `kyverno-${KYVERNO_CHART_VERSION}.tgz`, `kyverno-openshift-values.yaml` and `kyverno-node-values.yaml` to the machine that is logged in to the cluster, then install from the file:
 
 ```bash
 helm install kyverno "./kyverno-${KYVERNO_CHART_VERSION}.tgz" -n kyverno --create-namespace \
   -f kyverno-openshift-values.yaml \
+  -f kyverno-node-values.yaml \
   --set admissionController.replicas=3 \
   --set backgroundController.replicas=2 \
   --set cleanupController.replicas=2 \
@@ -407,13 +435,14 @@ helm install kyverno "./kyverno-${KYVERNO_CHART_VERSION}.tgz" -n kyverno --creat
 ```bash
 oc get pods -n kyverno -o custom-columns='POD:.metadata.name,SCC:.metadata.annotations.openshift\.io/scc,STATUS:.status.phase'
 oc get deploy -n kyverno -o jsonpath='{range .items[*]}{.metadata.name}{"  "}{.spec.template.spec.containers[0].image}{"\n"}{end}'
+oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[Node[^]]*\]'
 ```
 
-✅ **Expected:** every pod `Running`; `SCC` is `restricted-v2` (Option 1) or `nonroot-v2` (Option 2); image tags are `v1.13` or later.
+✅ **Expected:** every pod `Running`; `SCC` is `restricted-v2` (Option 1) or `nonroot-v2` (Option 2); image tags are `v1.13` or later; the last command prints only `[Node/?*,*,*]`.
 
 ### Step 1.7 – Give Kyverno permission to create NNCPs and Certificates
 
-By default Kyverno cannot create these resource types. This ClusterRole is **aggregated** into Kyverno's own roles through the labels.
+By default Kyverno cannot create these resource types, and it cannot read Nodes, which every policy in this guide matches on. These two ClusterRoles are **aggregated** into Kyverno's own roles through their labels.
 
 ```bash
 cat <<'EOF' > 03-kyverno-rbac.yaml
@@ -433,10 +462,38 @@ rules:
 - apiGroups: ["cert-manager.io"]
   resources: ["certificates"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# The policies match Nodes. The background controller lists them to create NNCPs and Certificates
+# for nodes that already exist; the reports controller reads them for policy reports.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:ipsec-nas-read-nodes
+  labels:
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
 EOF
 
 oc apply -f 03-kyverno-rbac.yaml
 ```
+
+Check it. Every line must say `yes`:
+
+```bash
+for r in nodenetworkconfigurationpolicies.nmstate.io certificates.cert-manager.io; do
+  printf 'background-controller create %s: ' "$r"
+  oc auth can-i create "$r" --as=system:serviceaccount:kyverno:kyverno-background-controller -n kcs-ipsec
+done
+printf 'background-controller list nodes: '
+oc auth can-i list nodes --as=system:serviceaccount:kyverno:kyverno-background-controller
+```
+
+> [!IMPORTANT]
+> Without the second ClusterRole the policies show `READY=True` and **create nothing**. Measured with Kyverno 1.19.1 (chart 3.9.1): the background controller logged `nodes is forbidden: ... cannot list resource "nodes"` and no NNCP appeared.
 
 ### ✅ Part 1 checklist
 
@@ -1312,7 +1369,9 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 | Alert `IpsecNasTunnelDown` for a node | That node's tunnel is not established | `oc debug node/<node> -- chroot /host ipsec trafficstatus`; then `journalctl -u ipsec` on the node. Check the NNCE for that node. |
 | `ipsec_nas_tunnel_up` returns nothing in Observe → Metrics | Metrics are not scraped | `oc get servicemonitor -n kcs-ipsec`; `oc get pods -n openshift-user-workload-monitoring`; the pods must be `3/3` (Step B.8) |
 | Alert `IpsecNasMetricsStale` | The `collector` container stopped | `oc logs -n kcs-ipsec <pod> -c collector`; delete the pod to restart it |
-| No NNCP / Certificate created | Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
+| No NNCP / Certificate created, policy is `READY=True`, and Kyverno logs nothing after `policy created` | Kyverno is ignoring Nodes | `oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' \| grep -o '\[Node[^]]*\]'` must not print `[Node,*,*]`. Fix: Step 1.6.3, then delete and re-apply the policy |
+| No NNCP / Certificate created, and Kyverno logs `nodes is forbidden` | Kyverno may not read Nodes | Apply both ClusterRoles of Step 1.7, then delete and re-apply the policy |
+| No NNCP / Certificate created | Another Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
 | Certificate not `Ready` | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check the issuer: `oc get clusterissuer "${CLUSTER_ISSUER}"` |
 | cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-unassigned" not found` | Kyverno mutation did not run | Check policy `ipsec-cert-sync-mount` is Ready, then `oc delete pod <pod> -n kcs-ipsec` |
 | cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-<node>" not found` | Certificate not issued yet | Fix the Certificate first (row above) |
