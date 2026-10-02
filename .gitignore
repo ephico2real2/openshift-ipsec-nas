@@ -1,0 +1,9 @@
+# Never commit private keys, CSRs, cert bundles or rendered output
+*.key
+*.csr
+*.p12
+*.pfx
+*.crt
+*.cer
+*.pem
+rendered/

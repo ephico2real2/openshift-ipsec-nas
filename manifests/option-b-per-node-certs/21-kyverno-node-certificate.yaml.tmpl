@@ -1,0 +1,44 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: ipsec-node-certificate
+spec:
+  failurePolicy: Ignore
+  rules:
+  - name: certificate-per-worker
+    match:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchLabels:
+              node-role.kubernetes.io/worker: ""
+    generate:
+      generateExisting: true
+      synchronize: true          # Certificate is deleted when the Node is deleted
+      apiVersion: cert-manager.io/v1
+      kind: Certificate
+      name: "ipsec-{{ request.object.metadata.name }}"
+      namespace: kcs-ipsec
+      data:
+        spec:
+          secretName: "ipsec-cert-{{ request.object.metadata.name }}"
+          commonName: "{{ request.object.metadata.name }}.${NODE_DOMAIN}"   # max 64 chars, must not start with ovs_
+          dnsNames:
+          - "{{ request.object.metadata.name }}.${NODE_DOMAIN}"           # must equal the NNCP "left" value
+          duration: 8760h          # 1 year (the CA may override this)
+          renewBefore: 720h        # renew 30 days before expiry
+          privateKey:
+            algorithm: RSA         # NNCP uses leftrsasigkey: '%cert'
+            size: 3072
+            rotationPolicy: Always # new key on every renewal
+          usages:
+          - digital signature
+          - key encipherment
+          - server auth
+          - client auth
+          issuerRef:
+            group: cert-manager.io
+            kind: ClusterIssuer
+            name: company-issuer-rnd
