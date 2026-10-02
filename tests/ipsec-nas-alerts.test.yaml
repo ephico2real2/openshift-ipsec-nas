@@ -31,6 +31,16 @@ tests:
     values: '1x30'
   - series: 'kube_node_role{node="master-0",role="master"}'
     values: '1x30'
+  # excluded nodes that ALSO carry the worker role, and run no exporter by design:
+  # an ingress node, and a control-plane node of a compact cluster
+  - series: 'kube_node_role{node="ingress-0",role="worker"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="ingress-0",role="ingress"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="compact-0",role="worker"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="compact-0",role="control-plane"}'
+    values: '1x30'
   alert_rule_test:
   # down since minute 10, "for: 5m" not yet served at minute 13
   - eval_time: 13m
@@ -46,7 +56,8 @@ tests:
       exp_annotations:
         summary: "Node worker-1 has no IPsec tunnel to the NAS"
         description: "NFS from this node to the NAS is not encrypted, or is failing if the NAS rejects cleartext. On the node: ipsec trafficstatus, then journalctl -u ipsec."
-  # the worker without an exporter is reported after 15 minutes; the master never is
+  # the worker without an exporter is reported after 15 minutes; the master and the excluded
+  # nodes (ingress-0, compact-0) never are, although two of them carry the worker role
   - eval_time: 14m
     alertname: IpsecNasExporterMissing
     exp_alerts: []

@@ -10,5 +10,13 @@ metadata:
   labels:
     app: ipsec-cert-sync
 spec:
-{{ .Files.Get "files/prometheus-rule-groups.yaml" | trimSuffix "\n" | indent 2 }}
+{{- /* The "exporter missing" alert must not fire for excluded nodes: put their roles in, or take the clause out. */}}
+{{- $rules := .Files.Get "files/prometheus-rule-groups.yaml" }}
+{{- $roles := include "ipsec-nas.excludedRoles" . }}
+{{- if $roles }}
+{{- $rules = replace "role=~\"control-plane|master|ingress\"" (printf "role=~\"%s\"" $roles) $rules }}
+{{- else }}
+{{- $rules = regexReplaceAll "(?m)^[ \\t]*# exclude-nodes:begin\\n.*\\n[ \\t]*# exclude-nodes:end\\n" $rules "" }}
+{{- end }}
+{{ $rules | trimSuffix "\n" | indent 2 }}
 {{- end }}

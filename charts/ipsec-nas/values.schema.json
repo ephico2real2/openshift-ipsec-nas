@@ -29,6 +29,7 @@
       }
     },
     "nodeSelector": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "string" } },
+    "excludeNodeLabels": { "type": "array", "items": { "type": "string", "minLength": 1 } },
     "tolerations": { "type": "array" },
     "certificate": {
       "type": "object",

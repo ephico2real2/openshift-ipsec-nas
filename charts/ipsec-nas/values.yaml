@@ -32,6 +32,15 @@ ipsec:
 nodeSelector:
   node-role.kubernetes.io/worker: ""
 
+# -- Label KEYS that exclude a Node. A Node that has ANY of them gets no certificate, no cert-sync
+# pod and no tunnel, even if it matches nodeSelector (for example a control-plane node that is also
+# a worker, or an ingress node that kept the worker label). Add node-role.kubernetes.io/infra if
+# your infra nodes must not reach the NAS. An empty list excludes nothing.
+excludeNodeLabels:
+- node-role.kubernetes.io/control-plane
+- node-role.kubernetes.io/master
+- node-role.kubernetes.io/ingress
+
 # -- Tolerations for the cert-sync DaemonSet, for example for tainted infra nodes that mount the NAS.
 tolerations: []
 

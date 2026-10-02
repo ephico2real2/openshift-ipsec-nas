@@ -572,6 +572,34 @@ What each piece does:
 > 6. **DNS:** every node FQDN must resolve, as in Part 0.
 > 7. **The NAS must authorize peers by CA + worker subnet, not by individual host.** Otherwise every scale-up still needs a NAS change.
 
+### 2.1 Which nodes get a tunnel
+
+Two things decide it, and all three places that act on a node use the same two: policy 1 (the certificate), the DaemonSet (the import), and policy 3 (the NNCP).
+
+| | Default | Meaning |
+|---|---|---|
+| **Include** | the label `node-role.kubernetes.io/worker` | Only nodes with this label are considered |
+| **Exclude** | any of the labels `node-role.kubernetes.io/control-plane`, `node-role.kubernetes.io/master`, `node-role.kubernetes.io/ingress` | A node with **any** of these is left out, even if it also has the include label |
+
+Why the exclusion list is needed: the include label alone leaves control-plane nodes out only by accident, because on most clusters they do not carry the worker label. On a compact cluster they do, and so do ingress or infra nodes that kept it. Without the list those nodes would get a certificate and a tunnel.
+
+What happens by itself:
+
+| Event | Result |
+|---|---|
+| A new node joins with the include label and none of the excluded ones | It gets its `Certificate`, a cert-sync pod, the `cert-ready` label and its NNCP, with nothing done by hand |
+| A new node joins with an excluded label | Nothing: no certificate, no pod, no tunnel, and the "exporter missing" alert ignores it |
+| A node is deleted | Its `Certificate` and Secret are removed (Step B.13) |
+| A node reboots | Nothing changes |
+
+To change the list:
+
+- **Manifests:** edit the lines between `# exclude-nodes:begin` and `# exclude-nodes:end` in `21-kyverno-node-certificate.yaml`, `26-cert-sync-daemonset.yaml`, `27-kyverno-nncp-per-node.yaml` and `29-prometheus-rule.yaml`. Keep the four the same. Add `node-role.kubernetes.io/infra` there if your infra nodes must not reach the NAS.
+- **Helm chart:** the value `excludeNodeLabels` (a list of label keys) sets all four at once.
+
+> [!WARNING]
+> Adding an excluded label to a node that **already has** a tunnel does not take the tunnel away. Kyverno removes the node's Certificate and NNCP, and the DaemonSet removes its pod, but a deleted NNCP leaves its tunnel on the node, and the certificate stays in the node's NSS database. Remove both by hand with the per-node steps of [3.4](#34-teardown-remove-ipsec-to-the-nas).
+
 ### Step B.1 – Check cert-manager and the ClusterIssuer
 
 ```bash
@@ -636,6 +664,32 @@ spec:
           selector:
             matchLabels:
               node-role.kubernetes.io/worker: ""
+    # exclude-nodes:begin
+    # Nodes with ANY of these labels are left out, even if they also match the labels above.
+    exclude:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/ingress
+              operator: Exists
+    # exclude-nodes:end
     generate:
       generateExisting: true
       synchronize: true          # Certificate is deleted when the Node is deleted
@@ -965,6 +1019,20 @@ spec:
       serviceAccountName: ipsec-cert-sync
       nodeSelector:
         node-role.kubernetes.io/worker: ""
+      # exclude-nodes:begin
+      # No pod on nodes with ANY of these labels, even if they also match the nodeSelector.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/ingress
+                operator: DoesNotExist
+      # exclude-nodes:end
       # Add tolerations here if some workers are tainted (e.g. infra nodes that mount the NAS)
       containers:
       - name: sync
@@ -1149,6 +1217,32 @@ spec:
             matchLabels:
               node-role.kubernetes.io/worker: ""
               ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
+    # exclude-nodes:begin
+    # Nodes with ANY of these labels are left out, even if they also match the labels above.
+    exclude:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/ingress
+              operator: Exists
+    # exclude-nodes:end
     generate:
       generateExisting: true
       synchronize: true

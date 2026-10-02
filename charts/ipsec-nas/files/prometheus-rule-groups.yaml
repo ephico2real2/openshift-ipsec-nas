@@ -58,7 +58,12 @@ groups:
   # kube_node_role comes from the platform's kube-state-metrics. User-defined rules are
   # evaluated through Thanos, which can read it.
   - alert: IpsecNasExporterMissing
-    expr: kube_node_role{role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds
+    expr: |-
+      kube_node_role{role="worker"}
+      # exclude-nodes:begin
+      unless on (node) kube_node_role{role=~"control-plane|master|ingress"}
+      # exclude-nodes:end
+      unless on (node) ipsec_nas_collect_timestamp_seconds
     for: 15m
     labels:
       severity: warning

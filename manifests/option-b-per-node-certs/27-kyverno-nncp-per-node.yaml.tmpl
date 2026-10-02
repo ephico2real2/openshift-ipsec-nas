@@ -15,6 +15,32 @@ spec:
             matchLabels:
               node-role.kubernetes.io/worker: ""
               ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
+    # exclude-nodes:begin
+    # Nodes with ANY of these labels are left out, even if they also match the labels above.
+    exclude:
+      any:
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+      - resources:
+          kinds:
+          - Node
+          selector:
+            matchExpressions:
+            - key: node-role.kubernetes.io/ingress
+              operator: Exists
+    # exclude-nodes:end
     generate:
       generateExisting: true
       synchronize: true

@@ -59,8 +59,25 @@ compare "the guide's values (transport mode)" \
   --set nodeDomain=ocp.example.com --set nas.fqdn=nas01.example.com --set nas.ip=10.0.0.50 --set clusterIssuer=company-issuer-rnd
 
 export NODE_DOMAIN=crc.testing NAS_FQDN=crc-nas.lab.internal NAS_IP=192.168.64.8 CLUSTER_ISSUER=enterprise-ca
-export IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 NODE_LEFT='%defaultroute'
-compare "values-crc.yaml (tunnel mode, as measured on CRC)" -f "${CHART}/values-crc.yaml"
+export IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 NODE_LEFT='%defaultroute' EXCLUDE_NODES=none
+compare "values-crc.yaml with no excluded nodes (tunnel mode)" -f "${CHART}/values-crc.yaml" --set-json 'excludeNodeLabels=[]'
+unset EXCLUDE_NODES
+
+# A custom exclusion list must reach the two Node policies, the DaemonSet and the alert alike
+helm template ipsec-nas "${CHART}" -n kcs-ipsec --set prerequisites.skipCheck=true --set trustCA.pem=x \
+  -f "${CHART}/values-crc.yaml" --set-json 'excludeNodeLabels=["node-role.kubernetes.io/infra","example.com/no-nas"]' > "${tmp}/chart.yaml"
+ruby -ryaml -e '
+  docs = YAML.load_stream(File.read(ARGV[0])).compact.to_h { |d| [d["kind"] + "/" + d["metadata"]["name"], d] }
+  want = %w[node-role.kubernetes.io/infra example.com/no-nas]
+  %w[ClusterPolicy/ipsec-node-certificate ClusterPolicy/ipsec-nncp-per-node].each do |k|
+    got = docs.fetch(k)["spec"]["rules"][0]["exclude"]["any"].map { |a| a["resources"]["selector"]["matchExpressions"][0] }
+    abort "      #{k}: #{got}" unless got == want.map { |w| { "key" => w, "operator" => "Exists" } }
+  end
+  aff = docs.fetch("DaemonSet/ipsec-cert-sync")["spec"]["template"]["spec"]["affinity"]["nodeAffinity"]["requiredDuringSchedulingIgnoredDuringExecution"]["nodeSelectorTerms"][0]["matchExpressions"]
+  abort "      DaemonSet: #{aff}" unless aff == want.map { |w| { "key" => w, "operator" => "DoesNotExist" } }
+  expr = docs.fetch("PrometheusRule/ipsec-nas")["spec"]["groups"][0]["rules"].find { |r| r["alert"] == "IpsecNasExporterMissing" }["expr"]
+  abort "      alert: #{expr}" unless expr.include?(%q(role=~"infra")) && !expr.include?("control-plane")
+  ' "${tmp}/chart.yaml" && echo "ok    a custom excludeNodeLabels list reaches the policies, the DaemonSet and the alert"
 
 # The checks for missing values and prerequisites must stop the install with a plain message
 expect_fail() {  # $1 = label, $2 = text the error must contain; the rest = helm arguments

@@ -17,6 +17,7 @@ spec:
             matchLabels:
               {{- include "ipsec-nas.nodeMatchLabels" . | nindent 14 }}
               ipsec.kcs.io/cert-ready: "true"     # set by ipsec-cert-sync after import
+    {{- include "ipsec-nas.kyvernoExclude" . | nindent 4 }}
     generate:
       generateExisting: true
       synchronize: true

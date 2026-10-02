@@ -16,6 +16,7 @@ spec:
           selector:
             matchLabels:
               {{- include "ipsec-nas.nodeMatchLabels" . | nindent 14 }}
+    {{- include "ipsec-nas.kyvernoExclude" . | nindent 4 }}
     generate:
       generateExisting: true
       synchronize: {{ .Values.nodeCleanup.deleteCertificate }}          # Certificate is deleted when the Node is deleted

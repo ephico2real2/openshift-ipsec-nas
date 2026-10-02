@@ -6,6 +6,9 @@ nas:
   fqdn: crc-nas.lab.internal
   ip: 192.168.64.8
 clusterIssuer: enterprise-ca
+# CRC's only node is control plane, master and worker at once, so those two cannot be excluded here.
+excludeNodeLabels:
+- node-role.kubernetes.io/ingress
 ipsec:
   type: tunnel
   left: "%defaultroute"

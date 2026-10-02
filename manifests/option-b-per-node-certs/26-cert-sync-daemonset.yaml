@@ -17,6 +17,20 @@ spec:
       serviceAccountName: ipsec-cert-sync
       nodeSelector:
         node-role.kubernetes.io/worker: ""
+      # exclude-nodes:begin
+      # No pod on nodes with ANY of these labels, even if they also match the nodeSelector.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/control-plane
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/master
+                operator: DoesNotExist
+              - key: node-role.kubernetes.io/ingress
+                operator: DoesNotExist
+      # exclude-nodes:end
       # Add tolerations here if some workers are tainted (e.g. infra nodes that mount the NAS)
       containers:
       - name: sync

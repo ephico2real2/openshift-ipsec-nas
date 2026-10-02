@@ -49,3 +49,29 @@ helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 argocd.argoproj.io/sync-wave: {{ .weight | quote }}
 {{- end -}}
 {{- end -}}
+
+{{/* A Kyverno "exclude" block for the Nodes that carry any of the excluded label keys. */}}
+{{- define "ipsec-nas.kyvernoExclude" -}}
+{{- if .Values.excludeNodeLabels }}
+exclude:
+  any:
+  {{- range .Values.excludeNodeLabels }}
+  - resources:
+      kinds:
+      - Node
+      selector:
+        matchExpressions:
+        - key: {{ . }}
+          operator: Exists
+  {{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* The excluded label keys that are node roles, as a regex for kube_node_role: "control-plane|master". */}}
+{{- define "ipsec-nas.excludedRoles" -}}
+{{- $roles := list -}}
+{{- range .Values.excludeNodeLabels -}}
+{{- if hasPrefix "node-role.kubernetes.io/" . -}}{{- $roles = append $roles (trimPrefix "node-role.kubernetes.io/" .) -}}{{- end -}}
+{{- end -}}
+{{- join "|" $roles -}}
+{{- end -}}

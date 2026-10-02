@@ -20,6 +20,10 @@ export IPSEC_TYPE="${IPSEC_TYPE:-transport}"
 export NAS_RIGHT="${NAS_RIGHT:-${NAS_FQDN}}"
 [[ -n "${NODE_LEFT:-}" ]] || NODE_LEFT="{{ request.object.metadata.name }}.${NODE_DOMAIN}"
 export NODE_LEFT
+# Which nodes are left out is written in the manifests between "# exclude-nodes:begin" and
+# "# exclude-nodes:end" (control-plane, master and ingress nodes). EXCLUDE_NODES=none takes those
+# blocks out, for a cluster whose only node is control plane and worker at once (CRC).
+EXCLUDE_NODES="${EXCLUDE_NODES:-default}"
 command -v perl >/dev/null || { echo "perl not found"; exit 1; }
 
 rm -rf rendered
@@ -29,6 +33,9 @@ while IFS= read -r f; do
     perl -pe 's/\$\{(NODE_DOMAIN|NAS_FQDN|NAS_IP|NAS_EXPORT|CLUSTER_ISSUER|OCP_VERSION|MCP_ROLE|IPSEC_TYPE|NAS_RIGHT|NODE_LEFT)\}/$ENV{$1}/g' "$f" > "${out%.tmpl}"
   else
     cp "$f" "$out"
+  fi
+  if [[ "${EXCLUDE_NODES}" == "none" ]]; then
+    perl -0pi -e 's/^[ \t]*# exclude-nodes:begin\n.*?^[ \t]*# exclude-nodes:end\n//msg' "${out%.tmpl}"
   fi
 done < <(find manifests -type f | sort)
 echo "Rendered into ./rendered (NODE_DOMAIN=${NODE_DOMAIN} NAS=${NAS_FQDN}/${NAS_IP} Issuer=${CLUSTER_ISSUER} Butane=${OCP_VERSION})"
