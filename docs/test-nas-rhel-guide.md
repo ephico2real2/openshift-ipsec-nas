@@ -42,7 +42,11 @@ install -D -m 0644 -t /root/ipsec-pki /tmp/pki/ca.pem /tmp/pki/nas.p12
 
 ## Set up the NAS
 
-Run every block as `root`, in one shell, in order.
+Run every block as `root`, in **one** shell, in order. Become root first with `sudo -i`. The blocks share the variables from Step 0, so do not open a new terminal halfway.
+
+After each step, compare what you see with the **Expected** line. If it does not match, stop and fix that step before going on. The libreswan log is the first place to look: `journalctl -u ipsec --no-pager -n 40`.
+
+New to the terms (IPsec, IKEv2, ESP, NSS database, `.p12`)? They are explained in [Words you will see](lab-lima-guide.md#words-you-will-see) in the lab guide.
 
 ### Step 0 – Variables
 

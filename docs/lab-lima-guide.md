@@ -42,6 +42,8 @@ The NAS runs either as a RHEL-style host (systemd services) or as one privileged
 
 ## Table of contents
 
+- [Before you start](#before-you-start)
+
 1. [What Lima is, and why this lab uses it](#1-what-lima-is-and-why-this-lab-uses-it)
 2. [Install Lima on the Mac](#2-install-lima-on-the-mac)
 3. [The Lima commands this lab uses](#3-the-lima-commands-this-lab-uses)
@@ -53,6 +55,43 @@ The NAS runs either as a RHEL-style host (systemd services) or as one privileged
 9. [What the lab does not cover](#9-what-the-lab-does-not-cover)
 10. [Troubleshooting](#10-troubleshooting)
 11. [Clean up](#11-clean-up)
+
+---
+
+## Before you start
+
+**Where to type the commands.** Every command in this guide is typed in the **Terminal on the Mac**, in the folder where you cloned this repository, unless a step says otherwise. You never need to log in to a VM by hand; `limactl shell` runs the command inside the VM for you.
+
+**What you need.**
+
+- [ ] A Mac with [Homebrew](https://brew.sh). The lab was measured on an Apple silicon Mac.
+- [ ] About 6 GiB of free memory and a few GiB of disk while the lab is up (three VMs of 2 GiB memory each).
+- [ ] Internet access the first time, to download the CentOS Stream 10 image. Lima caches it.
+- [ ] This repository cloned, and a Terminal open in its folder (`ls lab/lab.sh` prints the file name).
+
+**How long it takes.** About 75 seconds per run once the image is cached. Deleting the lab takes a few seconds.
+
+**If a step does not show the expected result, stop.** Do not go on to the next step. Look the symptom up in [Troubleshooting](#10-troubleshooting), or delete the lab with `lab/lab.sh down` and start again; nothing in the lab is precious.
+
+### Words you will see
+
+| Term | Meaning |
+|---|---|
+| **VM** | Virtual machine: a complete Linux computer running inside the Mac. |
+| **Lima / `limactl`** | The tool that creates and runs the VMs. `limactl` is its command. |
+| **Template** | A small file that tells Lima what kind of VM to create (which Linux, how much memory, which network). |
+| **NAS** | The storage server that shares files over NFS. In this lab it is a VM named `lab-nas`. |
+| **Stand-in worker** | A VM that plays the part of an OpenShift worker node. It is not a real node; it only uses the same IPsec settings. |
+| **NFS** | The protocol used to mount a shared folder from the NAS. |
+| **IPsec** | Encryption for network traffic between two machines, done by the Linux kernel. |
+| **libreswan** | The program that sets IPsec up on RHEL. Its service is called `ipsec` and its daemon `pluto`. |
+| **Tunnel** | The encrypted connection between one worker and the NAS. |
+| **IKEv2** | The conversation (on UDP port 500) in which both sides prove who they are and agree on keys. |
+| **ESP** | The encrypted packets themselves (IP protocol 50). The NFS traffic travels inside them. |
+| **Certificate / CA** | A certificate proves a machine's identity. The CA (certificate authority) signs certificates; both sides trust the same CA. |
+| **`.p12`** | One file holding a certificate together with its private key. |
+| **NSS database** | The place where libreswan keeps certificates: `/var/lib/ipsec/nss`. |
+| **NNCP** | The OpenShift object from the main guide that configures the tunnel on a node. The stand-in workers copy its settings. |
 
 ---
 
@@ -119,6 +158,14 @@ Lima keeps everything under `~/.lima/` (one directory per VM) and caches downloa
 | `limactl stop NAME` / `limactl delete NAME` | Shut the VM down / remove it and its disk |
 
 `--tty=false` stops Lima from opening an editor or asking questions, which is what you want in scripts.
+
+To look around inside a VM yourself, open a shell in it and leave again with `exit`:
+
+```text
+limactl shell lab-nas        # your prompt changes to the VM's
+sudo -i                      # become root inside the VM, if you need to
+exit                         # leave root, then exit again to return to the Mac
+```
 
 ---
 
@@ -193,6 +240,8 @@ PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPs
 ## 6. The same thing by hand, step by step
 
 These are the steps `lab/lab.sh up` runs. Do them once by hand to learn what each one does. Run every block on the **Mac**, from the repository root.
+
+Start from an empty lab: if `limactl list` shows `lab-nas`, `lab-worker1` or `lab-worker2`, run `lab/lab.sh down` first. Copy each block as a whole, wait for it to finish, and compare what you see with the **Expected** line before moving on.
 
 ### Step 1 – Create and start the three VMs
 
@@ -289,6 +338,8 @@ done
 ```
 
 ✅ **Expected** for each worker: an `ipsec trafficstatus` line for `"ipsec-nas"` with `id='CN=lima-lab-nas.internal, O=IPsec NAS test'`, then `Worker ready: ... mounted lima-lab-nas.internal:/export on /mnt/nas.`
+
+If you see `tunnel did not come up` instead, read the worker's libreswan log: `limactl shell lab-worker1 sudo journalctl -u ipsec --no-pager -n 40`, and compare it with the first row of [Troubleshooting](#10-troubleshooting).
 
 ### Step 9 – Check 3: the data really goes through the tunnel
 
