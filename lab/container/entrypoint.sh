@@ -8,12 +8,14 @@
 #   PKI_DIR         /pki, must hold ca.pem and nas.p12 (empty password, friendly name "nas")
 #   EXPORT_DIR      /export, mount a real filesystem here (a volume or a host directory)
 #   ALLOW_DUPLICATE_IDS  yes only for Option A (every worker presents the same certificate identity)
+#   NAS_LEFT        the address the workers connect to, on a host with several network interfaces
 set -euo pipefail
 
 WORKER_SUBNET="${WORKER_SUBNET:?set WORKER_SUBNET, e.g. 192.168.104.0/24}"
 PKI_DIR="${PKI_DIR:-/pki}"
 EXPORT_DIR="${EXPORT_DIR:-/export}"
 ALLOW_DUPLICATE_IDS="${ALLOW_DUPLICATE_IDS:-no}"
+NAS_LEFT="${NAS_LEFT:-%defaultroute}"
 NSS_DB=/var/lib/ipsec/nss
 NFS_ROOT=/srv/nfs4
 
@@ -40,11 +42,11 @@ config setup
 include /etc/crypto-policies/back-ends/libreswan.config
 include /etc/ipsec.d/*.conf
 EOF
-  cat > /etc/ipsec.d/nas-workers.conf <<'EOF'
+  cat > /etc/ipsec.d/nas-workers.conf <<EOF
 # The NAS answers any peer that holds a certificate from our CA.
 # Which peers may connect at all is limited by the firewall (worker subnet), not here.
 conn workers
-    left=%defaultroute
+    left=${NAS_LEFT}
     leftid=%fromcert
     leftcert=nas
     leftrsasigkey=%cert

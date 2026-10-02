@@ -5,12 +5,34 @@
 #
 #   WORKER_SUBNET=192.168.104.0/24 PKI_DIR=/root/ipsec-pki ./setup-nas.sh
 #
+# On a host with more than one network interface, also set NAS_LEFT to the address the workers
+# connect to; the default picks the interface that holds the default route.
+#
+# For ONE client that reaches the NAS through NAT (a CRC node on the same Mac), also set NAT_CLIENT
+# to that client's own address. libreswan refuses IKEv2 transport mode behind NAT
+# (TS_UNACCEPTABLE), so the connection is then built in tunnel mode and NFS arrives from the
+# client's own address instead of the address the NAT shows. NAS_LEFT must be an IP in that case.
+#
 # PKI_DIR must hold ca.pem and nas.p12 (empty password, friendly name "nas").
 set -euo pipefail
 
 WORKER_SUBNET="${WORKER_SUBNET:?set WORKER_SUBNET, e.g. 192.168.104.0/24}"
 PKI_DIR="${PKI_DIR:-/root/ipsec-pki}"
 EXPORT_DIR="${EXPORT_DIR:-/export}"
+NAS_LEFT="${NAS_LEFT:-%defaultroute}"
+NAT_CLIENT="${NAT_CLIENT:-}"
+
+# Who NFS is accepted from and exported to, and how the connection carries it
+if [[ -n "${NAT_CLIENT}" ]]; then
+  [[ "${NAS_LEFT}" != "%defaultroute" ]] || { echo "NAT_CLIENT needs NAS_LEFT set to the NAS IP"; exit 1; }
+  NFS_CLIENTS="${NAT_CLIENT}"
+  MODE_LINES="    leftsubnet=${NAS_LEFT}/32
+    rightsubnet=${NAT_CLIENT}/32
+    type=tunnel"
+else
+  NFS_CLIENTS="${WORKER_SUBNET}"
+  MODE_LINES="    type=transport"
+fi
 # yes only for Option A, where every worker presents the same certificate identity
 ALLOW_DUPLICATE_IDS="${ALLOW_DUPLICATE_IDS:-no}"
 NSS_DB=/var/lib/ipsec/nss
@@ -28,11 +50,11 @@ certutil -M -n nas -t 'u,u,u' -d "${NSS_DB}"
 certutil -L -d "${NSS_DB}"
 
 step "3. libreswan connection for the workers"
-cat > /etc/ipsec.d/nas-workers.conf <<'CONF'
+cat > /etc/ipsec.d/nas-workers.conf <<CONF
 # The NAS answers any peer that holds a certificate from our CA.
 # Which peers may connect at all is limited by the firewall (worker subnet), not here.
 conn workers
-    left=%defaultroute
+    left=${NAS_LEFT}
     leftid=%fromcert
     leftcert=nas
     leftrsasigkey=%cert
@@ -41,7 +63,7 @@ conn workers
     rightrsasigkey=%cert
     rightca=%same
     ikev2=insist
-    type=transport
+${MODE_LINES}
     auto=add
 CONF
 # uniqueids belongs to "config setup", which lives in /etc/ipsec.conf. Always write it, so that
@@ -69,7 +91,7 @@ table inet nas_ipsec_only {
         type filter hook input priority filter; policy accept;
         ip saddr ${WORKER_SUBNET} udp dport { 500, 4500 } counter accept comment "ike"
         ip saddr ${WORKER_SUBNET} meta l4proto esp counter accept comment "esp-in"
-        ip saddr ${WORKER_SUBNET} tcp dport 2049 meta ipsec exists counter accept comment "nfs-over-ipsec"
+        ip saddr ${NFS_CLIENTS} tcp dport 2049 meta ipsec exists counter accept comment "nfs-over-ipsec"
         tcp dport 2049 counter drop comment "nfs-cleartext-dropped"
     }
 }
@@ -83,7 +105,7 @@ nft list table inet nas_ipsec_only
 step "5. NFSv4 server"
 mkdir -p "${EXPORT_DIR}"
 chmod 0777 "${EXPORT_DIR}"
-echo "${EXPORT_DIR} ${WORKER_SUBNET}(rw,sync,no_subtree_check)" > /etc/exports.d/ipsec-nas.exports
+echo "${EXPORT_DIR} ${NFS_CLIENTS}(rw,sync,no_subtree_check)" > /etc/exports.d/ipsec-nas.exports
 # NFSv4 only: one TCP port (2049), no rpcbind and no NFSv3 side protocols
 nfsconf --set nfsd vers3 n
 systemctl enable --now nfs-server
@@ -92,4 +114,4 @@ exportfs -v
 cat /proc/fs/nfsd/versions
 
 echo
-echo "NAS ready: $(hostname -f) exports ${EXPORT_DIR} to ${WORKER_SUBNET}, IPsec only."
+echo "NAS ready: $(hostname -f) exports ${EXPORT_DIR} to ${NFS_CLIENTS}, IPsec only."

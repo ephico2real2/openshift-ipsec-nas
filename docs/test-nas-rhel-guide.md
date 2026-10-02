@@ -12,6 +12,7 @@ The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) needs a NAS that spe
 | Same steps as a script | [`lab/rhel/setup-nas.sh`](../lab/rhel/setup-nas.sh) |
 | Same NAS as a container | [`lab/container/`](../lab/container/), see [Run it as a container instead](#run-it-as-a-container-instead) |
 | A lab to try it on a Mac | [`lab-lima-guide.md`](lab-lima-guide.md) |
+| A client behind NAT (CRC) | [One client behind NAT](#one-client-behind-nat) |
 
 > [!NOTE]
 > **Why certificates and not a pre-shared key?** Many NFS-over-IPsec examples use `authby=secret` with a pre-shared key. That cannot pair with this project: the NNCP in the main guide authenticates with a certificate (`leftcert: left_server`, `leftid: '%fromcert'`). The test NAS must do the same, or the tunnel will not come up.
@@ -55,6 +56,9 @@ New to the terms (IPsec, IKEv2, ESP, NSS database, `.p12`)? They are explained i
 export WORKER_SUBNET="192.168.104.0/24"
 # ----------------------------------------------------------
 export PKI_DIR="/root/ipsec-pki"      # holds ca.pem and nas.p12
+# Only if this host has more than one network interface: the NAS address the workers connect to.
+# The default uses the interface that holds the default route.
+export NAS_LEFT="%defaultroute"
 export EXPORT_DIR="/export"           # the directory to share
 ```
 
@@ -83,11 +87,11 @@ certutil -L -d /var/lib/ipsec/nss
 The NAS is the `left` side here, and it answers **any** peer that holds a certificate from the same CA. This is the mirror image of the NNCP in the main guide.
 
 ```bash
-cat > /etc/ipsec.d/nas-workers.conf <<'CONF'
+cat > /etc/ipsec.d/nas-workers.conf <<CONF
 # The NAS answers any peer that holds a certificate from our CA.
 # Which peers may connect at all is limited by the firewall (worker subnet), not here.
 conn workers
-    left=%defaultroute
+    left=${NAS_LEFT}
     leftid=%fromcert
     leftcert=nas
     leftrsasigkey=%cert
@@ -188,6 +192,34 @@ nft list table inet nas_ipsec_only | grep counter    # nfs-over-ipsec grows; nfs
 ```
 
 No cluster yet? [`lab/rhel/setup-worker.sh`](../lab/rhel/setup-worker.sh) turns a second RHEL host into a stand-in worker that uses the same libreswan keys as the NNCP, and [`lab/rhel/verify-worker.sh`](../lab/rhel/verify-worker.sh) proves the data went through the tunnel. The [lab guide](lab-lima-guide.md) runs both.
+
+---
+
+## One client behind NAT
+
+If a client reaches the NAS **through NAT**, the transport-mode connection in Step 3 does not work for it: the IKE login succeeds, and then the NAS refuses the tunnel with `TS_UNACCEPTABLE`, because the client proposes its own address while the NAS only sees the NAT's address. This was measured; [`crc-integration-guide.md`](crc-integration-guide.md) has the logs. A CRC cluster on the same Mac as the NAS is such a client.
+
+Tunnel mode works through the same NAT. The script builds it when you name the client's own address:
+
+```
+WORKER_SUBNET=192.168.64.0/24 NAS_LEFT=192.168.64.8 NAT_CLIENT=192.168.127.2 ./lab/rhel/setup-nas.sh
+```
+
+| Variable | Meaning in this case |
+|---|---|
+| `WORKER_SUBNET` | Where the IKE packets come **from**, as the NAS sees them: the NAT's network |
+| `NAS_LEFT` | The NAS's own IP on that network. Required here. |
+| `NAT_CLIENT` | The client's **own** address behind the NAT. NFS then arrives from this address, and only it is allowed. |
+
+Compared with Step 3, the connection gains three lines and the firewall rule and the export name the client's own address:
+
+```text
+    leftsubnet=<NAS_LEFT>/32
+    rightsubnet=<NAT_CLIENT>/32
+    type=tunnel
+```
+
+This mode serves one client behind NAT. Several clients behind the same NAT address were not tested.
 
 ---
 

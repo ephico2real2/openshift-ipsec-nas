@@ -12,6 +12,7 @@ WORKER_SUBNET="${WORKER_SUBNET:?set WORKER_SUBNET, e.g. 192.168.104.0/24}"
 PKI_DIR="${PKI_DIR:-/root/ipsec-pki}"
 EXPORT_DIR="${EXPORT_DIR:-/export}"
 ALLOW_DUPLICATE_IDS="${ALLOW_DUPLICATE_IDS:-no}"
+NAS_LEFT="${NAS_LEFT:-%defaultroute}"
 ENGINE="${CONTAINER_ENGINE:-podman}"
 NAME=ipsec-test-nas
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -27,6 +28,7 @@ mkdir -p "${EXPORT_DIR}"
   --network host --privileged --security-opt label=disable \
   -e "WORKER_SUBNET=${WORKER_SUBNET}" \
   -e "ALLOW_DUPLICATE_IDS=${ALLOW_DUPLICATE_IDS}" \
+  -e "NAS_LEFT=${NAS_LEFT}" \
   -v "${PKI_DIR}:/pki:ro" \
   -v "${EXPORT_DIR}:/export" \
   "${NAME}"

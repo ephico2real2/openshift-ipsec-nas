@@ -11,6 +11,7 @@ automated per node with **Kyverno**.
 | [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
 | [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
 | [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
+| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, and the cluster steps (not run yet) |
 | [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
 
 ## How it works
@@ -42,8 +43,10 @@ docs/ipsec-nas-guide.md              the guide (source of truth)
 docs/test-nas-rhel-guide.md          a test NAS on RHEL 10
 docs/lab-lima-guide.md               Lima on a Mac and the lab
 docs/nas-consumer-app-guide.md       an application that uses the NAS through a PVC
+docs/crc-integration-guide.md        OpenShift Local (CRC) to the test NAS
 docs/diagrams/ipsec-nas/             the figures shown in the guide (source.html + rendered PNGs)
 docs/diagrams/lima-lab/              the lab figure (source.html + rendered PNGs)
+docs/diagrams/crc-nat/               the NAT figure (source.html + rendered PNGs)
 docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
 docs/diagrams/render.py              re-renders the figures from source.html
 manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC
@@ -52,7 +55,7 @@ manifests/option-b-per-node-certs/   Part 3: namespace, Certificate/mount/NNCP p
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
 lab/lab.sh                           creates and verifies the Lima lab (runs on the Mac)
-lab/lima/                            Lima template for the lab VMs
+lab/lima/                            Lima templates: lab VMs, and a NAS VM that CRC can reach
 lab/pki/                             throwaway test CA and certificates
 lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
 lab/container/                       the test NAS as a container image

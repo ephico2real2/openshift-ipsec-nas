@@ -1,0 +1,19 @@
+%% Why a cluster behind NAT (CRC on the same Mac) needs tunnel mode.
+%% Text source only. The figure shown in the docs is docs/diagrams/crc-nat/nat-tunnel-mode.*.png.
+flowchart LR
+    subgraph CLIENT["Client behind NAT"]
+        T1["Transport mode, as in the guide<br/>IKEv2 proposes the client's own address<br/>as the traffic selector"]
+        T2["Tunnel mode<br/>selector: client address/32 to NAS/32<br/>everything else in the NNCP unchanged"]
+    end
+    subgraph NAT["NAT on the Mac"]
+        N1["Source rewritten to 192.168.64.1<br/>IKE notices the NAT and moves to UDP 4500<br/>the IKE login succeeds"]
+        N2["ESP wrapped in UDP 4500<br/>the NAT forwards it like any UDP flow<br/>bare ESP would not pass"]
+    end
+    subgraph NAS["NAS VM 192.168.64.8"]
+        R1["Refused: TS_UNACCEPTABLE<br/>the selector names an address the NAS does not see<br/>no tunnel is built"]
+        R2["Accepted: the tunnel is up<br/>NFS arrives from the client's own address<br/>5 MiB write check passed"]
+    end
+    T1 --> N1 --> R1
+    T2 <--> N2 <--> R2
+    P["Proposed for the CRC node 192.168.127.2, not built yet:<br/>the same tunnel-mode connection"]
+    T2 -.-> P

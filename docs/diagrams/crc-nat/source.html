@@ -1,0 +1,121 @@
+<title>CRC NAT Path</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · CRC integration · 2026-10-02</div>
+    <h1>A cluster behind NAT needs tunnel mode</h1>
+    <p class="lede">One figure for <code>docs/crc-integration-guide.md</code>: why an OpenShift Local (CRC) node cannot use the guide's transport mode to reach a NAS on the same Mac, and what works instead. Measured with a stand-in VM behind the same kind of NAT; the CRC node itself is not connected yet.</p>
+  </header>
+
+  <section>
+    <h2>Transport mode is refused behind NAT; tunnel mode works</h2>
+    <figure>
+      <div class="fig-scroll">
+        <!-- Three lanes: the client behind NAT, the NAT on the Mac, the NAS VM. Two rows: the refused transport attempt and the working tunnel. -->
+        <svg viewBox="0 0 980 414" role="img" aria-label="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address.">
+          <defs>
+            <marker id="ahn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ahnr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+            <marker id="ahng" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--gap)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="300" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="170" y="34" text-anchor="middle" fill="var(--host)">CLIENT · behind NAT</text>
+            <rect x="340" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="490" y="34" text-anchor="middle" fill="var(--none)">NAT · on the Mac</text>
+            <rect x="660" y="14" width="300" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="810" y="34" text-anchor="middle" fill="var(--remote)">NAS VM · 192.168.64.8</text>
+          </g>
+
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <text x="30" y="68" fill="var(--muted)">The client's packets leave through the Mac, so the NAS sees them coming from the Mac's bridge address, 192.168.64.1.</text>
+
+            <!-- row 1: transport mode, refused -->
+            <rect x="30" y="84" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="44" y="106" font-weight="600">Transport mode, as in the guide</text>
+            <text x="44" y="123">IKEv2 proposes the client's own</text>
+            <text x="44" y="139">address as the traffic selector</text>
+            <line x1="310" y1="115" x2="348" y2="115" stroke="currentColor" stroke-width="1.2" marker-end="url(#ahn)"/>
+            <rect x="350" y="84" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="106" font-weight="600">Source rewritten to 192.168.64.1</text>
+            <text x="364" y="123">IKE notices the NAT and moves to</text>
+            <text x="364" y="139">UDP 4500; the IKE login succeeds</text>
+            <line x1="630" y1="115" x2="668" y2="115" stroke="var(--gap)" stroke-width="1.5" marker-end="url(#ahng)"/>
+            <rect x="670" y="84" width="280" height="62" rx="8" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+            <text x="684" y="106" font-weight="600" fill="var(--gap)">Refused: TS_UNACCEPTABLE</text>
+            <text x="684" y="123">the selector names an address the NAS</text>
+            <text x="684" y="139">does not see; no tunnel is built</text>
+
+            <!-- row 2: tunnel mode, works -->
+            <rect x="30" y="172" width="280" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="44" y="194" font-weight="600" fill="var(--host)">Tunnel mode</text>
+            <text x="44" y="211">selector: client address/32 to NAS/32</text>
+            <text x="44" y="227">everything else in the NNCP unchanged</text>
+            <line x1="310" y1="203" x2="348" y2="203" stroke="var(--remote)" stroke-width="1.8" marker-start="url(#ahnr)" marker-end="url(#ahnr)"/>
+            <rect x="350" y="172" width="280" height="62" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="194" font-weight="600">ESP wrapped in UDP 4500</text>
+            <text x="364" y="211">the NAT forwards it like any UDP flow</text>
+            <text x="364" y="227" fill="var(--muted)">bare ESP (protocol 50) would not pass</text>
+            <line x1="630" y1="203" x2="668" y2="203" stroke="var(--remote)" stroke-width="1.8" marker-start="url(#ahnr)" marker-end="url(#ahnr)"/>
+            <rect x="670" y="172" width="280" height="62" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="684" y="194" font-weight="600" fill="var(--remote)">Accepted: the tunnel is up</text>
+            <text x="684" y="211">NFS arrives from the client's own</text>
+            <text x="684" y="227">address; 5 MiB write check passed</text>
+
+            <!-- row 3: what this means for CRC, not built yet -->
+            <rect x="30" y="260" width="920" height="62" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5" stroke-dasharray="5 4"/>
+            <text x="44" y="282" font-weight="600" fill="var(--host)">Proposed for the CRC node (192.168.127.2), not built yet</text>
+            <text x="44" y="299">The same tunnel-mode connection, with the NAS told that one client behind NAT has the address 192.168.127.2.</text>
+            <text x="44" y="315">Probed so far: the node reaches the NAS VM on TCP and on UDP 500 and 4500, and arrives as 192.168.64.1.</text>
+
+            <text x="30" y="354" fill="var(--muted)">Measured 2026-10-02 with a stand-in VM on Lima's default network, which leaves through the Mac the same way a CRC node does.</text>
+            <text x="30" y="374" fill="var(--muted)">A cluster on a routed network keeps transport mode and bare ESP, as measured in the Lima lab.</text>
+            <text x="30" y="394" fill="var(--host)" font-weight="600">Dashed = proposed, not built: the CRC node's own tunnel.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. The CRC node's own tunnel is proposed, not built.</figcaption>
+    </figure>
+  </section>
+</div>

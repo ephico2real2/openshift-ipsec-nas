@@ -1,0 +1,22 @@
+# NAS VM for a cluster that runs OUTSIDE Lima (OpenShift Local / CRC on the same Mac).
+#   limactl create --name=crc-nas lab/lima/stream10-vznat.yaml
+minimumLimaVersion: 2.0.0
+
+base:
+- template:_images/centos-stream-10
+
+vmType: vz
+cpus: 2
+memory: 2GiB
+disk: 10GiB
+
+# A plain server: no host directories mounted, no port forwarding, no containerd.
+plain: true
+
+# vzNAT gives the VM an address on the Mac's own bridge (192.168.64.0/24) that the Mac, and
+# anything that leaves through the Mac such as a CRC node, can reach. It needs no sudo.
+# user-v2 replaces Lima's default network (192.168.5.0/24, the same address in every VM), which
+# would otherwise clash with a client that sits behind that same default network.
+networks:
+- lima: user-v2
+- vzNAT: true

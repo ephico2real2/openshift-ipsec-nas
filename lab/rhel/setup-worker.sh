@@ -14,6 +14,8 @@ NAS_IP="${NAS_IP:?set NAS_IP}"
 PKI_DIR="${PKI_DIR:-/root/ipsec-pki}"
 EXPORT_DIR="${EXPORT_DIR:-/export}"
 MOUNT_DIR="${MOUNT_DIR:-/mnt/nas}"
+# transport is what the guide's NNCP uses. tunnel is only for a host that reaches the NAS through NAT.
+IPSEC_TYPE="${IPSEC_TYPE:-transport}"
 NSS_DB=/var/lib/ipsec/nss
 
 step() { echo; echo "== $*"; }
@@ -41,7 +43,7 @@ conn ipsec-nas
     rightrsasigkey=%cert
     rightsubnet=${NAS_IP}/32
     ikev2=insist
-    type=transport
+    type=${IPSEC_TYPE}
     auto=start
 CONF
 # libreswan 5 resolves left=/right= host names through libunbound. On the lab VMs that resolver
