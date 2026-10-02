@@ -1277,7 +1277,7 @@ openssl verify -CAfile enterprise-root.pem -untrusted intermediate.pem nas.crt  
 > If the NAS cert is signed by a **different** CA than our node certs, the nodes won't trust it: `ipsec-trust-ca` (Appendix A: `ca.pem`) holds **one** root only. Agree on **one enterprise CA for both sides** before starting.
 
 > [!NOTE]
-> We *could* issue the NAS cert from the same `ClusterIssuer` (`${CLUSTER_ISSUER}`) with cert-manager, but the private key would then be created inside our cluster and handed to another team. Only do this if the storage team and security explicitly agree, and the key is transferred securely.
+> We *could* issue the NAS cert from the same `ClusterIssuer` (`${CLUSTER_ISSUER}`) with cert-manager, but the private key would then be created inside our cluster and handed to another team. Only do this if the storage team and security explicitly agree, and the key is transferred securely. A cert-manager `CertificateRequest` avoids the problem: it signs a CSR that was made on the NAS, so the key stays there. [`crc-integration-guide.md`](crc-integration-guide.md#part-c--the-nas-side-for-crc) shows it, measured on CRC.
 
 ### 3.2 Verify end to end
 

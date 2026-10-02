@@ -10,9 +10,10 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 |---|---|---|
 | A | Measure the network path from the CRC node to a Lima VM | **Done**, measured |
 | B | A NAS VM that CRC can reach, and a tunnel that works through the NAT in between | **Done**, measured with a stand-in VM behind the same kind of NAT |
-| C | Change the CRC cluster (IPsec mode, NMState, certificates, NNCP) and run the demo app | **Not run yet.** The commands are prepared below. Nothing on CRC has been changed. |
+| C | The NAS side for CRC: a NAS certificate signed by the cluster's enterprise CA, and the NAS configured for the CRC node | **Done**, measured |
+| D | Change the CRC cluster (IPsec mode, NMState, node certificates, NNCP) and run the demo app | **Not run yet**, with one exception: the NMState Operator subscription is applied, and its result is not confirmed yet. The cluster's network settings are unchanged. |
 
-Everything in Parts A and B was run and the outputs shown are real. Part C is a plan: it will be filled in with measured output as each step is run.
+Everything in Parts A to C was run and the outputs shown are real. Part D is a plan: it will be filled in with measured output as each step is run.
 
 ---
 
@@ -25,7 +26,7 @@ Everything in Parts A and B was run and the outputs shown are real. Part C is a 
 | IPsec mode on the tunnel | `transport`, bare ESP | **`tunnel`**, ESP wrapped in UDP 4500. Transport mode is refused behind NAT (Part B). |
 | The node's address toward the NAS | `<node>.<NODE_DOMAIN>` resolves to it | `192.168.127.2`. No `crc.<domain>` name resolves to it, so the NNCP uses `left: '%defaultroute'`. The node's other address, `192.168.126.11`, cannot reach the NAS. |
 | Enterprise CA issuer | The placeholder `company-issuer-rnd` stands for yours | `enterprise-ca`, a root CA valid to 2031 |
-| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: false`, libreswan not installed on the node, NMState not installed |
+| IPsec today | – | `ipsecConfig.mode: Disabled`, `routingViaHost: false`, libreswan not installed on the node, no `NMState` instance |
 | Kyverno, cert-manager | Installed by the guide | Already installed (Kyverno chart 3.9.1, cert-manager running) |
 
 > [!IMPORTANT]
@@ -173,14 +174,197 @@ Delete the stand-in when done: `limactl stop nat-worker && limactl delete nat-wo
 
 ---
 
-## Part C – Change the CRC cluster (prepared, not run yet)
+## Part C – The NAS side for CRC
+
+In production the storage team owns the NAS certificate (main guide, [3.1](ipsec-nas-guide.md#31-nas-configuration-storage-team-not-us)). On a laptop we play both roles, and we keep the same rule: **the NAS private key is made on the NAS and never leaves it.** Only the CSR (a public file) goes to the cluster, where the existing enterprise CA issuer signs it through a cert-manager `CertificateRequest`. No issuer is created.
+
+On the cluster this part creates one namespace and one `CertificateRequest`. It does not touch the cluster's network.
+
+### Step C.1 – Create the key and the CSR on the NAS
+
+```bash
+limactl shell crc-nas sudo NAS_IP="${NAS_IP}" bash -c '
+set -euo pipefail
+umask 077
+mkdir -p /root/ipsec-pki-crc && cd /root/ipsec-pki-crc
+openssl req -new -newkey rsa:3072 -nodes -keyout nas.key -out nas.csr \
+  -subj "/O=KCS OpenShift lab/CN=crc-nas.lab.internal" \
+  -addext "subjectAltName=DNS:crc-nas.lab.internal,IP:${NAS_IP}" 2>/dev/null
+openssl req -in nas.csr -noout -verify -subject
+openssl req -in nas.csr -noout -text | grep -A1 "Subject Alternative Name"
+install -m 0644 nas.csr /tmp/crc-nas.csr
+'
+limactl copy crc-nas:/tmp/crc-nas.csr crc-nas.csr
+```
+
+✅ **Expected** (measured):
+
+```text
+Certificate request self-signature verify OK
+subject=O=KCS OpenShift lab, CN=crc-nas.lab.internal
+                X509v3 Subject Alternative Name:
+                    DNS:crc-nas.lab.internal, IP Address:192.168.64.8
+```
+
+The repository's `.gitignore` already excludes `*.csr`, `*.crt` and `*.pem`, so the files this part leaves in your working directory cannot be committed by accident.
+
+### Step C.2 – Have the cluster's enterprise CA sign it
+
+The namespace is the one the main guide creates in Step B.2. `duration: 2160h` asks for 90 days.
+
+```bash
+oc apply -f manifests/option-b-per-node-certs/20-namespace.yaml
+
+cat <<EOF > nas-certificaterequest.yaml
+apiVersion: cert-manager.io/v1
+kind: CertificateRequest
+metadata:
+  name: crc-nas
+  namespace: kcs-ipsec
+spec:
+  request: $(base64 < crc-nas.csr | tr -d '\n')
+  duration: 2160h
+  isCA: false
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+  - client auth
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: enterprise-ca
+EOF
+
+oc apply -f nas-certificaterequest.yaml
+oc wait -n kcs-ipsec certificaterequest/crc-nas --for=condition=Ready --timeout=60s
+oc get certificaterequest -n kcs-ipsec crc-nas -o wide
+```
+
+✅ **Expected** (measured):
+
+```text
+namespace/kcs-ipsec created
+certificaterequest.cert-manager.io/crc-nas created
+certificaterequest.cert-manager.io/crc-nas condition met
+NAME      APPROVED   DENIED   READY   ISSUER          REQUESTER   STATUS                                         AGE
+crc-nas   True                True    enterprise-ca   kubeadmin   Certificate fetched from issuer successfully   0s
+```
+
+### Step C.3 – Fetch the certificate and check it
+
+The signed certificate and the CA's own certificate are both in the request's status. Neither is secret.
+
+```bash
+oc get certificaterequest -n kcs-ipsec crc-nas -o jsonpath='{.status.certificate}' | base64 -d > crc-nas.crt
+oc get certificaterequest -n kcs-ipsec crc-nas -o jsonpath='{.status.ca}' | base64 -d > enterprise-root.pem
+
+openssl x509 -in crc-nas.crt -noout -subject -issuer -dates -ext subjectAltName,keyUsage,extendedKeyUsage,basicConstraints
+openssl verify -CAfile enterprise-root.pem crc-nas.crt
+```
+
+✅ **Expected** (measured):
+
+```text
+subject=O=KCS OpenShift lab, CN=crc-nas.lab.internal
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+notBefore=Oct  2 20:35:41 2026 GMT
+notAfter=Dec 31 20:35:41 2026 GMT
+X509v3 Key Usage: critical
+    Digital Signature, Key Encipherment
+X509v3 Extended Key Usage:
+    TLS Web Server Authentication, TLS Web Client Authentication
+X509v3 Basic Constraints: critical
+    CA:FALSE
+X509v3 Subject Alternative Name:
+    DNS:crc-nas.lab.internal, IP Address:192.168.64.8
+crc-nas.crt: OK
+```
+
+> [!NOTE]
+> A `CertificateRequest` is signed once and is not renewed. Before `notAfter`, repeat Steps C.1 to C.4 with a new request name.
+
+### Step C.4 – Install it on the NAS and configure the NAS for the CRC node
+
+First bundle the certificate with the key that stayed on the NAS:
+
+```bash
+limactl copy crc-nas.crt crc-nas:/tmp/crc-nas.crt
+limactl copy enterprise-root.pem crc-nas:/tmp/enterprise-root.pem
+limactl shell crc-nas sudo bash -c '
+set -euo pipefail
+cd /root/ipsec-pki-crc
+install -m 0644 /tmp/enterprise-root.pem ca.pem
+install -m 0644 /tmp/crc-nas.crt nas.crt
+# the certificate must belong to the key that never left this host
+[[ "$(openssl x509 -in nas.crt -noout -pubkey | sha256sum)" == "$(openssl pkey -in nas.key -pubout | sha256sum)" ]] && echo "certificate matches the private key"
+openssl verify -CAfile ca.pem nas.crt
+openssl pkcs12 -export -in nas.crt -inkey nas.key -name nas -out nas.p12 -passout pass:
+chmod 0600 nas.p12
+'
+```
+
+✅ **Expected** (measured): `certificate matches the private key`, then `nas.crt: OK`.
+
+Then configure the NAS. The two `certutil` lines are only needed if you ran the rehearsal in Step B.1: they remove its throwaway certificates, which use the same nicknames. `NAT_CLIENT` is now the CRC node's own address.
+
+```bash
+limactl copy -r lab crc-nas:/tmp/lab
+limactl shell crc-nas sudo bash -c '
+set -euo pipefail
+systemctl stop ipsec
+certutil -F -n nas -d /var/lib/ipsec/nss     # rehearsal certificate and its key
+certutil -D -n CA  -d /var/lib/ipsec/nss     # rehearsal CA
+PKI_DIR=/root/ipsec-pki-crc WORKER_SUBNET=192.168.64.0/24 NAS_LEFT=192.168.64.8 NAT_CLIENT=192.168.127.2 bash /tmp/lab/rhel/setup-nas.sh
+certutil -L -n nas -d /var/lib/ipsec/nss | grep -E "Subject:|Issuer:|Not After"
+'
+```
+
+✅ **Expected** (measured, shortened): the connection is loaded with the NAS's new identity and the CRC node's address, NFS is exported to that one address, and the certificate in the NSS database is the one from the enterprise CA.
+
+```text
+"workers": 192.168.64.8[O=KCS OpenShift lab, CN=crc-nas.lab.internal]...%any[%fromcert]===192.168.127.2/32; unrouted; my_ip=unset; their_ip=unset;
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 0 bytes 0 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 0 bytes 0 drop comment "nfs-cleartext-dropped"
+/export       	192.168.127.2(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+NAS ready: lima-crc-nas exports /export to 192.168.127.2, IPsec only.
+        Issuer: "CN=Enterprise Root CA,O=Enterprise POC"
+            Not After : Thu Dec 31 20:35:41 2026
+        Subject: "CN=crc-nas.lab.internal,O=KCS OpenShift lab"
+```
+
+### Step C.5 – Confirm the NAS refuses NFS without IPsec
+
+The node has no tunnel yet, so this is NFS in cleartext. It must fail.
+
+```bash
+oc debug node/crc -q -- chroot /host bash -c 'ip route show default; curl -s -m 4 --interface 192.168.127.2 telnet://192.168.64.8:2049 </dev/null; echo "curl exit code: $?"'
+limactl shell crc-nas sudo nft list table inet nas_ipsec_only | grep counter
+```
+
+✅ **Expected** (measured): `curl` gives up after 4 seconds (exit code 28 is a timeout), and the NAS counted the packets on its drop rule.
+
+```text
+default via 192.168.127.1 dev br-ex proto dhcp src 192.168.127.2 metric 48
+curl exit code: 28
+		ip saddr 192.168.64.0/24 udp dport { 500, 4500 } counter packets 0 bytes 0 accept comment "ike"
+		ip saddr 192.168.64.0/24 meta l4proto esp counter packets 0 bytes 0 accept comment "esp-in"
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 0 bytes 0 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 6 bytes 384 drop comment "nfs-cleartext-dropped"
+```
+
+The first line also shows that the node's default route leaves through `br-ex` from `192.168.127.2`. That is the address `left: '%defaultroute'` will pick in the NNCP, and the one the NAS now expects.
+
+---
+
+## Part D – Change the CRC cluster (prepared; only the first command of Step D.3 has been run)
 
 > [!WARNING]
 > These steps change cluster-wide network settings on CRC and **reboot its only node** at least once. While the node reboots, everything on CRC is down for several minutes. If an OS-level change fails on a single-node cluster, CRC may need to be rebuilt.
 
 The baseline before any change was recorded on 2026-10-02: OpenShift 4.22.7, all cluster operators healthy, the `master` pool updated, 196 pods, none failing.
 
-### Step C.1 – Enable `routingViaHost` (main guide, Step 1.3)
+### Step D.1 – Enable `routingViaHost` (main guide, Step 1.3)
 
 ```bash
 oc patch networks.operator.openshift.io cluster --type=merge -p \
@@ -190,7 +374,7 @@ oc get pods -n openshift-ovn-kubernetes -w     # wait until the ovnkube-node pod
 oc get co network                              # AVAILABLE=True, PROGRESSING=False, DEGRADED=False
 ```
 
-### Step C.2 – Enable IPsec in `External` mode (main guide, Step 1.4)
+### Step D.2 – Enable IPsec in `External` mode (main guide, Step 1.4)
 
 This installs libreswan on the node through a MachineConfig and reboots it.
 
@@ -203,19 +387,38 @@ watch oc get mcp master          # wait for UPDATED=True, UPDATING=False, DEGRAD
 oc debug node/crc -q -- chroot /host rpm -q libreswan
 ```
 
+### Step D.3 – NMState Operator and instance (main guide, Step 1.5)
+
+The subscription was applied on 2026-10-02. CRC's `redhat-operators` catalog offers the package in the `stable` channel (`kubernetes-nmstate-operator.4.22.0-202609230131`).
+
+```bash
+oc apply -f manifests/common/01-nmstate-operator.yaml
+```
+
+```text
+namespace/openshift-nmstate created
+operatorgroup.operators.coreos.com/openshift-nmstate created
+subscription.operators.coreos.com/kubernetes-nmstate-operator created
+```
+
+**Not confirmed yet:** that the operator reached `Succeeded`. Check it, and only then create the instance:
+
+```bash
+oc get csv -n openshift-nmstate | grep -i -E 'NAME|nmstate'    # PHASE must be Succeeded
+oc apply -f manifests/common/02-nmstate-instance.yaml
+oc get pods -n openshift-nmstate                               # an nmstate-handler pod, Running
+```
+
 ### What follows, in order
 
 Each of these will be written up with its measured output when it is run.
 
-1. **NMState Operator and instance** (main guide, Step 1.5).
-2. **Kyverno RBAC** (Step 1.7). Kyverno itself is already installed.
-3. **NAS certificate from the cluster's enterprise CA**: key and CSR made on the NAS VM, signed through `ClusterIssuer/enterprise-ca`, so the key never leaves the NAS.
-4. **NAS setup for CRC**: `setup-nas.sh` with `NAT_CLIENT=192.168.127.2`.
-5. **Option A, documented and then removed**: the shared certificate through a MachineConfig. On CRC the MachineConfig role is `master`, not `worker`, and it reboots the node again. Record the installation, verify the tunnel, then clean it off the cluster.
-6. **Option B, the standard**: per-node certificate from `enterprise-ca`, the cert-sync DaemonSet, and the NNCP with the CRC settings (`type: tunnel`, `left: '%defaultroute'`, `right: ${NAS_IP}`).
-7. **The demo application** from [`nas-consumer-app-guide.md`](nas-consumer-app-guide.md), with its Route.
+1. **Kyverno RBAC** (main guide, Step 1.7). Kyverno itself is already installed.
+2. **Option A, documented and then removed**: the shared certificate through a MachineConfig. On CRC the MachineConfig role is `master`, not `worker`, and it reboots the node again. Record the installation, verify the tunnel, then clean it off the cluster.
+3. **Option B, the standard**: per-node certificate from `enterprise-ca`, the cert-sync DaemonSet, and the NNCP with the CRC settings (`type: tunnel`, `left: '%defaultroute'`, `right: ${NAS_IP}`).
+4. **The demo application** from [`nas-consumer-app-guide.md`](nas-consumer-app-guide.md), with its Route.
 
-To undo Steps C.1 and C.2: set `ipsecConfig.mode` back to `Disabled` (the node reboots again) and `routingViaHost` back to `false`.
+To undo Steps D.1 and D.2: set `ipsecConfig.mode` back to `Disabled` (the node reboots again) and `routingViaHost` back to `false`.
 
 ---
 
