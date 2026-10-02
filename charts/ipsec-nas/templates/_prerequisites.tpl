@@ -83,20 +83,22 @@ exclude:
 {{- join "|" $roles -}}
 {{- end -}}
 
-{{/* The Node selection of a CEL policy (objectSelector): the nodeSelector labels, plus "extra"
-     labels, minus the Nodes that carry any excluded label key. */}}
-{{- define "ipsec-nas.nodeObjectSelector" -}}
-matchLabels:
-  {{- include "ipsec-nas.nodeMatchLabels" .root | nindent 2 }}
-  {{- range $k, $v := .extra }}
-  {{ $k }}: {{ $v | quote }}
-  {{- end }}
+{{/* The Node selection of a CEL policy, as matchConditions: the nodeSelector labels, plus "extra"
+     labels, and none of the excluded label keys. Not an objectSelector: with one, the API server
+     stops sending a Node to Kyverno once it no longer matches, so a Node that gains an excluded
+     label would keep its Certificate. With matchConditions Kyverno sees the change and deletes it. */}}
+{{- define "ipsec-nas.nodeMatchConditions" -}}
+{{- $labels := list -}}
+{{- range $k, $v := merge (dict) (.extra | default dict) .root.Values.nodeSelector -}}
+{{- $labels = append $labels (printf "object.metadata.?labels[?%q] == optional.of(%q)" $k $v) -}}
+{{- end -}}
+- name: selected-nodes
+  expression: >-
+    {{ join " &&\n    " $labels }}
 {{- with .root.Values.excludeNodeLabels }}
 # Nodes with ANY of these labels are left out, even if they also match the labels above.
-matchExpressions:
-{{- range . }}
-- key: {{ . }}
-  operator: DoesNotExist
-{{- end }}
+- name: not-excluded
+  expression: >-
+    !{{ toJson . | replace "," ", " }}.exists(k, k in object.metadata.?labels.orValue({}))
 {{- end }}
 {{- end -}}

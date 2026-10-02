@@ -15,19 +15,18 @@ spec:
       apiVersions: ["v1"]
       operations: ["CREATE", "UPDATE"]
       resources: ["nodes"]
-    objectSelector:
-      matchLabels:
-        node-role.kubernetes.io/worker: ""
-      # exclude-nodes:begin
-      # Nodes with ANY of these labels are left out, even if they also match the labels above.
-      matchExpressions:
-      - key: node-role.kubernetes.io/control-plane
-        operator: DoesNotExist
-      - key: node-role.kubernetes.io/master
-        operator: DoesNotExist
-      - key: node-role.kubernetes.io/ingress
-        operator: DoesNotExist
-      # exclude-nodes:end
+  # The selection is in matchConditions, not an objectSelector: with an objectSelector, a Node that
+  # gains an excluded label is no longer sent to Kyverno, and its Certificate would stay.
+  matchConditions:
+  - name: selected-nodes
+    expression: >-
+      object.metadata.?labels[?"node-role.kubernetes.io/worker"] == optional.of("")
+  # exclude-nodes:begin
+  # Nodes with ANY of these labels are left out, even if they also match the labels above.
+  - name: not-excluded
+    expression: >-
+      !["node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master", "node-role.kubernetes.io/ingress"].exists(k, k in object.metadata.?labels.orValue({}))
+  # exclude-nodes:end
   generate:
   - template:
       interpolate: cel

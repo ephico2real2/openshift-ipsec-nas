@@ -19,8 +19,8 @@ spec:
       apiVersions: ["v1"]
       operations: ["CREATE", "UPDATE"]
       resources: ["nodes"]
-    objectSelector:
-      {{- include "ipsec-nas.nodeObjectSelector" (dict "root" $ "extra" (dict "ipsec.kcs.io/cert-ready" "true")) | nindent 6 }}
+  matchConditions:
+  {{- include "ipsec-nas.nodeMatchConditions" (dict "root" $ "extra" (dict "ipsec.kcs.io/cert-ready" "true")) | nindent 2 }}
   generate:
   - template:
       interpolate: cel

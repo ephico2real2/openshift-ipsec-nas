@@ -82,8 +82,8 @@ ruby -ryaml -e '
   docs, legacy = load.(ARGV[0]), load.(ARGV[1])
   want = %w[node-role.kubernetes.io/infra example.com/no-nas]
   %w[GeneratingPolicy/ipsec-node-certificate GeneratingPolicy/ipsec-nncp-per-node].each do |k|
-    got = docs.fetch(k)["spec"]["matchConstraints"]["objectSelector"]["matchExpressions"]
-    abort "      #{k}: #{got}" unless got == want.map { |w| { "key" => w, "operator" => "DoesNotExist" } }
+    got = docs.fetch(k)["spec"]["matchConditions"].find { |c| c["name"] == "not-excluded" }["expression"]
+    abort "      #{k}: #{got}" unless got == %Q(!["node-role.kubernetes.io/infra", "example.com/no-nas"].exists(k, k in object.metadata.?labels.orValue({})))
   end
   %w[ClusterPolicy/ipsec-node-certificate ClusterPolicy/ipsec-nncp-per-node].each do |k|
     got = legacy.fetch(k)["spec"]["rules"][0]["exclude"]["any"].map { |a| a["resources"]["selector"]["matchExpressions"][0] }
