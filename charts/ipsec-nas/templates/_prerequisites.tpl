@@ -35,3 +35,17 @@ The checks that read objects only run against a real cluster ("helm template" ha
 {{- define "ipsec-nas.trustConfigMap" -}}
 {{- .Values.trustCA.existingConfigMap | default "ipsec-trust-ca" -}}
 {{- end -}}
+
+{{/* The annotations that make an object part of the uninstall hook, for Helm or for Argo CD. */}}
+{{- define "ipsec-nas.uninstallHook" -}}
+{{- if eq .root.Values.uninstallCleanup.hook "argocd" -}}
+argocd.argoproj.io/hook: PreDelete
+argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+argocd.argoproj.io/sync-wave: {{ .weight | quote }}
+{{- else -}}
+helm.sh/hook: pre-delete
+helm.sh/hook-weight: {{ .weight | quote }}
+helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+argocd.argoproj.io/sync-wave: {{ .weight | quote }}
+{{- end -}}
+{{- end -}}

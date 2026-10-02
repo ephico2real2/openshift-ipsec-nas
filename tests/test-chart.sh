@@ -33,7 +33,7 @@ compare() {  # $1 = label; the rest = helm --set arguments. The matching render.
     chart.delete("ConfigMap/kcs-ipsec/ipsec-trust-ca")
     chart.delete("RoleBinding/kcs-ipsec/system:openshift:scc:privileged")
     # in the chart only: the uninstall hook (it exists only while a release is being removed)
-    hooks = chart.select { |_, d| d["metadata"]["annotations"]&.key?("helm.sh/hook") }
+    hooks = chart.select { |_, d| d["metadata"]["annotations"]&.key?("helm.sh/hook") || d["metadata"]["annotations"]&.key?("argocd.argoproj.io/hook") }
     abort "      expected the 7 uninstall hook objects, found #{hooks.size}" unless hooks.size == 7
     hooks.each_key { |k| chart.delete(k) }
     # in the chart only: the checksum that restarts the pods when a script changes

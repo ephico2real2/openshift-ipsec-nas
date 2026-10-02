@@ -49,7 +49,8 @@
         "grafanaDashboard": { "type": "boolean" }
       }
     },
-    "uninstallCleanup": { "type": "object", "properties": { "enabled": { "type": "boolean" } } },
+    "nodeCleanup": { "type": "object", "properties": { "deleteCertificate": { "type": "boolean" }, "deleteOrphanedSecrets": { "type": "boolean" }, "schedule": { "type": "string" } } },
+    "uninstallCleanup": { "type": "object", "properties": { "enabled": { "type": "boolean" }, "hook": { "enum": ["helm", "argocd"] }, "removeCertificates": { "type": "boolean" } } },
     "prerequisites": {
       "type": "object",
       "properties": { "skipCheck": { "type": "boolean" }, "kyvernoNamespace": { "type": "string" } }

@@ -62,11 +62,26 @@ metrics:
   # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1").
   grafanaDashboard: false
 
+nodeCleanup:
+  # -- When a Node is DELETED, Kyverno deletes that node's Certificate. false keeps it.
+  # (A reboot does not delete the Node, so it never removes a certificate, whatever this says.)
+  deleteCertificate: true
+  # -- The Kyverno CleanupPolicy that deletes the cert-manager Secrets whose Certificate is gone
+  # (the private key of a deleted node). false keeps those Secrets until someone deletes them.
+  deleteOrphanedSecrets: true
+  # -- How often that CleanupPolicy runs (cron).
+  schedule: "*/5 * * * *"
+
 uninstallCleanup:
   # -- Before the release is removed, take the tunnels off the nodes and remove each node's
-  # certificate, key, Secret and label (files/uninstall.sh). A Helm pre-delete hook and an
-  # Argo CD PreDelete hook (Argo CD 3.3 or later).
+  # certificate, key, Secret and label (files/uninstall.sh).
   enabled: true
+  # -- Who runs it: "helm" (a pre-delete hook, for helm uninstall) or "argocd" (a PreDelete hook,
+  # Argo CD 3.3 or later, for deleting the Application). Set "argocd" in the Application's values.
+  hook: helm
+  # -- Also remove the certificates: from each node's NSS database, and the Certificates and
+  # Secrets in the namespace. false takes the tunnels and labels away and leaves the certificates.
+  removeCertificates: true
 
 prerequisites:
   # -- Skip the checks in templates/_prerequisites.tpl. For "helm template" without a cluster.

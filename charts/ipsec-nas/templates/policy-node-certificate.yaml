@@ -18,7 +18,7 @@ spec:
               {{- include "ipsec-nas.nodeMatchLabels" . | nindent 14 }}
     generate:
       generateExisting: true
-      synchronize: true          # Certificate is deleted when the Node is deleted
+      synchronize: {{ .Values.nodeCleanup.deleteCertificate }}          # Certificate is deleted when the Node is deleted
       apiVersion: cert-manager.io/v1
       kind: Certificate
       name: "ipsec-{{ "{{" }} request.object.metadata.name {{ "}}" }}"

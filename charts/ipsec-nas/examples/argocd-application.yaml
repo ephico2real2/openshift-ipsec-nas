@@ -7,6 +7,9 @@ kind: Application
 metadata:
   name: ipsec-nas
   namespace: openshift-gitops
+  # Deleting the Application then also deletes what it created, after the cleanup hook
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
@@ -25,6 +28,8 @@ spec:
           # The enterprise ROOT CA. Either name a ConfigMap that already exists in the namespace
           # (key ca.pem), or delete this line and paste the PEM under "pem: |".
           existingConfigMap: ipsec-trust-ca
+        uninstallCleanup:
+          hook: argocd     # run the cleanup as an Argo CD PreDelete hook when the Application is deleted
   destination:
     server: https://kubernetes.default.svc
     namespace: kcs-ipsec

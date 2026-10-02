@@ -9,18 +9,23 @@ NS="${POD_NAMESPACE}"
 NSS_DB=/var/lib/ipsec/nss
 log() { echo "$(date -u +%FT%TZ) $*"; }
 
-log "1. Stop Kyverno from creating NNCPs and Certificates again"
-oc delete clusterpolicy ipsec-nncp-per-node ipsec-node-certificate --ignore-not-found
+# Which nodes have a tunnel. This must be read BEFORE the policy is deleted: Kyverno deletes the
+# NNCPs together with their policy, and a deleted NNCP leaves its tunnel on the node.
+nodes=$(oc get nncp -l generate.kyverno.io/policy-name=ipsec-nncp-per-node \
+  -o jsonpath='{range .items[*]}{.spec.nodeSelector.kubernetes\.io/hostname}{"\n"}{end}')
 
-log "2. Remove the tunnel from every node (an NNCP with state: absent), then the NNCPs"
-nncps=$(oc get nncp -l generate.kyverno.io/policy-name=ipsec-nncp-per-node -o jsonpath='{.items[*].metadata.name}')
-for nncp in ${nncps}; do
-  node=$(oc get nncp "${nncp}" -o jsonpath='{.spec.nodeSelector.kubernetes\.io/hostname}')
+log "1. Stop Kyverno from creating NNCPs again"
+oc delete clusterpolicy ipsec-nncp-per-node --ignore-not-found
+
+log "2. Remove the tunnel from every node, with an NNCP that says: absent"
+# The removal NNCP has its own name. Kyverno deletes the NNCPs it generated a moment after their
+# policy, so an NNCP that reused one of those names would be deleted before NMState acted on it.
+for node in ${nodes}; do
   cat <<EOF | oc apply -f -
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: ${nncp}
+  name: ipsec-nas-remove-${node}
 spec:
   nodeSelector:
     kubernetes.io/hostname: ${node}
@@ -31,23 +36,27 @@ spec:
       state: absent
 EOF
 done
-# An NNCP still says Available from before the change for a moment, so its status cannot be
-# trusted here. Ask each node itself, through its cert-sync pod, until the connection is gone.
-for nncp in ${nncps}; do
-  node=$(oc get nncp "${nncp}" -o jsonpath='{.spec.nodeSelector.kubernetes\.io/hostname}')
-  pod=$(oc get pods -n "${NS}" -l app=ipsec-cert-sync --field-selector="spec.nodeName=${node},status.phase=Running" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
-  gone=no
-  for _ in $(seq 1 60); do
-    if [[ -n "${pod}" ]] && ! oc exec -n "${NS}" "${pod}" -c sync -- chroot /host nmcli -t -f NAME connection show 2>/dev/null | grep -qx ipsec-nas; then
-      gone=yes; break
-    fi
-    sleep 2
-  done
-  [[ "${gone}" == yes ]] && log "   tunnel removed from ${node}" || log "WARNING: could not confirm that the tunnel is gone from ${node}"
-  oc delete nncp "${nncp}" --ignore-not-found
+for node in ${nodes}; do
+  # a new object, so its Available condition can only come from this change
+  if oc wait "nncp/ipsec-nas-remove-${node}" --for=condition=Available --timeout=180s; then
+    log "   tunnel removed from ${node}"
+  else
+    log "WARNING: NMState did not confirm the removal on ${node}"
+  fi
+  oc delete nncp "ipsec-nas-remove-${node}" --ignore-not-found
 done
+[[ -n "${nodes}" ]] || log "   no tunnel NNCPs found"
 
-log "3. Remove each node's certificate and private key from its NSS database"
+log "3. Remove the cert-ready label from the nodes"
+oc label nodes -l ipsec.kcs.io/cert-ready ipsec.kcs.io/cert-ready-
+
+if [[ "${REMOVE_CERTIFICATES:-true}" != "true" ]]; then
+  log "Done. The certificates were kept (uninstallCleanup.removeCertificates is false):"
+  log "each node still has its certificate and key, and the Certificates and Secrets are still in ${NS}."
+  exit 0
+fi
+
+log "4. Remove each node's certificate and private key from its NSS database"
 for pod in $(oc get pods -n "${NS}" -l app=ipsec-cert-sync --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.name}'); do
   oc exec -n "${NS}" "${pod}" -c sync -- bash -c "
     touch /tmp/ipsec-nas-teardown
@@ -58,10 +67,8 @@ for pod in $(oc get pods -n "${NS}" -l app=ipsec-cert-sync --field-selector=stat
       true'" && log "   cleaned the node of pod ${pod}" || log "WARNING: could not clean the node of pod ${pod}"
 done
 
-log "4. Remove the cert-ready label from the nodes"
-oc label nodes -l ipsec.kcs.io/cert-ready ipsec.kcs.io/cert-ready-
-
 log "5. Delete the Certificates first (while one exists, cert-manager puts its Secret back), then the Secrets"
+oc delete clusterpolicy ipsec-node-certificate --ignore-not-found
 oc delete certificate -n "${NS}" -l generate.kyverno.io/policy-name=ipsec-node-certificate --ignore-not-found
 oc delete secret -n "${NS}" -l controller.cert-manager.io/fao=true --ignore-not-found
 
