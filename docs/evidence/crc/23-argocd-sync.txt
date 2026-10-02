@@ -1,0 +1,63 @@
+$ oc create configmap ipsec-trust-ca -n kcs-ipsec --from-file=ca.pem=enterprise-root.pem; oc apply -f application.yaml
+2026-10-02T22:10:57Z
+== before: nothing of the chart on the cluster
+ipsec policies: 0
+No resources found in kcs-ipsec namespace.
+== the root CA ConfigMap the Application refers to
+configmap/ipsec-trust-ca created
+== the Application
+2026-10-02T22:10:58Z
+application.argoproj.io/ipsec-nas created
+$ oc get application -n openshift-gitops ipsec-nas; (operation state, first pod, creation times of the policies and the DaemonSet, certificate, NNCP, tunnel)
+2026-10-02T22:11:21Z
+NAME        SYNC STATUS   HEALTH STATUS
+ipsec-nas   Synced        Healthy
+revision=295e2441254326eb4a57fc5daf205aa0b96987c9
+operation=Succeeded started=2026-10-02T22:11:00Z finished=2026-10-02T22:11:12Z
+message=successfully synced (all tasks run)
+== first cert-sync pod: was it created after the mount policy?
+ipsec-cert-sync-pbb57 3/3 Running 0 14s
+ipsec-cert-sync-pbb57 created=2026-10-02T22:11:08Z mounts secret: ipsec-cert-crc
+2026-10-02T22:11:09Z [crc] Starting
+2026-10-02T22:11:09Z [crc] New or renewed certificate detected - importing into NSS
+pk12util: PKCS12 IMPORT SUCCESSFUL
+2026-10-02T22:11:09Z [crc] Import OK
+node/crc labeled
+2026-10-02T22:11:09Z [crc] Node labelled ipsec.kcs.io/cert-ready=true
+NAME                            CREATED                READY
+ipsec-cert-sync-mount           2026-10-02T22:11:06Z   True
+ipsec-nncp-per-node             2026-10-02T22:11:12Z   True
+ipsec-node-certificate          2026-10-02T22:11:06Z   True
+daemonset created=2026-10-02T22:11:08Z
+NAME        READY   SECRET           AGE
+ipsec-crc   True    ipsec-cert-crc   16s
+NAME                                                      STATUS      REASON
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc   Available   SuccessfullyConfigured
+NAME                                                             STATUS      STATUS AGE   REASON
+nodenetworkconfigurationenactment.nmstate.io/crc.ipsec-nas-crc   Available   1s           SuccessfullyConfigured
+#6: "77176d0b-3331-4aa8-a15d-8e1cf062bf03", type=ESP, add_time=1790979077, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+$ oc get application ... -o jsonpath='{range .status.resources[*]}{.syncWave} {.kind} {.name} {.status} {.health.status}'      (after the sync to the next commit)
+2026-10-02T22:18:08Z
+revision=a888c66c1b68936ff259ddf5160ebefe1f9c60a5 sync=Synced health=Healthy
+-2	ClusterRole	ipsec-cert-sync-label-node	Synced	
+-2	ClusterRole	kyverno:ipsec-nas-generate	Synced	
+-2	ClusterRole	kyverno:ipsec-nas-read-nodes	Synced	
+-2	ClusterRoleBinding	ipsec-cert-sync-label-node	Synced	
+-2	ConfigMap	ipsec-cert-sync-script	Synced	
+-2	ConfigMap	ipsec-metrics-scripts	Synced	
+-2	Role	ipsec-cert-sync-recreate-pod	Synced	
+-2	Role	kyverno-cleanup-ipsec-secrets	Synced	
+-2	RoleBinding	ipsec-cert-sync-recreate-pod	Synced	
+-2	RoleBinding	kyverno-cleanup-ipsec-secrets	Synced	
+-2	RoleBinding	system:openshift:scc:privileged	Synced	
+-2	ServiceAccount	ipsec-cert-sync	Synced	
+-1	CleanupPolicy	ipsec-orphaned-node-secrets	Synced	
+-1	ClusterPolicy	ipsec-cert-sync-mount	Synced	
+-1	ClusterPolicy	ipsec-node-certificate	Synced	
+	DaemonSet	ipsec-cert-sync	Synced	Healthy
+1	ClusterPolicy	ipsec-nncp-per-node	Synced	
+1	PrometheusRule	ipsec-nas	Synced	
+1	Service	ipsec-nas-metrics	Synced	Healthy
+1	ServiceMonitor	ipsec-nas	Synced	
+ipsec-cert-sync-jnk6w 3/3 Running 6s
+#6: "77176d0b-3331-4aa8-a15d-8e1cf062bf03", type=ESP, add_time=1790979077, inBytes=224988, outBytes=

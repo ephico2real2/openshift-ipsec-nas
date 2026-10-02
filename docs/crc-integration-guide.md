@@ -4,7 +4,7 @@
 
 The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with stand-in workers. This guide goes one step further and connects the **CRC cluster** on the same Mac to a NAS VM. CRC differs from a production cluster in ways that change a few settings, and this guide records each difference and why.
 
-**How to read it.** Work through the parts in order, A to H. Every step has the command to run, what to expect, and the output that was measured when it was run for this guide. Things that went wrong on the way are **not** in the steps; they are collected in [Gotchas](#gotchas) at the end, and the steps point there where it matters. The steps are in the order that works, which is not always the order they were first run in; the times (UTC) show when each one was run.
+**How to read it.** Work through the parts in order, A to I. Every step has the command to run, what to expect, and the output that was measured when it was run for this guide. Things that went wrong on the way are **not** in the steps; they are collected in [Gotchas](#gotchas) at the end, and the steps point there where it matters. The steps are in the order that works, which is not always the order they were first run in; the times (UTC) show when each one was run.
 
 ## Where this stands
 
@@ -18,6 +18,7 @@ The Lima lab ([`lab-lima-guide.md`](lab-lima-guide.md)) proves the NAS side with
 | F | Option A, the shared certificate, end to end: certificate, MachineConfig, NNCP, tunnel, NFS through the tunnel | **Done**, measured, with its costs listed |
 | G | Remove Option A from CRC | **Done**, measured |
 | H | Option B, per-node certificates, our standard: certificate, DaemonSet, NNCP, tunnel, a demo application with its Route, metrics in Observe | **Done**, measured. No reboot; 47 seconds from the first policy to the tunnel |
+| I | The same setup as a Helm chart: installed with Helm and with Argo CD from Git, a node deleted, the node restarted, the chart removed | **Done**, measured. One limit: this Argo CD runs no cleanup hook when an Application is deleted (Step I.7) |
 
 Every output shown in this guide is real and was measured on the date above, including the steps that failed (they are in [Gotchas](#gotchas)). Where something is not tested, it says so.
 
@@ -48,6 +49,7 @@ A laptop has no enterprise NAS, no storage team and no routed data-centre networ
 | F | The shared-certificate procedure works on a real OpenShift node through NMState, and what it costs | NNCP `Available` in 12 seconds; the tunnel on both sides; 5 MiB of NFS counted on it (captures 8 to 13); the cost table in F.8 |
 | G | Option A can be taken off a cluster completely | No tunnel, no policy, no MachineConfig, no shared certificate left on the node (capture 14) |
 | H | Our standard, Option B, works on a real OpenShift node with no manual step and no reboot; an application stores data on the NAS through it; OpenShift's monitoring sees the tunnel | The NAS logging the node's own identity `CN=crc.crc.testing`; the demo page through the Route; `ipsec_nas_tunnel_up 1` in Observe (captures 15 to 19, screenshot 20) |
+| I | The setup can be deployed from Git by Argo CD in the right order; a deleted node is cleaned up; a reboot keeps the certificate; removal leaves nothing behind | Argo CD `Synced` and `Healthy` with 20 objects (screenshots 21a and 21b); the stand-in node test; the same certificate fingerprint before and after a restart; `helm uninstall` leaving no tunnel, key or Secret (captures 22 to 28) |
 
 ---
 
@@ -1244,12 +1246,310 @@ The collector reports the tunnel as up because it now looks the connection up un
 
 ### Not tested on CRC
 
-- **Scale-up and scale-down** (main guide, Steps B.10 and B.11): CRC has one node.
+- **Scale-up and scale-down with a real node** (main guide, Steps B.10 and B.11): CRC has one node. Step I.4 covers the cluster side with a stand-in Node object: its certificate appears, and is cleaned up when the Node is deleted. The tunnel of a second real node was not tested.
 - **Renewal**: the certificate was just issued. The cert-sync script's re-import path was not exercised.
 - **The alerts firing**: the rules are loaded and none fires; no tunnel was broken on purpose to see `IpsecNasTunnelDown`.
 - **The Grafana dashboard**: this CRC has no `ocp-platform-grafana` or `ocp-grafana` namespace. The dashboard was tested in the Lima lab.
-- **A restart of CRC with Option B in place**: whether the tunnel comes back by itself after `crc stop` and `crc start`.
 - **Dynamic provisioning** with `csi-driver-nfs` against this NAS.
+
+---
+
+## Part I – The same setup as a Helm chart, with Helm and with Argo CD
+
+Part H applied the manifests one by one. `charts/ipsec-nas` packages exactly those objects as one Helm release (`tests/test-chart.sh` compares them object by object), so that a cluster can be set up from Git. This part installs it both ways, and then tests what happens when a node is deleted, when the node reboots, and when the chart is removed.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/deploy-flow/gitops-deploy-flow.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/deploy-flow/gitops-deploy-flow.light.png">
+  <img alt="Deployment through GitOps: a change merged to the Git repository is pulled by Argo CD, which renders the Helm chart and applies it to the cluster in four sync waves, permissions and files first, then the Kyverno policies, then the DaemonSet, then the NNCP policy and monitoring. cert-manager with the enterprise CA issuer, Kyverno, NMState and libreswan are already on the cluster and are not installed by the chart. After that the cluster gives every node a certificate and a tunnel by itself." src="diagrams/deploy-flow/gitops-deploy-flow.light.png">
+</picture>
+
+*Figure 2. From Git to a tunnel on every node. cert-manager, Kyverno, NMState and libreswan are prerequisites: the chart checks for them and never installs them.*
+
+```text
+GIT (the repository)             ARGO CD (on the cluster)              OPENSHIFT CLUSTER
+
+charts/ipsec-nas + values   -->  Application ipsec-nas            -->  Already there, not installed by the chart:
+  a change is merged to main       renders the chart (helm template)     cert-manager + enterprise CA ClusterIssuer,
+                                   and applies it in waves               Kyverno, NMState, libreswan on the nodes
+
+                                 Sync wave -2                      -->  Permissions and files: RBAC, service account, scripts, root CA
+                                 Sync wave -1                      -->  The Kyverno policies the pods depend on: node certificate, mount, cleanup
+                                 Sync wave  0                      -->  DaemonSet ipsec-cert-sync: one pod per node, with its node's secret
+                                 Sync wave  1                      -->  NNCP policy, ServiceMonitor, alert rules
+
+Then, for every node: Certificate -> the pod imports it and labels the node -> NNCP -> NMState builds the tunnel.
+Measured: Synced and Healthy 12 seconds after the Application was applied; tunnel up within 23 seconds.
+```
+
+### Step I.1 – What must already be on the cluster
+
+The chart treats these as **prerequisites**. It checks for them and stops with a message that names what is missing; it never installs or upgrades them.
+
+| Prerequisite | On this CRC | Checked by the chart |
+|---|---|---|
+| cert-manager, with a `ClusterIssuer` for the enterprise CA | `enterprise-ca` | The API is served; the issuer named in `clusterIssuer` exists |
+| Kyverno, not filtering out Nodes | Step D.3 | The API is served; `[Node,*,*]` is not in its `resourceFilters` |
+| NMState Operator with an instance | Step D.2 | The API is served |
+| libreswan on the nodes | Part E (a production cluster: `ipsecConfig.mode: External`) | Not checked |
+| The namespace, with the privileged pod-security labels | `kcs-ipsec` from Step H.1 | Not checked |
+
+```bash
+tests/test-chart.sh
+helm install ipsec-nas charts/ipsec-nas -n kcs-ipsec -f charts/ipsec-nas/values-crc.yaml --set clusterIssuer=company-issuer-rnd --set trustCA.pem=x --dry-run=server
+```
+
+✅ **Expected** (measured): the test passes, and the dry run with an issuer that does not exist is refused:
+
+```text
+ok    values-crc.yaml (tunnel mode, as measured on CRC): 29 chart objects, identical to the manifests
+ok    a cluster without Kyverno is refused
+ok    Argo CD sync waves: RBAC and ConfigMaps, then the policies, then the DaemonSet
+all chart tests passed
+
+Error: INSTALLATION FAILED: ... prerequisite missing: ClusterIssuer "company-issuer-rnd" does not exist. Set clusterIssuer to the existing enterprise CA issuer (oc get clusterissuer). This chart does not create one.
+```
+
+Before installing the chart, Option B from Part H was removed with the main guide's teardown (section 3.4), which that run extended: see [Gotcha 11](#gotcha-11--removing-the-setup-leaves-the-certificate-and-key-on-the-node).
+
+### Step I.2 – Install with Helm
+
+```bash
+helm install ipsec-nas charts/ipsec-nas -n kcs-ipsec -f charts/ipsec-nas/values-crc.yaml \
+  --set-file trustCA.pem=enterprise-root.pem
+
+oc get pods -n kcs-ipsec
+oc get certificate -n kcs-ipsec; oc get nncp,nnce
+oc debug node/crc -q -- chroot /host ipsec trafficstatus
+```
+
+✅ **Expected** (measured, installed at 22:05:18 UTC): the tunnel was up about **100 seconds** after `helm install`. Most of that time is one deliberate wait. Helm creates the DaemonSet a moment before the Kyverno policies, so the first pod is created without its node's secret. It notices, says so in its log, deletes itself after 60 seconds, and the pod that replaces it gets the secret.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/22-helm-install.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/22-helm-install.light.png">
+  <img alt="Terminal capture of helm install: the release deployed at 22:05:18, the first cert-sync pod mounting the placeholder secret and logging that it will delete itself in 60 seconds; then the replacement pod mounting ipsec-cert-crc, importing the certificate at 22:06:51 and labelling the node; the Certificate ready, the three policies ready, the NNCP Available, the tunnel established, and the Helm release listed as deployed." src="images/crc/22-helm-install.light.png">
+</picture>
+
+*Capture 22. `helm install`, the first pod correcting itself, and the tunnel. Text: [`evidence/crc/22-helm-install.txt`](evidence/crc/22-helm-install.txt).*
+
+### Step I.3 – Install with Argo CD, from Git
+
+CRC already has an Argo CD (OpenShift GitOps 1.21, Argo CD 3.4.7). The Application points at the chart in the Git repository; `charts/ipsec-nas/examples/argocd-application.yaml` is the template. Here it uses `values-crc.yaml` and a ConfigMap with the root CA that is created first.
+
+```bash
+oc create configmap ipsec-trust-ca -n kcs-ipsec --from-file=ca.pem=enterprise-root.pem
+
+cat <<'EOF' | oc apply -f -
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ipsec-nas
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ephico2real2/openshift-ipsec-nas.git
+    targetRevision: main
+    path: charts/ipsec-nas
+    helm:
+      releaseName: ipsec-nas
+      valueFiles:
+      - values-crc.yaml
+      valuesObject:
+        trustCA:
+          existingConfigMap: ipsec-trust-ca
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kcs-ipsec
+  syncPolicy:
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/audit: privileged
+        pod-security.kubernetes.io/warn: privileged
+        security.openshift.io/scc.podSecurityLabelSync: "false"
+    automated: {}
+    syncOptions:
+    - CreateNamespace=true
+EOF
+
+oc get application -n openshift-gitops ipsec-nas
+oc get application -n openshift-gitops ipsec-nas -o jsonpath='{range .status.resources[*]}{.syncWave}{"\t"}{.kind}{"\t"}{.name}{"\t"}{.status}{"\n"}{end}' | sort -n
+```
+
+✅ **Expected** (measured, applied at 22:10:58 UTC): the sync ran from 22:11:00 to 22:11:12 and ended `Synced` and `Healthy`. The waves did what they are for: both policies were created at 22:11:06 and the DaemonSet at 22:11:08, so the **first** pod already mounted `ipsec-cert-crc`. The tunnel was up within **23 seconds** of applying the Application, against about 100 seconds with plain Helm.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/23-argocd-sync.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/23-argocd-sync.light.png">
+  <img alt="Terminal capture of the Argo CD deployment: the Application applied at 22:10:58, Synced and Healthy at 22:11:21 with the operation succeeded between 22:11:00 and 22:11:12; the first pod created at 22:11:08 mounting ipsec-cert-crc; the mount and certificate policies created at 22:11:06 and the NNCP policy at 22:11:12; the Certificate ready, the NNCP Available and the tunnel established; then the list of all 20 resources with their sync waves, all Synced." src="images/crc/23-argocd-sync.light.png">
+</picture>
+
+*Capture 23. The Argo CD sync, the creation order, and every resource with its wave. Text: [`evidence/crc/23-argocd-sync.txt`](evidence/crc/23-argocd-sync.txt).*
+
+The application in the Argo CD user interface, with every component deployed. These two are real browser screenshots. They were taken without typing a password: `argocd admin dashboard -n openshift-gitops` serves the interface locally from the existing `oc` login.
+
+<img alt="Browser screenshot of the Argo CD application ipsec-nas in tree view: App Health Healthy, Synced to main, Sync OK, 20 resources Synced, and the tree of the application with its ConfigMaps, Service, ServiceAccount, DaemonSet, CleanupPolicy, three ClusterPolicies, PrometheusRule, ServiceMonitor, ClusterRoles, ClusterRoleBinding, Roles and RoleBindings, each with a green check." src="images/crc/21-argocd-app-tree.png" width="820">
+
+*Screenshot 21a. The Argo CD application `ipsec-nas`: `Healthy`, `Synced` to `main`, all 20 objects.*
+
+<img alt="Browser screenshot of the Argo CD application ipsec-nas in list view: 20 resources, each Synced, with a Sync Order column showing minus 2 for the RBAC objects, ServiceAccount and ConfigMaps, minus 1 for the two ClusterPolicies and the CleanupPolicy the DaemonSet depends on, no number for the DaemonSet (wave 0), and 1 for the NNCP policy, ServiceMonitor, PrometheusRule and Service." src="images/crc/21-argocd-app-list.png" width="820">
+
+*Screenshot 21b. The same application as a list, with the `SYNC ORDER` column: the waves of Figure 2.*
+
+### Step I.4 – A node is deleted
+
+When a Node is deleted, Kyverno deletes that node's `Certificate`. cert-manager leaves the Certificate's Secret behind, with the node's private key in it. The chart adds a Kyverno `CleanupPolicy` that deletes such Secrets, with rights in this namespace only.
+
+CRC's only node cannot be deleted, so the test uses a **stand-in Node object** with no machine behind it:
+
+```bash
+cat <<'EOF' | oc apply -f -
+apiVersion: v1
+kind: Node
+metadata:
+  name: ipsec-test-node
+  labels:
+    node-role.kubernetes.io/worker: ""
+    kubernetes.io/hostname: ipsec-test-node
+EOF
+oc get certificate -n kcs-ipsec
+oc get secret -n kcs-ipsec -l controller.cert-manager.io/fao=true
+
+oc delete node ipsec-test-node
+oc get certificate -n kcs-ipsec
+oc get secret -n kcs-ipsec -l controller.cert-manager.io/fao=true      # again after the policy's next run
+```
+
+✅ **Expected** (measured):
+
+- The new Node had its own `Certificate` and Secret within **2 seconds**, with nothing done by hand. It got no NNCP, because no certificate had been imported on it.
+- The Node was deleted at 22:14:57. Its `Certificate` was gone one second later. Its Secret was still there.
+- The cleanup policy ran at 22:15:00 and deleted that Secret.
+- The real node was not touched: `ipsec-crc`, `ipsec-cert-crc` and its tunnel were the same before and after.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/24-node-deleted.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/24-node-deleted.light.png">
+  <img alt="Terminal capture of the node deletion test: the cleanup policy created with the cleanup controller allowed to delete secrets in kcs-ipsec and not in default; a stand-in node created at 22:14:47 and two seconds later a second Certificate and Secret for it; the node deleted at 22:14:57, the Certificate gone at 22:14:58 with the Secret still present; after the cleanup policy's run at 22:15:00 only ipsec-cert-crc is left, the pending pod is gone, the worker pool is back to zero machines and the real node's tunnel is unchanged." src="images/crc/24-node-deleted.light.png">
+</picture>
+
+*Capture 24. A stand-in node appears, gets its certificate, is deleted, and is cleaned up. Text: [`evidence/crc/24-node-deleted.txt`](evidence/crc/24-node-deleted.txt).*
+
+Three values control this. They are all `true` (or the schedule) by default:
+
+| Value | Default | What it controls |
+|---|---|---|
+| `nodeCleanup.deleteCertificate` | `true` | Kyverno deletes a node's `Certificate` when the Node is deleted. `false` keeps it |
+| `nodeCleanup.deleteOrphanedSecrets` | `true` | The cleanup policy for Secrets whose `Certificate` is gone. `false` keeps those Secrets |
+| `nodeCleanup.schedule` | `*/5 * * * *` | How often the cleanup policy runs |
+
+### Step I.5 – A reboot does not take the certificate away
+
+None of the cleanup above is triggered by a reboot: a reboot does not delete the Node object. This was tested by restarting CRC with the setup in place and comparing before and after.
+
+```bash
+oc get certificate -n kcs-ipsec -o jsonpath='{range .items[*]}{.metadata.name} notAfter={.status.notAfter} revision={.status.revision}{"\n"}{end}'
+oc get secret -n kcs-ipsec ipsec-cert-crc -o jsonpath='secret uid={.metadata.uid}{"\n"}'
+oc debug node/crc -q -- chroot /host bash -c 'uptime -s; certutil -L -n left_server -d /var/lib/ipsec/nss -a | sha256sum | cut -c1-16; ipsec trafficstatus'
+
+crc stop; crc start          # then the same three commands again
+```
+
+✅ **Expected** (measured, restart from 22:32:46 to 22:35:58): the node booted at 22:32:55, and everything about the certificate is the same as before: the `Certificate` is at revision 1 with the same expiry, the Secret has the same UID, and the certificate in the node's NSS database has the same fingerprint (`dbb35eec3d71aeca`). The tunnel **came back by itself**, and the Argo CD application was still `Synced` and `Healthy`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/27-restart-keeps-certificate.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/27-restart-keeps-certificate.light.png">
+  <img alt="Terminal capture of the restart test: before the restart the Certificate ipsec-crc at revision 1, the secret's UID, the node's boot time, the certificate fingerprint dbb35eec3d71aeca and the tunnel; crc stop and crc start between 22:32:46 and 22:35:58; after it the node Ready with a new boot time of 22:32:55, the application Synced and Healthy, the same Certificate revision, the same secret UID, the same fingerprint, ipsec active, the ipsec-nas VPN activated and the tunnel established again on the node and on the NAS." src="images/crc/27-restart-keeps-certificate.light.png">
+</picture>
+
+*Capture 27. Before and after a restart: the same certificate, and the tunnel back by itself. Text: [`evidence/crc/27-restart-keeps-certificate.txt`](evidence/crc/27-restart-keeps-certificate.txt).*
+
+### Step I.6 – Remove it with Helm
+
+Deleting the chart's objects does not undo what they did: the tunnel stays on the node, and the node keeps its certificate and key. Kyverno cannot clean up here, because the uninstall takes its policies and its permissions away in the same moment ([Gotcha 11](#gotcha-11--removing-the-setup-leaves-the-certificate-and-key-on-the-node)). So the chart runs `files/uninstall.sh` **before** anything is removed, as a Helm pre-delete hook.
+
+```bash
+helm uninstall ipsec-nas -n kcs-ipsec
+```
+
+✅ **Expected** (measured, 12 seconds from 22:27:36 to 22:27:48): the hook removes the tunnel from the node, the node's certificate and key, its label, and the Secret; then Helm removes the release. Nothing is left on the cluster, on the node or on the NAS, except the root CA ConfigMap, which was created by hand and is not part of the release.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/25-helm-uninstall.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/25-helm-uninstall.light.png">
+  <img alt="Terminal capture of helm uninstall: the release uninstalled between 22:27:36 and 22:27:48; the hook's log with five steps, stopping Kyverno from creating NNCPs, removing the tunnel with an absent NNCP named ipsec-nas-remove-crc, removing the cert-ready label, removing the certificate and key from the node's NSS database, and deleting the certificates and the secret; then zero Helm releases, zero policies, zero cluster roles, no NNCP, only the root CA ConfigMap left, no label, zero entries in the node's NSS database, and no tunnel on the node or the NAS." src="images/crc/25-helm-uninstall.light.png">
+</picture>
+
+*Capture 25. `helm uninstall` with the cleanup hook, and what is left. Text: [`evidence/crc/25-helm-uninstall.txt`](evidence/crc/25-helm-uninstall.txt).*
+
+`uninstallCleanup.removeCertificates: false` makes the hook take away the tunnels and labels and leave the certificates. That setting was **not tested on a cluster**.
+
+### Step I.7 – Remove it with Argo CD
+
+> [!WARNING]
+> On this Argo CD (3.4.7), deleting the Application **ran no cleanup hook**, in either form the chart offers (`uninstallCleanup.hook: helm` or `argocd`). Everything the hook removes was left behind: the tunnel, the key in the node's NSS database, the label and the Secret. Do not delete the Application first.
+
+The procedure that was tested instead: detach the Application, run the same cleanup script as a one-off job, then delete the objects.
+
+```bash
+# 1. Detach: delete the Application and keep its objects (no cascade finalizer on it)
+oc patch application -n openshift-gitops ipsec-nas --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'   # only if it has finalizers
+oc delete application -n openshift-gitops ipsec-nas
+
+# 2. Run the cleanup while the cert-sync pods are still there
+charts/ipsec-nas/examples/run-cleanup.sh kcs-ipsec
+
+# 3. Delete the chart's objects
+helm template ipsec-nas charts/ipsec-nas -n kcs-ipsec --set prerequisites.skipCheck=true \
+  -f charts/ipsec-nas/values-crc.yaml --set trustCA.existingConfigMap=ipsec-trust-ca | oc delete --ignore-not-found -f -
+```
+
+✅ **Expected** (measured, cleanup from 22:31:46 to 22:31:57): the same five steps as in Step I.6, then 18 objects deleted, and nothing left.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/26-argocd-removal.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/26-argocd-removal.light.png">
+  <img alt="Terminal capture of removal through Argo CD. First: an Application deleted with its resources, where no hook ran and the secret, the cert-ready label, two entries in the node's NSS database and the tunnel on both sides were left behind. Then the tested procedure: the Application detached with the DaemonSet still there, run-cleanup.sh creating the job and its log showing the tunnel removed from crc, the label removed, the node cleaned and the secret deleted, 18 chart objects deleted, and nothing left on the cluster, the node or the NAS." src="images/crc/26-argocd-removal.light.png">
+</picture>
+
+*Capture 26. An Argo CD delete that left everything behind, and the procedure that does not. Text: [`evidence/crc/26-argocd-removal.txt`](evidence/crc/26-argocd-removal.txt).*
+
+### Step I.8 – Does the Grafana dashboard show what we need?
+
+This CRC has no Grafana, so the dashboard itself was last seen in the Lima lab. What can be checked here is whether its queries find the real metrics. Every panel query was run against OpenShift's monitoring on CRC:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/28-grafana-panel-queries.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/28-grafana-panel-queries.light.png">
+  <img alt="Terminal capture: all ten dashboard panels return one series for node crc from OpenShift's monitoring, tunnels up 1, tunnels down 0, workers reporting 1, certificate 365 days left, traffic rates, tunnel age, metrics age and the libreswan version; and a list of the ten exported metrics showing that ipsec_nas_collect_success, ipsec_nas_tunnel_info and ipsec_nas_certificate_import_timestamp_seconds are not used by the dashboard." src="images/crc/28-grafana-panel-queries.light.png">
+</picture>
+
+*Capture 28. The dashboard's queries against real metrics on CRC, and which metrics it does not use. Text: [`evidence/crc/28-grafana-panel-queries.txt`](evidence/crc/28-grafana-panel-queries.txt).*
+
+**What the dashboard answers today:** is every node's tunnel up, how many are down, is every worker reporting, how long until the first certificate expires, how much traffic goes through, how old each tunnel is, and which libreswan version runs. All ten panels return data on a real node.
+
+**What it does not show, although the metric exists** (no change to the DaemonSet needed):
+
+| Missing panel | Metric | Why it is worth having |
+|---|---|---|
+| Last certificate import per node | `ipsec_nas_certificate_import_timestamp_seconds` | Shows that a renewal really reached the node |
+| NAS identity per node | `ipsec_nas_tunnel_info` (`peer_id`) | Shows which NAS certificate each node is talking to |
+| libreswan answering per node | `ipsec_nas_collect_success` | Today only an alert uses it |
+| Tunnel re-established, per hour | `changes(ipsec_nas_tunnel_established_timestamp_seconds[1h])` | A tunnel that keeps dropping looks "up" on every other panel |
+
+**What needs a new metric from the DaemonSet.** When a tunnel was down during this work, the dashboard could say *that* it was down and not *why*. Each cause below happened here, and each would need one more metric:
+
+| Proposed metric | What it would tell apart | Seen in |
+|---|---|---|
+| `ipsec_nas_certificate_present` (1 or 0: `left_server` is in the node's NSS database) | "No certificate on the node" from "tunnel down for another reason". Today a missing certificate only shows as a missing series | The placeholder-secret pod (Step I.2); a node after cleanup |
+| `ipsec_nas_connection_configured` (1 or 0: NetworkManager has the `ipsec-nas` connection) | "No NNCP was applied" from "the NNCP is there and the tunnel does not come up" | The Kyverno gotchas 3 and 4 |
+| `ipsec_nas_ike_sa_established` (1 or 0) | "The NAS does not answer or refuses the login" from "logged in, and the tunnel itself is refused" | Transport mode behind NAT (Part B) |
+| `ipsec_nas_nfs_mounts` (number of NFS mounts from the NAS on the node) | Nodes that only have a tunnel from nodes that really use the NAS | The demo application stalled while the tunnel was down |
+
+None of these is built yet. They are a proposal.
 
 ---
 
@@ -1268,6 +1568,10 @@ Things that went wrong while this guide was built, in the order they were met. T
 | 7 | On a real node libreswan names the connection by UUID | Difference from the lab; the collector is fixed | Steps F.6 and H.7 |
 | 8 | The Butane download in the main guide is a Linux binary | Gap in the main guide, fixed | Step F.4 |
 | 9 | A command kept in a shell variable does nothing in zsh | Mistake in one-off commands | – |
+| 10 | Helm creates the DaemonSet before the Kyverno policies | Helm behaviour; the pods now correct themselves | Steps I.2 and I.3 |
+| 11 | Removing the setup leaves the certificate and key on the node | Gap in this repository, fixed | Steps I.6 and I.7; main guide 3.4 |
+| 12 | The uninstall hook removed everything except the tunnel, twice | Mistakes in the script, fixed | Step I.6 |
+| 13 | Argo CD 3.4.7 runs no cleanup hook when an Application is deleted | Limit of this Argo CD version | Step I.7 |
 
 ### Gotcha 1 – `ipsecConfig.mode: External` cannot install libreswan on CRC
 
@@ -1430,18 +1734,57 @@ The main guide's Step A.1 downloads `butane` from Red Hat's mirror. That file is
 
 **The fix.** Use a function (`crcssh() { ssh -i ... core@127.0.0.1 "$@"; }`) or an array. The scripts in this repository start with `#!/bin/bash` and are not affected.
 
+### Gotcha 10 – Helm creates the DaemonSet before the Kyverno policies
+
+**What happened.** After `helm install`, the first cert-sync pod mounted the placeholder secret `ipsec-cert-unassigned`.
+
+**The cause.** Each pod gets its node's secret from the Kyverno policy `ipsec-cert-sync-mount` at the moment the pod is created. Helm applies the kinds it knows first and custom resources last, so the DaemonSet exists a moment before the policy. The same happens on any cluster if Kyverno is down while a node joins. Before this work such a pod stayed in `ContainerCreating` until someone deleted it.
+
+**The fix.** The pod now starts, sees that it has the placeholder, logs `This pod mounts the placeholder secret`, waits 60 seconds and deletes itself; the DaemonSet creates it again. With Argo CD the sync waves avoid the situation altogether (Step I.3).
+
+### Gotcha 11 – Removing the setup leaves the certificate and key on the node
+
+**What happened.** Three removals each left something behind that holds a private key:
+
+- Deleting Option A's MachineConfig left the shared certificate and its key in the node's NSS database (Step G.3).
+- Removing Option B left the node's Secret in the namespace, the `cert-ready` label on the node, and the certificate, key and staging directory on the node.
+- After `helm uninstall`, the node's `Certificate` was still there, and when its Secret was deleted, cert-manager **put the Secret back** nine seconds later.
+
+**The cause.** Removing an object does not undo what it did on a node. And Kyverno, which deletes the `Certificate` when its policy is deleted, cannot do so during an uninstall: the uninstall removes Kyverno's permissions in the same moment.
+
+**The fix.** The main guide's teardown (section 3.4) now lists every one of these. The chart does it by itself in a pre-delete hook (Step I.6), in this order: tunnels, node labels, the certificate on each node, the `Certificate` objects, and only then the Secrets.
+
+### Gotcha 12 – The uninstall hook removed everything except the tunnel, twice
+
+**What happened.** The first two versions of `files/uninstall.sh` reported success and left the tunnel up on the node and on the NAS.
+
+**The mistakes.**
+
+1. The script deleted the NNCP policy and then looked for the NNCPs to turn into `state: absent`. Kyverno deletes its NNCPs together with their policy, so there were none left to find, and a deleted NNCP leaves its tunnel in place.
+2. The second version read the node list first, and then applied the `absent` NNCP under the **same name** as Kyverno's NNCP. Kyverno deleted it a moment later, before NMState had acted on it. The script's check, "is the connection gone on the node?", also passed when the check itself failed.
+
+**The fix.** Read the nodes before deleting the policy; give the removal NNCP its own name (`ipsec-nas-remove-<node>`); and wait for that new object's `Available` condition, which can only come from this change. Found only because the hook was run on a cluster and the tunnel was looked at afterwards: three install and uninstall cycles.
+
+### Gotcha 13 – Argo CD 3.4.7 runs no cleanup hook when an Application is deleted
+
+**What happened.** Deleting the Argo CD Application, with the finalizer that deletes its resources, finished in about 30 seconds and ran no hook. The tunnel, the key on the node, the label and the Secret were left behind.
+
+**What was tried.** The hook with Helm's annotation (`helm.sh/hook: pre-delete`) together with Argo CD's (`argocd.argoproj.io/hook: PreDelete`), and then with Argo CD's alone (`uninstallCleanup.hook: argocd`). Neither ran on OpenShift GitOps 1.21 (Argo CD 3.4.7); the application controller's log shows the deletion and no hook.
+
+**What to do.** Use the three steps of Step I.7. The chart keeps the `argocd` form of the hook for an Argo CD that does run `PreDelete` hooks; that was **not** seen working here.
+
 ---
 
 ## State of CRC, and how to undo everything
 
-State now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and **Option B installed and running**: the three policies, the node's certificate, the cert-sync DaemonSet, the NNCP with its tunnel, the ServiceMonitor and alert rules, and the demo application in `ipsec-nas-demo`.
+State now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and **Option B installed and running, deployed by Argo CD from Git** (Application `ipsec-nas` in `openshift-gitops`, chart `charts/ipsec-nas`): the policies, the node's certificate, the cert-sync DaemonSet, the NNCP with its tunnel, the ServiceMonitor and alert rules; plus the demo application in `ipsec-nas-demo`.
 
 To undo the rest, in this order:
 
 | What | How | Run for this guide? |
 |---|---|---|
 | The demo application | `oc delete namespace ipsec-nas-demo; oc delete pv ipsec-nas-demo` | No |
-| Option B | The teardown in the main guide's section 3.4 | No |
+| Option B (the Argo CD application) | The three steps of Step I.7 | **Yes**, measured |
 | libreswan on the node | `lab/crc/ipsec-sysext.sh remove` | **No**, not run yet |
 | Kyverno's Node filter | `helm rollback kyverno 1 -n kyverno` | No |
 | The Kyverno ClusterRoles | `oc delete -f manifests/common/03-kyverno-rbac.yaml` | No |
@@ -1453,15 +1796,16 @@ To undo the rest, in this order:
 
 ## Diagram and capture sources
 
-Figure 1 is rendered from `docs/diagrams/crc-nat/source.html` by `docs/diagrams/render.py` (see the main guide's [Diagram sources](ipsec-nas-guide.md#diagram-sources)):
+Figures 1 and 2 are rendered from `source.html` pages by `docs/diagrams/render.py` (see the main guide's [Diagram sources](ipsec-nas-guide.md#diagram-sources)):
 
 ```bash
 python3 docs/diagrams/render.py docs/diagrams/crc-nat/source.html docs/diagrams/crc-nat nat-tunnel-mode
+python3 docs/diagrams/render.py docs/diagrams/deploy-flow/source.html docs/diagrams/deploy-flow gitops-deploy-flow
 ```
 
-The Mermaid text version is `docs/diagrams/mermaid/nat-tunnel-mode.mmd`; it is not what this document displays.
+The Mermaid text versions are `docs/diagrams/mermaid/nat-tunnel-mode.mmd` and `gitops-deploy-flow.mmd`; they are not what this document displays.
 
-The numbered captures are **not** screenshots of a screen. Each one is the saved output of the commands shown in it, kept as text in `docs/evidence/crc/` and rendered as an image by `docs/images/render-terminal.py`, in a light and a dark version. Lines that start with `$` are the commands; everything else is their output, exactly as saved. Where a file leaves lines out, the step says the output is shortened. To render them again:
+Screenshots 20, 21a and 21b are real browser screenshots. The numbered captures are **not** screenshots of a screen. Each one is the saved output of the commands shown in it, kept as text in `docs/evidence/crc/` and rendered as an image by `docs/images/render-terminal.py`, in a light and a dark version. Lines that start with `$` are the commands; everything else is their output, exactly as saved. Where a file leaves lines out, the step says the output is shortened. To render them again:
 
 ```bash
 python3 docs/images/render-terminal.py docs/evidence/crc docs/images/crc

@@ -1,0 +1,43 @@
+$ helm install ipsec-nas charts/ipsec-nas -n kcs-ipsec -f charts/ipsec-nas/values-crc.yaml --set-file trustCA.pem=enterprise-root.pem; oc get pods -n kcs-ipsec; (which secret does the first pod mount?)
+2026-10-02T22:05:18Z
+NAME: ipsec-nas
+LAST DEPLOYED: Fri Oct  2 17:05:18 2026
+NAMESPACE: kcs-ipsec
+STATUS: deployed
+REVISION: 1
+DESCRIPTION: Install complete
+TEST SUITE: None
+NOTES:
+ipsec-nas is installed in namespace kcs-ipsec.
+2026-10-02T22:05:19Z
+ipsec-cert-sync-nsfkc 0/3 ContainerCreating
+ipsec-cert-sync-nsfkc mounts secret: ipsec-cert-unassigned
+$ oc logs <first pod> -c sync; then, once the NNCP is Available: oc get pods; oc logs <pod> -c sync; oc get certificate; oc get clusterpolicy | grep ipsec; oc get nncp,nnce; ipsec trafficstatus; helm list
+== the first pod's log (created before the policy)
+2026-10-02T22:05:19Z [crc] Starting
+2026-10-02T22:05:19Z [crc] This pod mounts the placeholder secret: policy ipsec-cert-sync-mount did not run when it was created.
+2026-10-02T22:05:19Z [crc] Deleting this pod in 60s so that it is created again.
+2026-10-02T22:07:00Z
+== after it corrected itself
+ipsec-cert-sync-jm5nk 3/3 Running
+ipsec-cert-sync-jm5nk mounts secret: ipsec-cert-crc
+2026-10-02T22:06:51Z [crc] Starting
+2026-10-02T22:06:51Z [crc] New or renewed certificate detected - importing into NSS
+pk12util: PKCS12 IMPORT SUCCESSFUL
+2026-10-02T22:06:51Z [crc] Import OK
+node/crc labeled
+2026-10-02T22:06:51Z [crc] Node labelled ipsec.kcs.io/cert-ready=true
+NAME        READY   SECRET           AGE
+ipsec-crc   True    ipsec-cert-crc   101s
+ipsec-cert-sync-mount           true        false        True    101s   Ready
+ipsec-nncp-per-node             true        true         True    101s   Ready
+ipsec-node-certificate          true        true         True    101s   Ready
+NAME                                                      STATUS      REASON
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc   Available   SuccessfullyConfigured
+NAME                                                             STATUS      STATUS AGE   REASON
+nodenetworkconfigurationenactment.nmstate.io/crc.ipsec-nas-crc   Available   1s           SuccessfullyConfigured
+== the tunnel
+#4: "8d3c7fd6-81a6-439b-90fe-673051ac29f1", type=ESP, add_time=1790978817, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+]: "workers"[3] 192.168.64.1 #6: responder established Child SA using #5; IPsec tunnel [192.168.64.8/32===192.168.127.2/32] {ESPinUDP/ESN=>0x01c27d5e <0x929d6d29 xfrm=AES_GCM_16_256 NATD=192.168.64.1:52769 DPD=p
+NAME     	NAMESPACE	REVISION	UPDATED                             	STATUS  	CHART          	APP VERSION
+ipsec-nas	kcs-ipsec	1       	2026-10-02 17:05:18.598787 -0500 CDT	deployed	ipsec-nas-0.1.0	1.0.0      

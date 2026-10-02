@@ -11,8 +11,9 @@ automated per node with **Kyverno**.
 | [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
 | [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
 | [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
-| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, step by step with terminal captures: the NAS certificate from the cluster's enterprise CA, libreswan on the CRC node as a system extension, the shared certificate (Option A) installed, measured, costed and removed, the standard per-node setup (Option B) installed and measured with a demo application and metrics in Observe, and a Gotchas section |
+| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | OpenShift Local (CRC) to the test NAS, step by step with captures and screenshots: the shared certificate (Option A) installed, measured, costed and removed; the standard per-node setup (Option B) with a demo application and metrics in Observe; the Helm chart deployed with Helm and with Argo CD from Git; node deletion, restart and removal; and a Gotchas section |
 | [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
+| [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart for the standard setup: prerequisites it checks, install with Helm or Argo CD (sync waves), what is cleaned up when a node is deleted or the chart is removed |
 
 ## How it works
 
@@ -50,6 +51,7 @@ docs/crc-integration-guide.md        OpenShift Local (CRC) to the test NAS
 docs/diagrams/ipsec-nas/             the figures shown in the guide (source.html + rendered PNGs)
 docs/diagrams/lima-lab/              the lab figure (source.html + rendered PNGs)
 docs/diagrams/crc-nat/               the NAT figure (source.html + rendered PNGs)
+docs/diagrams/deploy-flow/           the Git, Argo CD and Helm deployment figure
 docs/evidence/crc/                   saved command output behind the CRC guide's captures
 docs/images/crc/                     those captures as images (render-terminal.py makes them)
 docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
@@ -66,7 +68,8 @@ lab/pki/                             throwaway test CA and certificates
 lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
 lab/container/                       the test NAS as a container image
 lab/crc/                             CRC only: libreswan on the node as a system extension (remove is not run yet)
-tests/                               unit tests: metrics parser, alert rules (promtool)
+charts/ipsec-nas/                    Helm chart of the standard setup (the same objects as manifests/option-b-per-node-certs)
+tests/                               tests: metrics parser, alert rules (promtool), chart equals manifests
 docs/images/                         screenshots
 ```
 

@@ -503,7 +503,7 @@ oc auth can-i list nodes --as=system:serviceaccount:kyverno:kyverno-background-c
 - [ ] NMState Operator `Succeeded`, `NMState` instance created
 - [ ] Kyverno running (≥ 1.13), RBAC applied
 
-**Now go to Part 2.**
+**Now go to Part 2.** Part 2 explains every object step by step. Once you know them, the same objects can be installed as one release with the Helm chart in [`charts/ipsec-nas`](../charts/ipsec-nas/README.md), by hand or through Argo CD; everything in Part 1 is a prerequisite of that chart.
 
 ---
 
@@ -711,6 +711,9 @@ data:
     # the secret name in the DaemonSet template, before Kyverno replaces it
     PLACEHOLDER_SECRET=ipsec-cert-unassigned
     RECREATE_AFTER=60
+    # created in this container by the chart's uninstall hook, just before it removes the
+    # certificate from the node; without it the next check would import the certificate again
+    TEARDOWN_FLAG=/tmp/ipsec-nas-teardown
 
     log() { echo "$(date -u +%FT%TZ) [${NODE_NAME}] $*"; }
 
@@ -754,6 +757,11 @@ data:
     log "Starting"
     recreate_if_unassigned
     while true; do
+      if [[ -e "${TEARDOWN_FLAG}" ]]; then
+        log "Uninstall in progress: not importing"
+        sleep "${CHECK_EVERY}"
+        continue
+      fi
       if [[ -s /certs/tls.crt && -s /certs/tls.key && -s /ca/ca.pem ]]; then
         want=$(cat /certs/tls.crt /ca/ca.pem | sha256sum | cut -d' ' -f1)
         have=$(cat "${STAMP}" 2>/dev/null || echo none)
@@ -1304,6 +1312,22 @@ oc apply -f 31-grafana-dashboard-cr.yaml
 > [!NOTE]
 > **What was tested, and where.** The collector and the metrics container were run on the lab workers against live tunnels, including taking a tunnel down and stopping libreswan. The alert rules pass `promtool` unit tests (`tests/test-alert-rules.sh`) and loaded in a real Prometheus. The dashboard was loaded in a real Grafana 13.2.3 and all of its queries returned data. **Not tested yet:** the ServiceMonitor and PrometheusRule on an OpenShift cluster, and the `GrafanaDashboard` object against a central Grafana; no such Grafana exists on our cluster today.
 
+### Step B.13 – Clean up after a deleted node
+
+When a Node is deleted, Kyverno deletes that node's `Certificate` (policy 1 has `synchronize: true`). cert-manager leaves the Certificate's Secret behind, with the node's private key in it. This Kyverno `CleanupPolicy` deletes the cert-manager Secrets in the namespace whose Certificate no longer exists, every 5 minutes. Kyverno's cleanup controller gets the rights for it in this namespace only.
+
+```bash
+oc apply -f manifests/option-b-per-node-certs/31-cleanup-orphaned-secrets.yaml
+oc get cleanuppolicy -n kcs-ipsec
+oc auth can-i delete secrets -n kcs-ipsec --as=system:serviceaccount:kyverno:kyverno-cleanup-controller   # yes
+oc auth can-i delete secrets -n default   --as=system:serviceaccount:kyverno:kyverno-cleanup-controller   # no
+```
+
+✅ **Expected** (measured on CRC with a stand-in Node object, [`crc-integration-guide.md`](crc-integration-guide.md#step-i4--a-node-is-deleted)): the Node's `Certificate` was gone one second after the Node was deleted, and its Secret at the policy's next run. The other node's Certificate, Secret and tunnel were not touched.
+
+> [!NOTE]
+> A **reboot** does not delete the Node object, so it removes nothing: measured on CRC, the node had the same certificate after a restart and its tunnel came back by itself. If you want to keep the certificates of deleted nodes, do not apply this policy and set `synchronize: false` in policy 1.
+
 ### ✅ Part 2 checklist
 
 - [ ] All `Certificate`s `Ready`
@@ -1472,13 +1496,29 @@ oc get nnce | grep ipsec-nas
 oc get nncp -o name | grep ipsec-nas | xargs oc delete
 ```
 
-Then remove the per-node certificate pieces:
+Then take each node's certificate and private key off the node, **before** the DaemonSet is deleted (its pods are how the nodes are reached). Deleting the cluster objects alone leaves them there (measured on CRC):
+
+```bash
+for n in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do
+  oc label node "${n}" ipsec.kcs.io/cert-ready-
+  oc debug "node/${n}" -q -- chroot /host bash -c '
+    certutil -F -n left_server -d /var/lib/ipsec/nss     # the certificate AND its private key
+    certutil -D -n KCS-IPSEC-CA -d /var/lib/ipsec/nss
+    rm -rf /etc/pki/certs/kcs-ipsec'
+done
+```
+
+Then remove the per-node certificate pieces. The Certificates go first: while a Certificate exists, cert-manager puts a deleted Secret back.
 
 ```bash
 oc delete clusterpolicy ipsec-node-certificate ipsec-cert-sync-mount
 oc delete ds ipsec-cert-sync -n kcs-ipsec
-oc delete namespace kcs-ipsec           # removes Certificates and Secrets: revoke certs at the CA
+oc delete certificate -n kcs-ipsec -l generate.kyverno.io/policy-name=ipsec-node-certificate
+oc delete secret -n kcs-ipsec -l controller.cert-manager.io/fao=true
+oc delete namespace kcs-ipsec           # then ask the CA team to revoke the node certificates
 ```
+
+Installed with the Helm chart? `helm uninstall` does all of the above by itself: see [`charts/ipsec-nas/README.md`](../charts/ipsec-nas/README.md#uninstall).
 
 Appendix A only (reboots every worker):
 

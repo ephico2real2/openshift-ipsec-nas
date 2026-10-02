@@ -1,0 +1,24 @@
+$ (every panel query of the Grafana dashboard, run against OpenShift's monitoring on CRC through the Thanos querier)
+panel queries against OpenShift monitoring on CRC ($node = .*):
+  ok  Tunnels up                         1 series  -=1
+  ok  Tunnels down                       1 series  -=0
+  ok  Workers reporting                  1 series  -=1
+  ok  Soonest certificate expiry         1 series  -=365
+  ok  Tunnel state per node              1 series  crc=1
+  ok  Certificate days left per node     1 series  crc=365
+  ok  Traffic through the tunnel         1 series  crc=460.9
+  ok  Traffic through the tunnel         1 series  crc=230.6
+  ok  Tunnel age per node                1 series  crc=176.2
+  ok  Metrics age per node               1 series  crc=30.23
+  ok  libreswan version per node         1 series  crc=1
+metrics the exporter serves, and whether the dashboard or an alert uses each:
+  ipsec_nas_collect_success                            dashboard=NO  alert=yes  series on CRC: 1
+  ipsec_nas_collect_timestamp_seconds                  dashboard=yes alert=yes  series on CRC: 1
+  ipsec_nas_tunnel_up                                  dashboard=yes alert=yes  series on CRC: 1
+  ipsec_nas_tunnel_info                                dashboard=NO  alert=no  series on CRC: 1
+  ipsec_nas_tunnel_established_timestamp_seconds       dashboard=yes alert=no  series on CRC: 1
+  ipsec_nas_tunnel_in_bytes_total                      dashboard=yes alert=no  series on CRC: 1
+  ipsec_nas_tunnel_out_bytes_total                     dashboard=yes alert=no  series on CRC: 1
+  ipsec_nas_certificate_not_after_timestamp_seconds    dashboard=yes alert=yes  series on CRC: 1
+  ipsec_nas_certificate_import_timestamp_seconds       dashboard=NO  alert=no  series on CRC: 1
+  ipsec_nas_libreswan_info                             dashboard=yes alert=no  series on CRC: 1

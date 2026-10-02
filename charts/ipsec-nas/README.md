@@ -52,7 +52,21 @@ oc debug node/<node> -q -- chroot /host ipsec trafficstatus
 ```
 
 > [!NOTE]
-> Helm creates the DaemonSet a moment before the Kyverno policies. The first cert-sync pod on each node is therefore created without its node's secret. It notices, logs `This pod mounts the placeholder secret`, and deletes itself after 60 seconds; the pod that replaces it gets the secret. Measured on CRC: the tunnel was up **101 seconds** after `helm install`.
+> Helm creates the DaemonSet a moment before the Kyverno policies. The first cert-sync pod on each node is therefore created without its node's secret. It notices, logs `This pod mounts the placeholder secret`, and deletes itself after 60 seconds; the pod that replaces it gets the secret. Measured on CRC: the tunnel was up about **100 seconds** after `helm install`.
+
+## Install with Argo CD
+
+`examples/argocd-application.yaml` is an Application for this chart. Every object carries a sync wave, so Argo CD creates the permissions and ConfigMaps first, then the two Kyverno policies the DaemonSet depends on, then the DaemonSet, then the NNCP policy and the monitoring. The first pod then already has its node's secret.
+
+```bash
+oc create configmap ipsec-trust-ca -n kcs-ipsec --from-file=ca.pem=enterprise-root.pem   # or put the PEM in the Application's values
+oc apply -f charts/ipsec-nas/examples/argocd-application.yaml                            # after editing its values
+oc get application -n openshift-gitops ipsec-nas
+```
+
+Measured on CRC with Argo CD 3.4.7: `Synced` and `Healthy` 12 seconds after the sync started, tunnel up within 23 seconds of applying the Application. [`docs/crc-integration-guide.md`](../../docs/crc-integration-guide.md#part-i--the-same-setup-as-a-helm-chart-with-helm-and-with-argo-cd) has the steps, the diagram and screenshots of the application.
+
+Argo CD renders the chart without a cluster connection, so the checks that read objects (the `ClusterIssuer`, Kyverno's Node filter) do not run there; the checks for the served APIs do.
 
 ## Values
 
@@ -74,54 +88,56 @@ oc debug node/<node> -q -- chroot /host ipsec trafficstatus
 | `kyvernoRBAC.create` | `true` | The two ClusterRoles of the main guide's Step 1.7 |
 | `scc.bind` | `true` | Binds the `privileged` SCC to the cert-sync service account |
 | `metrics.serviceMonitor` / `prometheusRule` / `grafanaDashboard` | `true` / `true` / `false` | Observe, the six alerts, the dashboard ConfigMap |
+| `nodeCleanup.deleteCertificate` / `deleteOrphanedSecrets` / `schedule` | `true` / `true` / `*/5 * * * *` | What is removed when a Node is deleted |
+| `uninstallCleanup.enabled` / `hook` / `removeCertificates` | `true` / `helm` / `true` | The cleanup before the release is removed |
 | `prerequisites.skipCheck` | `false` | Only for `helm template` without a cluster |
 | `prerequisites.kyvernoNamespace` | `kyverno` | Where to look for Kyverno's configuration |
 
 `values-crc.yaml` holds the values used on OpenShift Local in [`docs/crc-integration-guide.md`](../../docs/crc-integration-guide.md). Tunnel mode, `%defaultroute` and an IP as `right` are for that lab only.
 
+## What is cleaned up, and when
+
+| Event | What happens | Controlled by |
+|---|---|---|
+| A node **reboots** | Nothing is removed. The Node object stays, so its `Certificate`, its Secret and the certificate on the node stay; the tunnel comes back by itself (measured) | – |
+| A Node is **deleted** | Kyverno deletes that node's `Certificate`. A Kyverno `CleanupPolicy` then deletes the Secret that cert-manager leaves behind (measured with a stand-in Node) | `nodeCleanup.deleteCertificate`, `nodeCleanup.deleteOrphanedSecrets`, `nodeCleanup.schedule` |
+| `helm uninstall` | `files/uninstall.sh` runs first, as a pre-delete hook: tunnels off the nodes, node labels, the certificate and key on each node, the `Certificate` objects, then the Secrets (measured: 12 seconds, nothing left) | `uninstallCleanup.enabled`, `uninstallCleanup.removeCertificates` |
+| An Argo CD Application is deleted | **Nothing is cleaned up** on Argo CD 3.4.7: it ran no hook (measured). Use the three steps below | `uninstallCleanup.hook: argocd` is there for an Argo CD that runs `PreDelete` hooks; not seen working |
+
+To keep the certificates through a node deletion **and** an uninstall, set `nodeCleanup.deleteCertificate`, `nodeCleanup.deleteOrphanedSecrets` and `uninstallCleanup.removeCertificates` to `false`. The `false` settings were not tested on a cluster.
+
 ## Uninstall
 
-`helm uninstall` removes the objects the release created. It does **not** remove what those objects did on the nodes. Follow this order (measured on CRC):
+With Helm:
 
 ```bash
-# 1. The tunnel: remove the NNCP policy first, then tell NMState to take the tunnel away
-oc delete clusterpolicy ipsec-nncp-per-node
-for n in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do
-cat <<EOF | oc apply -f -
-apiVersion: nmstate.io/v1
-kind: NodeNetworkConfigurationPolicy
-metadata:
-  name: ipsec-nas-${n}
-spec:
-  nodeSelector:
-    kubernetes.io/hostname: ${n}
-  desiredState:
-    interfaces:
-    - name: ipsec-nas
-      type: ipsec
-      state: absent
-EOF
-done
-oc get nnce | grep ipsec-nas            # wait for Available
-oc get nncp -o name | grep ipsec-nas | xargs oc delete
-
-# 2. The release
 helm uninstall ipsec-nas -n kcs-ipsec
-
-# 3. What stays behind: each node's Certificate and secret, its label, and the certificate with its key on the node.
-#    The Certificates first: while one exists, cert-manager puts its secret back.
-oc delete certificate -n kcs-ipsec -l generate.kyverno.io/policy-name=ipsec-node-certificate
-oc delete secret -n kcs-ipsec -l controller.cert-manager.io/fao=true
-for n in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do
-  oc label node "${n}" ipsec.kcs.io/cert-ready-
-  oc debug "node/${n}" -q -- chroot /host bash -c '
-    certutil -F -n left_server -d /var/lib/ipsec/nss
-    certutil -D -n KCS-IPSEC-CA -d /var/lib/ipsec/nss
-    rm -rf /etc/pki/certs/kcs-ipsec'
-done
 ```
 
-`helm uninstall` deletes `ipsec-nncp-per-node` anyway; deleting it first in step 1 is what lets the `absent` NNCP take effect without Kyverno putting the old one back. Then ask the CA team to revoke the node certificates.
+With Argo CD (three steps, measured):
+
+```bash
+# 1. Detach: delete the Application and keep its objects
+oc patch application -n openshift-gitops ipsec-nas --type=json -p '[{"op":"remove","path":"/metadata/finalizers"}]'   # only if it has finalizers
+oc delete application -n openshift-gitops ipsec-nas
+
+# 2. Run the cleanup while the cert-sync pods are still there
+charts/ipsec-nas/examples/run-cleanup.sh kcs-ipsec
+
+# 3. Delete the chart's objects (the same values as the Application)
+helm template ipsec-nas charts/ipsec-nas -n kcs-ipsec --set prerequisites.skipCheck=true -f my-values.yaml \
+  --set trustCA.existingConfigMap=ipsec-trust-ca | oc delete --ignore-not-found -f -
+```
+
+Afterwards, ask the CA team to revoke the node certificates. The hook cannot do that.
+
+What the cleanup does, in order, and why the order matters:
+
+1. Deletes the NNCP policy, so Kyverno stops re-creating NNCPs. The list of nodes is read **before** this, because Kyverno deletes its NNCPs together with the policy.
+2. Applies an NNCP with `state: absent` for each node, under its own name (`ipsec-nas-remove-<node>`), and waits for it. Deleting an NNCP does not remove a tunnel.
+3. Removes the `ipsec.kcs.io/cert-ready` label from the nodes.
+4. Removes the certificate and its private key from each node's NSS database, through that node's cert-sync pod.
+5. Deletes the `Certificate` objects and then the Secrets. While a `Certificate` exists, cert-manager puts a deleted Secret back.
 
 ## Test
 

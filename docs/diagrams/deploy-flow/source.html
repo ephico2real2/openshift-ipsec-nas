@@ -1,0 +1,140 @@
+<title>GitOps Deployment Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · deployment · 2026-10-02</div>
+    <h1>From Git to a tunnel on every node</h1>
+    <p class="lede">One figure for the Helm chart: how a change in Git reaches the cluster through Argo CD, what the chart expects to find there, and the order its objects are applied in.</p>
+  </header>
+
+  <section>
+    <h2>Git, Argo CD, and four sync waves</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 980 574" role="img" aria-label="Deployment through GitOps: a change merged to the Git repository is pulled by Argo CD, which renders the Helm chart and applies it to the cluster in four sync waves, permissions and files first, then the Kyverno policies, then the DaemonSet, then the NNCP policy and monitoring. cert-manager with the enterprise CA issuer, Kyverno, NMState and libreswan are already on the cluster and are not installed by the chart. After that the cluster gives every node a certificate and a tunnel by itself.">
+          <defs>
+            <marker id="ahd" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ahdr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+            <marker id="ahdn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--none)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="300" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="170" y="34" text-anchor="middle" fill="var(--host)">GIT · the repository</text>
+            <rect x="340" y="14" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="490" y="34" text-anchor="middle" fill="var(--none)">ARGO CD · on the cluster</text>
+            <rect x="660" y="14" width="300" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="810" y="34" text-anchor="middle" fill="var(--remote)">OPENSHIFT CLUSTER</text>
+          </g>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <rect x="30" y="60" width="280" height="78" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="44" y="81" font-weight="600" fill="var(--host)">charts/ipsec-nas, and its values</text>
+            <text x="44" y="98">a change is merged to main</text>
+            <text x="44" y="114" fill="var(--muted)">nothing is run by hand on the cluster</text>
+            <line x1="310" y1="99" x2="348" y2="99" stroke="currentColor" stroke-width="1.3" marker-end="url(#ahd)"/>
+            <text x="329" y="90" text-anchor="middle" font-size="11" fill="var(--muted)">pulls</text>
+            <rect x="350" y="60" width="280" height="78" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="81" font-weight="600">Application ipsec-nas</text>
+            <text x="364" y="98">renders the chart (helm template)</text>
+            <text x="364" y="114">and applies it in waves</text>
+            <line x1="630" y1="99" x2="668" y2="99" stroke="var(--none)" stroke-width="1.3" marker-end="url(#ahdn)"/>
+            <text x="649" y="90" text-anchor="middle" font-size="11" fill="var(--muted)">checks</text>
+            <rect x="670" y="60" width="280" height="78" rx="8" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.4"/>
+            <text x="684" y="81" font-weight="600" fill="var(--none)">Already there, not installed by the chart</text>
+            <text x="684" y="98">cert-manager + enterprise CA ClusterIssuer</text>
+            <text x="684" y="114">Kyverno · NMState · libreswan on the nodes</text>
+
+            <text x="44" y="187" font-weight="600">Why the order matters</text>
+            <text x="44" y="206">A cert-sync pod gets its node's secret from a</text>
+            <text x="44" y="222">Kyverno policy at the moment it is created.</text>
+            <text x="44" y="238">The waves put that policy in place first.</text>
+            <text x="44" y="262" fill="var(--muted)">With plain helm install the DaemonSet comes</text>
+            <text x="44" y="278" fill="var(--muted)">before the policies; the first pod then notices,</text>
+            <text x="44" y="294" fill="var(--muted)">and is created again after 60 seconds.</text>
+            <rect x="30" y="166" width="280" height="220" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+
+            <rect x="350" y="166" width="280" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="187" font-weight="600">Sync wave −2</text>
+            <text x="364" y="203" fill="var(--muted)">applied first</text>
+            <line x1="630" y1="189" x2="668" y2="189" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ahdr)"/>
+            <rect x="670" y="166" width="280" height="46" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="684" y="187" font-weight="600" fill="var(--remote)">Permissions and files</text>
+            <text x="684" y="203">RBAC, service account, scripts, root CA</text>
+            <rect x="350" y="224" width="280" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="245" font-weight="600">Sync wave −1</text>
+            <text x="364" y="261" fill="var(--muted)">after wave −2 is in place</text>
+            <line x1="630" y1="247" x2="668" y2="247" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ahdr)"/>
+            <rect x="670" y="224" width="280" height="46" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="684" y="245" font-weight="600" fill="var(--remote)">The Kyverno policies the pods depend on</text>
+            <text x="684" y="261">node certificate, mount, cleanup</text>
+            <rect x="350" y="282" width="280" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="303" font-weight="600">Sync wave 0</text>
+            <text x="364" y="319" fill="var(--muted)">after wave −1 is in place</text>
+            <line x1="630" y1="305" x2="668" y2="305" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ahdr)"/>
+            <rect x="670" y="282" width="280" height="46" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="684" y="303" font-weight="600" fill="var(--remote)">DaemonSet ipsec-cert-sync</text>
+            <text x="684" y="319">one pod per node, with its node's secret</text>
+            <rect x="350" y="340" width="280" height="46" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="364" y="361" font-weight="600">Sync wave 1</text>
+            <text x="364" y="377" fill="var(--muted)">after wave 0 is in place</text>
+            <line x1="630" y1="363" x2="668" y2="363" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ahdr)"/>
+            <rect x="670" y="340" width="280" height="46" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.4"/>
+            <text x="684" y="361" font-weight="600" fill="var(--remote)">NNCP policy, ServiceMonitor, alert rules</text>
+            <text x="684" y="377">the tunnel follows the certificate</text>
+
+            <rect x="30" y="408" width="920" height="80" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="44" y="430" font-weight="600" fill="var(--remote)">Then, for every node, with nothing more to do</text>
+            <text x="44" y="449">Kyverno creates a Certificate → cert-manager issues it → the cert-sync pod imports it and labels the node → Kyverno creates</text>
+            <text x="44" y="465">the NNCP → NMState builds the tunnel to the NAS. A stand-in new Node got its Certificate within 2 seconds.</text>
+            <text x="44" y="481" fill="var(--muted)">Measured: Synced and Healthy 12 seconds after the Application was applied; the tunnel was up within 23 seconds.</text>
+
+            <text x="30" y="516" fill="var(--muted)">Measured 2026-10-02 on OpenShift Local 4.22.7 with Argo CD 3.4.7 (OpenShift GitOps 1.21), chart from GitHub, one node.</text>
+            <text x="30" y="536" fill="var(--muted)">Removing it: this Argo CD ran no PreDelete hook. Detach the Application, run the cleanup job, then delete the objects.</text>
+            <text x="30" y="556" fill="var(--muted)">helm uninstall runs the same cleanup as a pre-delete hook.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Argo CD pulls the chart from Git and applies it in four waves. cert-manager, Kyverno, NMState and libreswan are prerequisites: the chart checks for them and never installs them. After the last wave the cluster gives every node a certificate and a tunnel by itself.</figcaption>
+    </figure>
+  </section>
+</div>

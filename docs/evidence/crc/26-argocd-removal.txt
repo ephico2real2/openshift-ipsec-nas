@@ -1,0 +1,71 @@
+$ oc delete application -n openshift-gitops ipsec-nas      (with the cascade finalizer and uninstallCleanup.hook=argocd: no hook ran)
+2026-10-02T22:29:51Z
+application.argoproj.io "ipsec-nas" deleted from openshift-gitops namespace
+2026-10-02T22:30:24Z
+== the hook's log
+== application
+Error from server (NotFound): applications.argoproj.io "ipsec-nas" not found
+== what is left
+ipsec policies: 0
+No resources found
+left in the namespace: secret/ipsec-cert-crc
+left in the namespace: configmap/ipsec-trust-ca
+cert-ready label: [true]
+entries in the node NSS database: 2
+trafficstatus: [#14: "ac4d2328-6318-4766-8ecb-7a2dc0a35e2f", type=ESP, add_time=1790980175, inBytes=99816, outBytes=109280, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=cr
+NAS trafficstatus: [#16: "workers"[8] 192.168.64.1, type=ESP, add_time=1790980175, inBytes=110100, outBytes=100424, maxBytes=2^63B, id='CN=crc.crc.testing']
+$ (the tested procedure) detach the Application; charts/ipsec-nas/examples/run-cleanup.sh kcs-ipsec; helm template ... | oc delete --ignore-not-found -f -
+2026-10-02T22:31:22Z
+== 0. install through Argo CD
+application.argoproj.io/ipsec-nas created
+2026-10-02T22:31:44Z
+#16: "7cfa0951-0bda-4840-8ee1-65bd6422be3a", type=ESP, add_time=1790980299, inBytes=12720, outBytes=
+== 1. detach: delete the Application and keep its objects
+application.argoproj.io/ipsec-nas patched
+application.argoproj.io "ipsec-nas" deleted from openshift-gitops namespace
+still there: ipsec-cert-sync
+== 2. run the cleanup
+2026-10-02T22:31:46Z
+serviceaccount/ipsec-nas-uninstall created
+configmap/ipsec-nas-uninstall created
+clusterrole.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+clusterrolebinding.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+role.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+rolebinding.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+job.batch/ipsec-nas-uninstall created
+job.batch/ipsec-nas-uninstall condition met
+2026-10-02T22:31:47Z 1. Stop Kyverno from creating NNCPs again
+clusterpolicy.kyverno.io "ipsec-nncp-per-node" deleted
+2026-10-02T22:31:47Z 2. Remove the tunnel from every node, with an NNCP that says: absent
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc condition met
+2026-10-02T22:31:54Z    tunnel removed from crc
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-remove-crc" deleted
+2026-10-02T22:31:54Z 3. Remove the cert-ready label from the nodes
+node/crc unlabeled
+2026-10-02T22:31:54Z 4. Remove each node's certificate and private key from its NSS database
+2026-10-02T22:31:54Z    cleaned the node of pod ipsec-cert-sync-fjlpj
+2026-10-02T22:31:54Z 5. Delete the Certificates first (while one exists, cert-manager puts its Secret back), then the Secrets
+clusterpolicy.kyverno.io "ipsec-node-certificate" deleted
+No resources found
+secret "ipsec-cert-crc" deleted from kcs-ipsec namespace
+2026-10-02T22:31:55Z Done. Ask the CA team to revoke the node certificates.
+serviceaccount "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+configmap "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+clusterrole.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted
+clusterrolebinding.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted
+role.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+job.batch "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+2026-10-02T22:31:57Z
+== 3. delete the chart's objects
+objects deleted: 18
+== what is left
+ipsec policies: 0
+cluster roles and bindings of the chart: 0
+No resources found
+left in the namespace: configmap/ipsec-trust-ca
+cert-ready label: []
+entries in the node NSS database: 0
+trafficstatus: []
+NAS trafficstatus: []

@@ -1,0 +1,28 @@
+%% How the Helm chart reaches a cluster through Git and Argo CD.
+%% Text source only. The figure shown in the docs is docs/diagrams/deploy-flow/gitops-deploy-flow.*.png.
+flowchart LR
+    subgraph GIT["Git: the repository"]
+        C["charts/ipsec-nas, and its values<br/>a change is merged to main<br/>nothing is run by hand on the cluster"]
+    end
+    subgraph ARGO["Argo CD, on the cluster"]
+        A["Application ipsec-nas<br/>renders the chart (helm template)<br/>and applies it in waves"]
+        W2["Sync wave -2"]
+        W1["Sync wave -1"]
+        W0["Sync wave 0"]
+        WP["Sync wave 1"]
+    end
+    subgraph CLUSTER["OpenShift cluster"]
+        P["Already there, not installed by the chart:<br/>cert-manager + enterprise CA ClusterIssuer<br/>Kyverno, NMState, libreswan on the nodes"]
+        R2["Permissions and files:<br/>RBAC, service account, scripts, root CA"]
+        R1["The Kyverno policies the pods depend on:<br/>node certificate, mount, cleanup"]
+        R0["DaemonSet ipsec-cert-sync:<br/>one pod per node, with its node's secret"]
+        RP["NNCP policy, ServiceMonitor, alert rules"]
+        N["Then, for every node:<br/>Certificate -> import and label -> NNCP -> tunnel to the NAS<br/>Measured: Synced and Healthy after 12 s, tunnel within 23 s"]
+    end
+    C -- pulls --> A
+    A -- checks --> P
+    A --> W2 --> R2
+    W2 --> W1 --> R1
+    W1 --> W0 --> R0
+    W0 --> WP --> RP
+    RP --> N

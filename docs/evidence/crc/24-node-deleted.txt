@@ -1,0 +1,46 @@
+$ oc apply -f manifests/option-b-per-node-certs/31-cleanup-orphaned-secrets.yaml; oc auth can-i delete secrets -n kcs-ipsec|default --as=system:serviceaccount:kyverno:kyverno-cleanup-controller
+2026-10-02T22:14:34Z
+role.rbac.authorization.k8s.io/kyverno-cleanup-ipsec-secrets created
+rolebinding.rbac.authorization.k8s.io/kyverno-cleanup-ipsec-secrets created
+cleanuppolicy.kyverno.io/ipsec-orphaned-node-secrets created
+yes
+no
+$ oc apply -f - <<EOF ... kind: Node, name: ipsec-test-node, label node-role.kubernetes.io/worker ... EOF; oc get nodes; oc get certificate,secret -n kcs-ipsec; oc get nncp; oc get pods -n kcs-ipsec -o wide
+2026-10-02T22:14:47Z
+== a stand-in Node object (no machine behind it)
+node/ipsec-test-node created
+2026-10-02T22:14:49Z
+crc Ready control-plane,master,worker
+ipsec-test-node Unknown worker
+NAME                    READY   SECRET                       AGE
+ipsec-crc               True    ipsec-cert-crc               3m44s
+ipsec-ipsec-test-node   True    ipsec-cert-ipsec-test-node   3s
+ipsec-cert-crc kubernetes.io/tls
+ipsec-cert-ipsec-test-node kubernetes.io/tls
+ipsec-nas-crc Available
+ipsec-cert-sync-bn8rf 0/3 Pending <none>
+ipsec-cert-sync-pbb57 3/3 Running crc
+$ oc delete node ipsec-test-node; oc get certificate -n kcs-ipsec; oc get secret -n kcs-ipsec -l controller.cert-manager.io/fao=true
+2026-10-02T22:14:57Z
+== delete the Node
+node "ipsec-test-node" deleted
+2026-10-02T22:14:58Z
+== right after: the Certificate is gone, its Secret is not
+NAME        READY   SECRET           AGE
+ipsec-crc   True    ipsec-cert-crc   3m52s
+ipsec-cert-crc kubernetes.io/tls
+ipsec-cert-ipsec-test-node kubernetes.io/tls
+ipsec-cert-sync-bn8rf 0/3 Pending <none>
+ipsec-cert-sync-pbb57 3/3 Running crc
+master True False False 1
+worker False True False 1
+$ (after the cleanup policy's next run) oc get secret ...; oc get certificate ...; oc get cleanuppolicy ... -o jsonpath='{.status.lastExecutionTime}'; oc get pods; oc get mcp; ipsec trafficstatus
+2026-10-02T22:15:08Z
+== after the cleanup policy's next run
+ipsec-cert-crc kubernetes.io/tls
+ipsec-crc True
+last run: 2026-10-02T22:15:00Z
+ipsec-cert-sync-pbb57 3/3 Running crc
+master updated=True updating=False degraded=False machines=1
+worker updated=True updating=False degraded=False machines=0
+#6: "77176d0b-3331-4aa8-a15d-8e1cf062bf03", type=ESP, add_time=1790979077, inBytes=143628, outBytes=

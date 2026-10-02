@@ -1,0 +1,38 @@
+$ helm install ipsec-nas charts/ipsec-nas -n kcs-ipsec -f charts/ipsec-nas/values-crc.yaml --set trustCA.existingConfigMap=ipsec-trust-ca      (and wait for the tunnel)
+2026-10-02T22:25:53Z
+NAME: ipsec-nas
+NAMESPACE: kcs-ipsec
+STATUS: deployed
+2026-10-02T22:27:35Z
+#12: "eb0fd912-2674-49d4-ad52-e9d928c4d034", type=ESP, add_time=1790980051, inBytes=0, outBytes=0, m
+$ helm uninstall ipsec-nas -n kcs-ipsec; oc logs -n kcs-ipsec job/ipsec-nas-uninstall      (the pre-delete hook), then what is left
+2026-10-02T22:27:36Z
+release "ipsec-nas" uninstalled
+2026-10-02T22:27:48Z
+== the hook's log
+2026-10-02T22:27:38Z 1. Stop Kyverno from creating NNCPs and Certificates again
+clusterpolicy.kyverno.io "ipsec-nncp-per-node" deleted
+clusterpolicy.kyverno.io "ipsec-node-certificate" deleted
+2026-10-02T22:27:38Z 2. Remove the tunnel from every node, with an NNCP that says: absent
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc condition met
+2026-10-02T22:27:45Z    tunnel removed from crc
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-remove-crc" deleted
+2026-10-02T22:27:45Z 3. Remove each node's certificate and private key from its NSS database
+2026-10-02T22:27:45Z    cleaned the node of pod ipsec-cert-sync-ptb6g
+2026-10-02T22:27:45Z 4. Remove the cert-ready label from the nodes
+node/crc unlabeled
+2026-10-02T22:27:45Z 5. Delete the Certificates first (while one exists, cert-manager puts its Secret back), then the Secrets
+No resources found
+secret "ipsec-cert-crc" deleted from kcs-ipsec namespace
+2026-10-02T22:27:45Z Done. Ask the CA team to revoke the node certificates.
+== what is left
+helm releases: 0
+ipsec policies: 0
+cluster roles and bindings of the chart: 0
+No resources found
+left in the namespace: configmap/ipsec-trust-ca
+cert-ready label: []
+entries in the node NSS database: 0
+trafficstatus: []
+NAS trafficstatus: []

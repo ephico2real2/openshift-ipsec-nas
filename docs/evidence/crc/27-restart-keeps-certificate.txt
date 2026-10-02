@@ -1,0 +1,37 @@
+$ (before) oc get certificate,secret -n kcs-ipsec; on the node: uptime -s; certutil -L -n left_server ...; certutil -L -n left_server -a | sha256sum | cut -c1-16; ipsec trafficstatus
+ipsec-nas   Synced        Healthy
+== before the restart
+ipsec-crc ready=True notAfter=2027-10-02T22:32:22Z revision=1
+secret uid=89a87319-5097-4217-8e53-48c1eb623309 created=2026-10-02T22:32:22Z
+2026-10-02 21:44:28
+        Serial Number:
+            Not After : Sat Oct 02 22:32:22 2027
+dbb35eec3d71aeca
+#18: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790980352, inBytes=0, outBytes=0, m
+$ crc stop; crc start
+2026-10-02T22:32:46Z crc stop
+Stopped the instance
+2026-10-02T22:32:52Z crc start
+level=info msg="Starting kubelet service"
+level=info msg="Operators are stable (3/3)..."
+Started the OpenShift cluster.
+2026-10-02T22:35:58Z done
+$ (after) the same checks, plus the pod, the NNCP and the NAS
+== after the restart
+crc Ready
+application: Synced Healthy
+ipsec-crc ready=True notAfter=2027-10-02T22:32:22Z revision=1
+secret uid=89a87319-5097-4217-8e53-48c1eb623309 created=2026-10-02T22:32:22Z
+ipsec-cert-sync-q6xpn 3/3 Running 3
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc Available
+nodenetworkconfigurationenactment.nmstate.io/crc.ipsec-nas-crc Available
+2026-10-02 22:32:55
+KCS-IPSEC-CA                                                 CT,C,C
+left_server                                                  u,u,u
+            Not After : Sat Oct 02 22:32:22 2027
+dbb35eec3d71aeca
+active
+ipsec-nas:vpn:activated
+#2: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790980430, inBytes=77732, outBytes=132444, max
+#20: "workers"[10] 192.168.64.1, type=ESP, add_time=1790980352, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=
+#22: "workers"[10] 192.168.64.1, type=ESP, add_time=0, inBytes=132444, outBytes=77732, maxBytes=2^63B, id='CN=
