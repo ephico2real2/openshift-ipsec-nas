@@ -1,0 +1,42 @@
+$ lab/crc/ipsec-sysext.sh status
+2026-10-02T21:06:45Z
+HIERARCHY EXTENSIONS SINCE
+/opt      none       -
+/usr      ipsec      Fri 2026-10-02 21:06:21 UTC
+ipsec.service: active
+Libreswan 5.3
+system_u:object_r:ipsec_exec_t:s0 /usr/libexec/ipsec/pluto
+type=AVC msg=audit(1790975183.497:5538): avc:  denied  { sys_admin } for  pid=255587 comm="ipsec" capability=21  scontext=system_u:system_r:ipsec_mgmt_t:s0 tcontext=system_u:system_r:ipsec_mgmt_t:s0 tclass=capabilit
+type=AVC msg=audit(1790975183.497:5538): avc:  denied  { sys_resource } for  pid=255587 comm="ipsec" capability=24  scontext=system_u:system_r:ipsec_mgmt_t:s0 tcontext=system_u:system_r:ipsec_mgmt_t:s0 tclass=capabi
+type=AVC msg=audit(1790975183.497:5539): avc:  denied  { sys_admin } for  pid=255595 comm="ipsec" capability=21  scontext=system_u:system_r:ipsec_mgmt_t:s0 tcontext=system_u:system_r:ipsec_mgmt_t:s0 tclass=capabilit
+type=AVC msg=audit(1790975183.497:5539): avc:  denied  { sys_resource } for  pid=255595 comm="ipsec" capability=24  scontext=system_u:system_r:ipsec_mgmt_t:s0 tcontext=system_u:system_r:ipsec_mgmt_t:s0 tclass=capabi
+$ oc debug node/crc -q -- chroot /host bash -c 'ps -eo label,pid,args | grep "[p]luto"; findmnt /usr; certutil -L -d /var/lib/ipsec/nss; rpm -q libreswan; ...'
+== pluto process and its SELinux domain
+system_u:system_r:ipsec_t:s0     255598 /usr/libexec/ipsec/pluto --leak-detective --config /etc/ipsec.conf --nofork
+== service
+active
+disabled disabled 
+== libreswan
+using kernel interface: xfrm
+dnssec-enable=yes, dnssec-rootkey-file=/var/lib/unbound/root.key, dnssec-anchors=<unset>
+nhelpers=-1, uniqueids=yes, shuntlifetime=900s, expire-lifetime=30s
+Total IPsec connections: loaded 0, routed 0, active 0
+== NSS database
+system_u:object_r:ipsec_key_file_t:s0 /var/lib/ipsec/nss
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+== /usr is now
+overlay ro,relatime,seclabel,lowerdir=/run/systemd/sysext/meta/usr:/run/systemd/sysext/extensions/ipsec/usr:/usr
+== NetworkManager VPN plugin
+system_u:object_r:ipsec_mgmt_exec_t:s0 /usr/libexec/nm-libreswan-service
+/usr/lib/NetworkManager/VPN/:
+system_u:object_r:lib_t:s0 nm-libreswan-service.name
+== rpm database (unchanged by a sysext)
+package libreswan is not installed
+== AVC denials for pluto itself
+0
+== cluster
+NAME   STATUS   ROLES                         AGE   VERSION
+crc    Ready    control-plane,master,worker   65d   v1.35.6
+master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True   False   False   1     1     1     0     65d
+cluster operators not healthy: 0

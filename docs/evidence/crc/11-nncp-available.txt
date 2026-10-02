@@ -1,0 +1,15 @@
+$ oc delete clusterpolicy ipsec-nncp-shared-cert; oc apply -f rendered/option-a-shared-cert/10-kyverno-nncp-shared-cert.yaml
+2026-10-02T21:34:07Z
+clusterpolicy.kyverno.io "ipsec-nncp-shared-cert" deleted
+clusterpolicy.kyverno.io/ipsec-nncp-shared-cert created
+$ oc get nncp; oc get nnce; oc get nnce crc.ipsec-nas-crc -o jsonpath='{range .status.conditions[*]}...'
+2026-10-02T21:34:19Z
+NAME            STATUS      REASON
+ipsec-nas-crc   Available   SuccessfullyConfigured
+NAME                STATUS      STATUS AGE   REASON
+crc.ipsec-nas-crc   Available   2s           SuccessfullyConfigured
+Progressing=False SuccessfullyConfigured: 
+Failing=False SuccessfullyConfigured: 
+Available=True SuccessfullyConfigured: successfully reconciled
+Pending=False SuccessfullyConfigured: 
+Aborted=False SuccessfullyConfigured: 

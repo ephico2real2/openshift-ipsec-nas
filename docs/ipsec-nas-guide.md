@@ -1429,6 +1429,19 @@ oc delete mc 99-worker-import-certs
 watch oc get mcp worker
 ```
 
+Deleting the MachineConfig removes the files it wrote, but **not** what was imported from them: the shared certificate and its private key stay in every node's NSS database. Remove them when the pool is updated (measured on one node in [`crc-integration-guide.md`](crc-integration-guide.md#step-g4--remove-the-shared-certificate-and-its-key-from-the-node)):
+
+```bash
+for n in $(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[*].metadata.name}'); do
+  oc debug "node/${n}" -q -- chroot /host bash -c '
+    certutil -F -n left_server -d /var/lib/ipsec/nss     # the certificate AND its private key
+    certutil -D -n CA -d /var/lib/ipsec/nss              # the CA certificate
+    certutil -L -d /var/lib/ipsec/nss'
+done
+```
+
+✅ **Expected:** an empty certificate list on every node. Then ask the CA team to revoke the shared certificate.
+
 ---
 
 ## Appendix A – Shared certificate (documented, not our standard)

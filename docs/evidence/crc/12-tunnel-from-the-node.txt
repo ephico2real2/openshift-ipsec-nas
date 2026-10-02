@@ -1,0 +1,25 @@
+$ oc debug node/crc -q -- chroot /host bash -c 'ipsec trafficstatus; ipsec status | grep ...; nmcli ...; ip xfrm policy ...; ip xfrm state | grep -E "^src|mode|encap"'
+#2: "c5ccbae6-1377-43d4-8a6b-ae155d137023", type=ESP, add_time=1790976853, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+Total IPsec connections: loaded 1, routed 1, active 1
+IKE SAs: total(1), half-open(0), open(0), authenticated(1), anonymous(0)
+IPsec SAs: total(1), authenticated(1), anonymous(0)
+ipsec-nas:vpn:activated
+-- kernel policy (no keys shown)
+src 192.168.127.2/32 dst 192.168.64.8/32 
+	dir out priority 1753281 ptype main 
+	tmpl src 192.168.127.2 dst 192.168.64.8
+		proto esp reqid 16389 mode tunnel
+src 192.168.64.8/32 dst 192.168.127.2/32 
+	dir fwd priority 1753281 ptype main 
+	tmpl src 192.168.64.8 dst 192.168.127.2
+		proto esp reqid 16389 mode tunnel
+src 192.168.127.2 dst 192.168.64.8
+	proto esp spi 0x1df57e56 reqid 16389 mode tunnel
+	encap type espinudp sport 4500 dport 4500 addr 0.0.0.0
+src 192.168.64.8 dst 192.168.127.2
+	proto esp spi 0xbb28a9f5 reqid 16389 mode tunnel
+	encap type espinudp sport 4500 dport 4500 addr 0.0.0.0
+$ limactl shell crc-nas sudo bash -c 'ipsec trafficstatus; journalctl -u ipsec --since "-3min" | grep established'
+#2: "workers"[1] 192.168.64.1, type=ESP, add_time=1790976853, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers, O=KCS'
+Oct 02 21:34:13 lima-crc-nas pluto[7038]: "workers"[1] 192.168.64.1 #1: responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise POC, CN=Enterprise Root CA'
+Oct 02 21:34:13 lima-crc-nas pluto[7038]: "workers"[1] 192.168.64.1 #2: responder established Child SA using #1; IPsec tunnel [192.168.64.8/32===192.168.127.2/32] {ESPinUDP/ESN=>0xbb28a9f5 <0x1df57e56 xfrm=AES_GCM_16_256 NATD=192.168.64.1:59351 DPD=passive}

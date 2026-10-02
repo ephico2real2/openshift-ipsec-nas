@@ -1,0 +1,29 @@
+$ oc patch networks.operator.openshift.io cluster --type=merge -p '{..."gatewayConfig":{"routingViaHost":true}...}'
+2026-10-02T20:48:28Z
+network.operator.openshift.io/cluster patched
+{"ipv4":{},"ipv6":{},"routingViaHost":true}
+$ oc apply -f manifests/common/02-nmstate-instance.yaml; oc get pods -n openshift-nmstate
+nmstate.nmstate.io/nmstate created
+nmstate-console-plugin-c7d695d6c-wvq75   1/1   Running   0     24s
+nmstate-handler-5jzth                    1/1   Running   0     25s
+nmstate-metrics-9cbc858c-mv48q           1/1   Running   0     25s
+nmstate-operator-5894554fdb-pn6lp        1/1   Running   0     12m
+nmstate-webhook-6cd895856c-9hg5h         1/1   Running   0     25s
+$ oc apply -f manifests/common/03-kyverno-rbac.yaml; oc auth can-i list nodes --as=system:serviceaccount:kyverno:<controller>
+2026-10-02T21:32:07Z
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-generate unchanged
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-read-nodes created
+kyverno-background-controller list nodes: Warning: resource 'nodes' is not namespace scoped
+yes
+kyverno-reports-controller list nodes: Warning: resource 'nodes' is not namespace scoped
+yes
+$ helm upgrade kyverno kyverno/kyverno -n kyverno --version 3.9.1 --reuse-values -f kyverno-node-values.yaml; oc get cm ... | grep -o '\[Node[^]]*\]' | sort | uniq -c
+2026-10-02T21:33:45Z
+Release "kyverno" has been upgraded. Happy Helming!
+STATUS: deployed
+REVISION: 2
+   1 [Node/?*,*,*]
+kyverno-admission-controller-7c4f4687c-srmp6 1/1 Running 13d
+kyverno-background-controller-798676bddd-vdndd 1/1 Running 13d
+kyverno-cleanup-controller-7dc684f5c-vrgxf 1/1 Running 13d
+kyverno-reports-controller-85bc9cc8db-jhrxz 1/1 Running 13d

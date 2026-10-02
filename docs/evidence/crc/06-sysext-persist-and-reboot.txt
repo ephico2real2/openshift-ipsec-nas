@@ -1,0 +1,17 @@
+$ lab/crc/ipsec-sysext.sh persist
+system_u:object_r:ipsec_mgmt_unit_file_t:s0 /etc/systemd/system/ipsec-sysext-start.service
+Created symlink /etc/systemd/system/sysinit.target.wants/systemd-sysext.service → /usr/lib/systemd/system/systemd-sysext.service.
+Created symlink /etc/systemd/system/multi-user.target.wants/ipsec-sysext-start.service → /etc/systemd/system/ipsec-sysext-start.service.
+enabled
+enabled
+$ ssh ... core@127.0.0.1 'sudo journalctl -b -u systemd-sysext -u ipsec-import -u ipsec-sysext-start'      (first boot after persist)
+Oct 02 21:13:18 crc systemd[1]: Starting Merge System Extension Images into /usr/ and /opt/...
+Oct 02 21:13:18 crc systemd[1]: Finished Merge System Extension Images into /usr/ and /opt/.
+Oct 02 21:13:18 crc systemd[1]: Starting Import external certs into ipsec NSS...
+Oct 02 21:13:18 crc ipsec-addcert.sh[985]: importing cert to NSS
+Oct 02 21:13:18 crc ipsec-addcert.sh[1027]: pk12util: PKCS12 IMPORT SUCCESSFUL
+Oct 02 21:13:19 crc systemd[1]: ipsec-import.service: Deactivated successfully.
+Oct 02 21:13:19 crc systemd[1]: Finished Import external certs into ipsec NSS.
+Oct 02 21:13:20 crc systemd[1]: Starting Start libreswan from the ipsec system extension (CRC only)...
+Oct 02 21:13:20 crc systemd[1]: ipsec-sysext-start.service: Deactivated successfully.
+Oct 02 21:13:20 crc systemd[1]: Finished Start libreswan from the ipsec system extension (CRC only).

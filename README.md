@@ -11,7 +11,7 @@ automated per node with **Kyverno**.
 | [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
 | [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
 | [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
-| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, a NAS certificate signed by the cluster's enterprise CA, why CRC cannot install libreswan the supported way and the system-extension way around it, and the shared-certificate tunnel measured from the CRC node |
+| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | Connecting OpenShift Local (CRC) on the same Mac to the test NAS: the NAT problem, the tunnel-mode fix, step by step with terminal captures: the NAS certificate from the cluster's enterprise CA, libreswan on the CRC node as a system extension, the shared certificate (Option A) installed, measured, costed and removed, and a Gotchas section |
 | [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
 
 ## How it works
@@ -50,6 +50,8 @@ docs/crc-integration-guide.md        OpenShift Local (CRC) to the test NAS
 docs/diagrams/ipsec-nas/             the figures shown in the guide (source.html + rendered PNGs)
 docs/diagrams/lima-lab/              the lab figure (source.html + rendered PNGs)
 docs/diagrams/crc-nat/               the NAT figure (source.html + rendered PNGs)
+docs/evidence/crc/                   saved command output behind the CRC guide's captures
+docs/images/crc/                     those captures as images (render-terminal.py makes them)
 docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
 docs/diagrams/render.py              re-renders the figures from source.html
 manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC

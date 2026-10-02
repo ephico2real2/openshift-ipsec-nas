@@ -1,0 +1,33 @@
+$ oc patch networks.operator.openshift.io cluster --type=merge -p '{..."ipsecConfig":{"mode":"External"}...}'
+2026-10-02T20:50:14Z
+network.operator.openshift.io/cluster patched
+{"mode":"External"}
+$ oc get mcp master -o jsonpath='{range .status.conditions[*]}{.type}={.status} msg={.message}{"\n"}{end}'      (55 seconds later)
+Updating=True reason= msg=All nodes are updating to MachineConfig rendered-master-b3f2e397f8d74fba1e653fbe4392558d
+NodeDegraded=True reason=1 nodes are reporting degraded status on sync msg=Node crc is reporting: "Node crc upgrade failure. error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86\n: exit status 1", Node crc
+$ oc debug node/crc -q -- chroot /host bash -c 'rpm-ostree status; rpm -q ...; ls -la /etc/yum.repos.d/'
+* ostree-unverified-registry:quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:fdab859490948a296e4d04353360f3834150630ec02e30a176edea52c191701d
+                  Version: 9.8.20260721-0 (2026-07-22T05:28:57Z)
+          LayeredPackages: cloud-init gvisor-tap-vsock-gvforwarder qemu-user-static-x86
+cloud-init-24.4-8.el9_8.1.noarch
+gvisor-tap-vsock-gvforwarder-0.8.7-1.el9.aarch64
+qemu-user-static-x86-10.2.2-1.fc44.aarch64
+package libreswan is not installed
+package NetworkManager-libreswan is not installed
+package nss-tools is not installed
+$ oc logs -n openshift-machine-config-operator ds/machine-config-daemon -c machine-config-daemon | grep ...
+Enabled rpm-md repositories: coreos-extensions
+rpm-md repo 'coreos-extensions' (cached); generated: 2026-07-22T05:32:31Z solvables: 136
+I1002 20:52:41.692627    7557 update.go:3363] Rolling back applied changes to OS due to error: error running rpm-ostree update --install NetworkManager-libreswan --install libreswan: error: Packages not found: cloud-init, gvisor-tap-vsock-gvforwarder, qemu-user-static-x86
+$ oc patch ... '{..."ipsecConfig":{"mode":"Disabled"}...}'; oc get mcp master; oc get co network machine-config      (the undo)
+2026-10-02T20:53:25Z
+network.operator.openshift.io/cluster patched
+{"mode":"Disabled"}
+2026-10-02T20:54:03Z
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True      False      False      1              1                   1                     0                      65d
+state=Done
+NAME             VERSION   AVAILABLE   PROGRESSING   DEGRADED   SINCE   MESSAGE
+network          4.22.7    True        False         False      65d     
+machine-config   4.22.7    True        False         False      65d     
+cluster operators not healthy: 0

@@ -1,0 +1,19 @@
+$ oc auth can-i get|list|watch nodes --as=system:serviceaccount:kyverno:<controller>      (before the fix)
+kyverno-background-controller get nodes: no
+kyverno-background-controller list nodes: no
+kyverno-background-controller watch nodes: no
+kyverno-admission-controller get nodes: no
+kyverno-admission-controller list nodes: no
+kyverno-admission-controller watch nodes: no
+kyverno-reports-controller get nodes: no
+kyverno-reports-controller list nodes: no
+kyverno-reports-controller watch nodes: no
+$ oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[Node[^]]*\]'      (before the fix)
+[Node,*,*]
+[Node/?*,*,*]
+$ helm upgrade kyverno kyverno/kyverno -n kyverno --version 3.9.1 --reuse-values -f kyverno-node-values.yaml; oc get cm ... | grep -o '\[Node[^]]*\]' | sort | uniq -c
+2026-10-02T21:33:45Z
+Release "kyverno" has been upgraded. Happy Helming!
+STATUS: deployed
+REVISION: 2
+   1 [Node/?*,*,*]

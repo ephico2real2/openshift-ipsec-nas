@@ -1,0 +1,31 @@
+$ lab/crc/ipsec-sysext.sh fetch
+extensions image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:3ae2c94227672e1f0cddab9e47ab90b071b6a25e2a17d8e6fe2df31e135f14a9
+rpms in the extensions image: 136
+== rpms needed that the node does not have
+NetworkManager-libreswan-1.2.30-1.el9.aarch64.rpm
+ldns-1.7.1-12.el9.aarch64.rpm
+libreswan-5.3-5.el9fdp.aarch64.rpm
+nspr-4.36.0-8.el9_4.aarch64.rpm
+nss-3.112.0-8.el9_4.aarch64.rpm
+nss-softokn-3.112.0-8.el9_4.aarch64.rpm
+nss-softokn-freebl-3.112.0-8.el9_4.aarch64.rpm
+nss-sysinit-3.112.0-8.el9_4.aarch64.rpm
+nss-tools-3.112.0-8.el9_4.aarch64.rpm
+nss-util-3.112.0-8.el9_4.aarch64.rpm
+== outside usr/
+./etc/crypto-policies/local.d/nss-p11-kit.config
+./etc/dbus-1/system.d/nm-libreswan-service.conf
+./etc/ipsec.conf
+./etc/ipsec.d/policies/block
+./etc/ipsec.d/policies/clear
+./etc/ipsec.d/policies/clear-or-private
+./etc/ipsec.d/policies/portexcludes.conf
+./etc/ipsec.d/policies/private
+./etc/ipsec.d/policies/private-or-clear
+./etc/ipsec.secrets
+./etc/logrotate.d/libreswan
+./etc/pam.d/pluto
+./etc/pki/nssdb/cert9.db
+./etc/pki/nssdb/key4.db
+./etc/pki/nssdb/pkcs11.txt
+files that already exist on the node: 0

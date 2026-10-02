@@ -1,0 +1,23 @@
+$ SAN_LIST=...; openssl req -new -newkey rsa:3072 -nodes -keyout left_server.key -out left_server.csr ...
+== A.2 SAN list
+DNS:crc.crc.testing
+== A.3 key and CSR
+                X509v3 Subject Alternative Name: 
+                    DNS:crc.crc.testing
+$ oc apply -f shared-certificaterequest.yaml; ...; openssl pkcs12 -export ...; openssl verify -CAfile ca.pem left_server.crt
+== A.4 the enterprise CA signs the CSR (through the existing ClusterIssuer)
+certificaterequest.cert-manager.io/ipsec-shared-workers created
+certificaterequest.cert-manager.io/ipsec-shared-workers condition met
+== A.5 ca.pem (root only)
+subject=O=Enterprise POC, CN=Enterprise Root CA
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+== A.6 bundle (no intermediate at this CA, so no -certfile)
+left_server.p12 written
+== A.7 verify
+    friendlyName: left_server
+subject=CN=ocp-ipsec-workers, O=KCS
+X509v3 Subject Alternative Name: 
+    DNS:crc.crc.testing
+notBefore=Oct  2 21:09:33 2026 GMT
+notAfter=Dec 31 21:09:33 2026 GMT
+left_server.crt: OK

@@ -1,0 +1,85 @@
+$ oc delete clusterpolicy ipsec-nncp-shared-cert; oc get nncp; oc debug node/crc ... 'ipsec trafficstatus; nmcli ... | grep -i vpn'
+2026-10-02T21:37:20Z
+clusterpolicy.kyverno.io "ipsec-nncp-shared-cert" deleted
+No resources found
+== the tunnel is still on the node (deleting an NNCP does not remove it)
+#2: "c5ccbae6-1377-43d4-8a6b-ae155d137023", type=ESP, add_time=1790976853, inBytes=34492, outBytes=5477144, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+ipsec-nas:vpn:activated
+$ oc apply -f - <<EOF ... NNCP ipsec-nas-crc with state: absent ... EOF; oc get nncp,nnce; (node and NAS checks); oc delete nncp ipsec-nas-crc
+2026-10-02T21:38:40Z
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc created
+2026-10-02T21:38:47Z
+NAME                                                      STATUS      REASON
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc   Available   SuccessfullyConfigured
+NAME                                                             STATUS      STATUS AGE   REASON
+nodenetworkconfigurationenactment.nmstate.io/crc.ipsec-nas-crc   Available   0s           SuccessfullyConfigured
+== on the node
+trafficstatus: []
+Total IPsec connections: loaded 0, routed 0, active 0
+NetworkManager vpn connections: 0
+kernel policies for the NAS: 0
+== on the NAS
+trafficstatus: []
+== delete the absent NNCP
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-crc" deleted
+No resources found
+$ oc delete mc 99-master-import-certs      (the node reboots; then crc stop, crc start)
+2026-10-02T21:38:54Z oc delete mc 99-master-import-certs
+2026-10-02T21:39:10Z API stopped answering
+2026-10-02T21:44:22Z node state before the restart:
+2026-10-02 21:41:46
+running
+kubelet: inactive
+ipsec: active
+/usr      ipsec      Fri 2026-10-02 21:41:49 UTC
+Failed to get unit file state for ipsec-import.service: No such file or directory
+2026-10-02T21:44:23Z crc stop
+Stopped the instance
+2026-10-02T21:44:25Z crc start
+level=info msg="Starting kubelet service"
+level=info msg="Operators are stable (3/3)..."
+Started the OpenShift cluster.
+2026-10-02T21:47:58Z done
+$ oc get mcp master; oc debug node/crc ... 'ls /etc/pki/certs; certutil -L -d /var/lib/ipsec/nss; ...'
+2026-10-02T21:48:07Z
+MachineConfigs named import-certs: 0
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True      False      False      1              1                   1                     0                      65d
+mco state=Done current=rendered-master-a8e0982444c8d7812f7bef6a181da1b1
+unhealthy operators: 0
+== what the MachineConfig removal took away
+files in /etc/pki/certs: 0
+ls: cannot access '/usr/local/bin/ipsec-addcert.sh': No such file or directory
+Failed to get unit file state for ipsec-import.service: No such file or directory
+== what it left behind: the NSS database still holds the shared certificate
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+CA                                                           CT,C,C
+left_server                                                  u,u,u
+== libreswan itself
+/usr      ipsec      Fri 2026-10-02 21:44:31 UTC
+active
+$ oc debug node/crc ... 'certutil -F -n left_server -d /var/lib/ipsec/nss; certutil -D -n CA -d /var/lib/ipsec/nss; certutil -L ...; certutil -K ...'
+2026-10-02T21:48:17Z
+private keys named left_server before: 1
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+certutil: Checking token "NSS Certificate DB" in slot "NSS User Private Key and Certificate Services"
+certutil: no keys found
+$ oc delete certificaterequest -n kcs-ipsec ipsec-shared-workers; (final checks on the cluster, the node and the NAS)
+2026-10-02T21:48:27Z
+certificaterequest.cert-manager.io "ipsec-shared-workers" deleted from kcs-ipsec namespace
+NAME      APPROVED   DENIED   READY   ISSUER          REQUESTER   AGE
+crc-nas   True                True    enterprise-ca   kubeadmin   72m
+== G.6 nothing of Option A is left
+ipsec policies: 0
+No resources found
+import-certs MachineConfigs: 0
+trafficstatus: []
+Total IPsec connections: loaded 0, routed 0, active 0
+Option A entries in the NSS database: 0
+NAS trafficstatus: []
+== the NAS still refuses cleartext NFS
+curl exit code: 28
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 725 bytes 5290060 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 17 bytes 1072 drop comment "nfs-cleartext-dropped"

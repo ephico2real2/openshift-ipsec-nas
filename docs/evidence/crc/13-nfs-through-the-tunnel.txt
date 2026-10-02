@@ -1,0 +1,20 @@
+$ limactl shell crc-nas sudo nft list table inet nas_ipsec_only | grep counter      (before)
+		ip saddr 192.168.64.0/24 udp dport { 500, 4500 } counter packets 7 bytes 3327 accept comment "ike"
+		ip saddr 192.168.64.0/24 meta l4proto esp counter packets 0 bytes 0 accept comment "esp-in"
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 0 bytes 0 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 11 bytes 688 drop comment "nfs-cleartext-dropped"
+$ oc debug node/crc -q -- chroot /host bash -c 'mount -t nfs4 ...; dd ... bs=1M count=5 conv=fsync; sha256sum ...; umount ...'
+192.168.64.8:/export /var/tmp/nas-test nfs4 rw,relatime,vers=4.1,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clien
+0c0d5a66e0cf381a59f094a7e92c8136868d9ad72148b26f2d0b36487e76b64a
+-rw-r--r--. 1 nfsnobody nfsnobody 5242880 Oct  2 21:34 /var/tmp/nas-test/verify-crc-option-a.bin
+tunnel outBytes: before=0 after=5477144 grew=5477144 (wrote 5242880)
+PASS: the 5 MiB write went through the IPsec tunnel
+#2: "c5ccbae6-1377-43d4-8a6b-ae155d137023", type=ESP, add_time=1790976853, inBytes=34492, outBytes=5477144, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+$ limactl shell crc-nas sudo bash -c 'ls -l /export/...; sha256sum ...; ipsec trafficstatus; nft list table inet nas_ipsec_only | grep counter'      (after)
+-rw-r--r--. 1 nobody nobody 5242880 Oct  2 21:34 /export/verify-crc-option-a.bin
+0c0d5a66e0cf381a59f094a7e92c8136868d9ad72148b26f2d0b36487e76b64a
+#2: "workers"[1] 192.168.64.1, type=ESP, add_time=1790976853, inBytes=5451260, outBytes=34492, maxBytes=2^63B, id='CN=ocp-ipsec-workers, O=KCS'
+		ip saddr 192.168.64.0/24 udp dport { 500, 4500 } counter packets 3832 bytes 5691815 accept comment "ike"
+		ip saddr 192.168.64.0/24 meta l4proto esp counter packets 0 bytes 0 accept comment "esp-in"
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 725 bytes 5290060 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 11 bytes 688 drop comment "nfs-cleartext-dropped"

@@ -1,0 +1,25 @@
+$ butane -d . 99-ipsec-master-endpoint-config.bu -o 99-ipsec-master-endpoint-config.yaml; oc apply -f 99-ipsec-master-endpoint-config.yaml
+2026-10-02T21:10:21Z
+machineconfig.machineconfiguration.openshift.io/99-master-import-certs created
+NAME                     GENERATEDBYCONTROLLER   IGNITIONVERSION   AGE
+99-master-import-certs                           3.5.0             0s
+$ oc debug node/crc -q -- chroot /host bash -c 'journalctl -b -u ipsec-import; certutil -L -d /var/lib/ipsec/nss; ...; ls -l /etc/pki/certs/'      (after crc start)
+Oct 02 21:25:07 crc ipsec-addcert.sh[995]: importing cert to NSS
+Oct 02 21:25:07 crc ipsec-addcert.sh[1038]: pk12util: PKCS12 IMPORT SUCCESSFUL
+Oct 02 21:25:07 crc systemd[1]: ipsec-import.service: Deactivated successfully.
+Oct 02 21:25:07 crc systemd[1]: Finished Import external certs into ipsec NSS.
+
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+
+CA                                                           CT,C,C
+left_server                                                  u,u,u
+        Issuer: "CN=Enterprise Root CA,O=Enterprise POC"
+            Not After : Thu Dec 31 21:09:33 2026
+        Subject: "O=KCS,CN=ocp-ipsec-workers"
+-rwxr-----. 1 root root 259 Oct  2 21:10 /usr/local/bin/ipsec-addcert.sh
+
+/etc/pki/certs/:
+total 8
+-r--------. 1 root root 1874 Oct  2 21:10 ca.pem
+-r--------. 1 root root 3682 Oct  2 21:10 left_server.p12

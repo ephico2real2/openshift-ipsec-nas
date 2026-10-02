@@ -1,0 +1,8 @@
+$ oc debug node/crc -q -- chroot /host bash -c 'ip route show default; ip route get 192.168.64.8; curl -s -m 4 --interface 192.168.127.2 telnet://192.168.64.8:2049'
+default via 192.168.127.1 dev br-ex proto dhcp src 192.168.127.2 metric 48 
+192.168.64.8 via 192.168.127.1 dev br-ex src 192.168.127.2 uid 0 
+curl exit code: 28
+		ip saddr 192.168.64.0/24 udp dport { 500, 4500 } counter packets 0 bytes 0 accept comment "ike"
+		ip saddr 192.168.64.0/24 meta l4proto esp counter packets 0 bytes 0 accept comment "esp-in"
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 0 bytes 0 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 6 bytes 384 drop comment "nfs-cleartext-dropped"

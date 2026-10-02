@@ -1,0 +1,42 @@
+$ ssh ... core@127.0.0.1 'uptime; systemctl is-system-running; systemctl --failed; systemctl is-active <unit> ...'      (14 minutes after the MachineConfig)
+== uptime
+ 21:24:29 up 11 min,  0 users,  load average: 0.01, 0.03, 0.00
+== system state
+running
+== failed units
+== key services
+kubelet                      inactive
+crio                         inactive
+systemd-sysext               active
+ipsec-sysext-start           inactive
+ipsec                        active
+ipsec-import                 inactive
+NetworkManager               active
+ovs-vswitchd                 active
+machine-config-daemon-firstboot inactive
+== jobs still queued
+No jobs running.
+$ ssh ... core@127.0.0.1 'systemctl is-enabled kubelet crio; systemctl list-dependencies --reverse kubelet.service'
+kubelet    disabled
+crio       disabled
+kubelet.service
+○ ├─crc-wait-apiserver-up.service
+○ └─crc-wait-node-ready.service
+$ crc stop; crc start
+level=info msg="Stopping the instance, this may take a few minutes..."
+Stopped the instance
+level=info msg="Starting kubelet service"
+level=info msg="Waiting for kube-apiserver availability... [takes around 2min]"
+level=info msg="Operators are stable (3/3)..."
+Started the OpenShift cluster.
+$ oc get mcp master; oc get node crc -o jsonpath=...; systemd-sysext status; systemctl is-active ipsec.service
+2026-10-02T21:28:44Z
+NAME     CONFIG                                             UPDATED   UPDATING   DEGRADED   MACHINECOUNT   READYMACHINECOUNT   UPDATEDMACHINECOUNT   DEGRADEDMACHINECOUNT   AGE
+master   rendered-master-74d9ff048e8f4b33d6227c68e6442930   True      False      False      1              1                   1                     0                      65d
+mco state=Done current=rendered-master-74d9ff048e8f4b33d6227c68e6442930
+unhealthy operators: 0
+== boot
+2026-10-02 21:25:04
+== extension and libreswan after the restart
+/usr      ipsec      Fri 2026-10-02 21:25:07 UTC
+active

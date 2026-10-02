@@ -1,0 +1,27 @@
+$ oc apply -f nas-certificaterequest.yaml; oc wait ... --for=condition=Ready; oc get certificaterequest -n kcs-ipsec crc-nas -o wide
+certificaterequest.cert-manager.io/crc-nas created
+certificaterequest.cert-manager.io/crc-nas condition met
+NAME      APPROVED   DENIED   READY   ISSUER          REQUESTER   STATUS                                         AGE
+crc-nas   True                True    enterprise-ca   kubeadmin   Certificate fetched from issuer successfully   0s
+$ openssl x509 -in crc-nas.crt -noout -subject -issuer -dates -ext ...; openssl verify -CAfile enterprise-root.pem crc-nas.crt
+subject=O=KCS OpenShift lab, CN=crc-nas.lab.internal
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+notBefore=Oct  2 20:35:41 2026 GMT
+notAfter=Dec 31 20:35:41 2026 GMT
+X509v3 Key Usage: critical
+    Digital Signature, Key Encipherment
+X509v3 Extended Key Usage: 
+    TLS Web Server Authentication, TLS Web Client Authentication
+X509v3 Basic Constraints: critical
+    CA:FALSE
+X509v3 Subject Alternative Name: 
+    DNS:crc-nas.lab.internal, IP Address:192.168.64.8
+--- root
+subject=O=Enterprise POC, CN=Enterprise Root CA
+issuer=O=Enterprise POC, CN=Enterprise Root CA
+notBefore=Sep 24 05:08:39 2026 GMT
+notAfter=Sep 23 05:08:39 2031 GMT
+X509v3 Basic Constraints: critical
+    CA:TRUE
+--- verify
+crc-nas.crt: OK
