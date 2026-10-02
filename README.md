@@ -24,17 +24,20 @@ automated per node with **Kyverno**.
 
 *Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted. The guide has the same figure with a text version, plus one figure for each certificate option.*
 
-## Choose one certificate option
+## Certificate delivery: one certificate per node
 
-| | Option A – shared certificate | Option B – per-node certificates (recommended) |
+Our standard for a production cluster is **one certificate per node** (Option B): cert-manager issues it from the cluster's enterprise CA and a DaemonSet imports it. The shared-certificate method Red Hat documents (Option A) is kept in the guide's Appendix A for reference and is not used.
+
+| | Per-node certificates (our standard) | Shared certificate (Appendix A, not used) |
 |---|---|---|
-| Cert delivery | One `.p12` in a MachineConfig | cert-manager per node + import DaemonSet |
-| Red Hat documented | Yes | NMState/IPsec part yes; cert delivery is custom |
-| Adding a worker | Manual re-issue + full worker reboot | Automatic, no reboot |
-| Renewal | Manual, disruptive | Automatic |
-| Revoke one node | No | Yes |
+| Cert delivery | cert-manager per node + import DaemonSet | One `.p12` in a MachineConfig |
+| Red Hat documented | NMState/IPsec part yes; cert delivery is custom | Yes |
+| Adding a worker | Automatic, no reboot | Manual re-issue + full worker reboot |
+| Renewal | Automatic | Manual, disruptive |
+| Revoke one node | Yes | No |
+| Monitoring | Per-node metrics, alerts, Grafana dashboard | None |
 
-> ⚠️ Never run Option A and Option B on the same cluster — both write the NSS nickname `left_server`.
+> ⚠️ Never run both on the same cluster — both write the NSS nickname `left_server`.
 
 ## Layout
 
@@ -50,8 +53,8 @@ docs/diagrams/crc-nat/               the NAT figure (source.html + rendered PNGs
 docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
 docs/diagrams/render.py              re-renders the figures from source.html
 manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC
-manifests/option-a-shared-cert/      Part 2: Butane MachineConfig + NNCP generate policy
-manifests/option-b-per-node-certs/   Part 3: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet,
+manifests/option-a-shared-cert/      Appendix A (not used): Butane MachineConfig + NNCP generate policy
+manifests/option-b-per-node-certs/   Part 2, our standard: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet,
                                      metrics scripts, ServiceMonitor, alert rules, Grafana dashboard
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
@@ -76,14 +79,14 @@ export CLUSTER_ISSUER="company-issuer-rnd"   # placeholder: the enterprise CA Cl
 
 Then follow the guide. The cluster-level patches (`routingViaHost`, `ipsecConfig.mode: External`),
 the Kyverno Helm install and the cert/CA steps are commands in the guide, not manifests here.
-Apply the files in numeric order **only as the guide tells you** — e.g. in Option B,
+Apply the files in numeric order **only as the guide tells you** — e.g.
 `24-kyverno-cert-sync-mount.yaml` must be Ready before `26-cert-sync-daemonset.yaml`.
 
 ## Requirements (summary)
 
 - OpenShift 4.19 (design target), RHCOS workers, bare metal / vSphere / RHOSP / GCP
 - Kyverno ≥ 1.13 (community software, not Red Hat supported)
-- Option B: cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the guide is a placeholder for its name (`CLUSTER_ISSUER`).
+- cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the guide is a placeholder for its name (`CLUSTER_ISSUER`).
 - NAS supporting IKEv2 transport mode with PKI auth, chaining to the same enterprise root CA
 
 ## Security

@@ -16,7 +16,7 @@ The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) builds the IPsec tun
 
 ## Before you start
 
-- [ ] The main guide is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel (main guide, section 4.2).
+- [ ] The main guide is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel (main guide, section 3.2).
 - [ ] You know the NAS IP and the path it exports.
 - [ ] You are logged in with `oc` as `cluster-admin`. A PersistentVolume is a cluster-wide object.
 

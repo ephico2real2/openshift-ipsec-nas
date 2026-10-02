@@ -3,7 +3,7 @@
 flowchart LR
     subgraph CLUSTER["Cluster: what you apply"]
         NET["Cluster network settings<br/>ipsecConfig.mode: External<br/>routingViaHost: true"]
-        CERT["Node certificate delivery<br/>A: MachineConfig, one shared cert<br/>B: cert-manager + DaemonSet"]
+        CERT["Node certificate delivery<br/>cert-manager: one cert per node<br/>cert-sync DaemonSet imports it"]
         NNCP["Kyverno: one NNCP per worker<br/>ipsec-nas-NODE<br/>NMState applies it on that node"]
         WL["Workload with an NFS volume<br/>PVC backed by the NAS"]
     end
