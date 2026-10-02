@@ -806,6 +806,7 @@ What each piece does:
 | **Policy 2** `ipsec-cert-sync-mount` | When the DaemonSet starts a pod on a node, mount **only that node's** Secret into it. |
 | **DaemonSet** `ipsec-cert-sync` | Imports the cert into the node's NSS DB, labels the node `ipsec.kcs.io/cert-ready=true`, re-imports on renewal. |
 | **Policy 3** `ipsec-nncp-per-node` | Only after the label appears, create the NNCP for that node. This prevents NNCPs failing because the cert isn't there yet. |
+| **Metrics** (in the same DaemonSet) | Each pod reports whether its node's tunnel is up, how much traffic it carries and when the node's certificate expires. OpenShift's monitoring scrapes it, and alerts fire when a tunnel is down (Step B.12). |
 
 > [!IMPORTANT]
 > ### Risks and responsibilities for Option B
@@ -1111,13 +1112,30 @@ oc get clusterpolicy ipsec-cert-sync-mount       # READY must be True
 
 ### Step B.8 – Deploy the DaemonSet
 
+Each pod has three containers:
+
+| Container | Privileged? | Job |
+|---|---|---|
+| `sync` | Yes | Imports the node's certificate into the host's NSS database and labels the node (Step B.5). |
+| `collector` | Yes, host mounted **read-only** | Every 30 seconds reads the tunnel and certificate state from the host and writes it as Prometheus metrics into a shared volume. |
+| `metrics` | **No** | Serves that file on port 9754 (`/metrics`). It is the pod's only network listener and has no access to the host. |
+
 The template's `node-cert` volume points at a placeholder Secret (`ipsec-cert-unassigned`) that **does not exist**. If the Kyverno mutation ever fails, the pod waits safely instead of importing the wrong certificate.
 
 > [!NOTE]
-> The image is the OpenShift CLI image shipped with every cluster (`openshift/cli` image stream). If the internal image registry is disabled, replace it with our mirrored `ose-cli` image.
+> `sync` and `collector` use the OpenShift CLI image shipped with every cluster (`openshift/cli` image stream). If the internal image registry is disabled, replace it with our mirrored `ose-cli` image. `metrics` uses the Red Hat UBI Python image `registry.access.redhat.com/ubi9/python-312`; mirror it too on a disconnected cluster.
+
+First the two scripts the `collector` and `metrics` containers run. They are long, and unit-tested in the repository, so apply the file from the repository instead of typing them:
 
 ```bash
-cat <<'EOF' > 25-cert-sync-daemonset.yaml
+oc apply -f manifests/option-b-per-node-certs/25-metrics-scripts.yaml     # run from the repository root
+oc get configmap ipsec-metrics-scripts -n kcs-ipsec
+```
+
+Then the DaemonSet:
+
+```bash
+cat <<'EOF' > 26-cert-sync-daemonset.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -1168,6 +1186,74 @@ spec:
         - name: script
           mountPath: /scripts
           readOnly: true
+      # Reads the tunnel and certificate state from the host every 30 seconds and writes it as
+      # Prometheus metrics into the shared "metrics" volume. The host is mounted read-only.
+      - name: collector
+        image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+        command: ["/bin/bash", "/metrics-scripts/collect.sh"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        volumeMounts:
+        - name: host
+          mountPath: /host
+          readOnly: true
+        - name: metrics
+          mountPath: /metrics
+        - name: metrics-scripts
+          mountPath: /metrics-scripts
+          readOnly: true
+      # Serves the collector's file on :9754/metrics. Unprivileged: the only network listener in
+      # this pod has no access to the host.
+      - name: metrics
+        image: registry.access.redhat.com/ubi9/python-312:latest
+        command: ["python3", "/metrics-scripts/serve.py"]
+        ports:
+        - name: metrics
+          containerPort: 9754
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          periodSeconds: 30
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 5m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        volumeMounts:
+        - name: metrics
+          mountPath: /metrics
+          readOnly: true
+        - name: metrics-scripts
+          mountPath: /metrics-scripts
+          readOnly: true
       volumes:
       - name: host
         hostPath:
@@ -1184,22 +1270,28 @@ spec:
         configMap:
           name: ipsec-cert-sync-script
           defaultMode: 0555
+      - name: metrics
+        emptyDir: {}
+      - name: metrics-scripts
+        configMap:
+          name: ipsec-metrics-scripts
+          defaultMode: 0555
 EOF
 
-oc apply -f 25-cert-sync-daemonset.yaml
+oc apply -f 26-cert-sync-daemonset.yaml
 ```
 
 Verify:
 
 ```bash
-# 1. One Running pod per worker
+# 1. One Running pod per worker, 3/3 containers ready
 oc get pods -n kcs-ipsec -o wide
 
 # 2. Each pod mounts ITS OWN node's secret
 oc get pods -n kcs-ipsec -o custom-columns='POD:.metadata.name,NODE:.spec.nodeName,SECRET:.spec.volumes[?(@.name=="node-cert")].secret.secretName'
 
 # 3. Logs show "Import OK" and "Node labelled"
-oc logs -n kcs-ipsec -l app=ipsec-cert-sync --prefix --tail=20
+oc logs -n kcs-ipsec -l app=ipsec-cert-sync -c sync --prefix --tail=20
 
 # 4. Every worker has the label
 oc get nodes -l node-role.kubernetes.io/worker -L ipsec.kcs.io/cert-ready
@@ -1207,9 +1299,12 @@ oc get nodes -l node-role.kubernetes.io/worker -L ipsec.kcs.io/cert-ready
 # 5. The cert is in one node's NSS database
 NODE=$(oc get nodes -l node-role.kubernetes.io/worker -o jsonpath='{.items[0].metadata.name}')
 oc debug node/${NODE} -- chroot /host certutil -L -d /var/lib/ipsec/nss
+
+# 6. The pod serves metrics (the tunnel itself comes in the next step, so tunnel_up is still 0)
+oc exec -n kcs-ipsec ds/ipsec-cert-sync -c metrics -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:9754/metrics').read().decode())" | grep -E '^ipsec_nas_(collect_success|tunnel_up)'
 ```
 
-✅ **Expected:** in check 2, `SECRET` equals `ipsec-cert-<that NODE>` on every row. In check 5, you see `left_server u,u,u` and `KCS-IPSEC-CA CT,C,C`.
+✅ **Expected:** in check 2, `SECRET` equals `ipsec-cert-<that NODE>` on every row. In check 5, you see `left_server u,u,u` and `KCS-IPSEC-CA CT,C,C`. In check 6, `ipsec_nas_collect_success{...} 1` and `ipsec_nas_tunnel_up{...} 0`.
 
 ### Step B.9 – Policy 3: NNCP per node, only when its cert is ready
 
@@ -1217,7 +1312,7 @@ oc debug node/${NODE} -- chroot /host certutil -L -d /var/lib/ipsec/nss
 > **Stop here until the NAS side is ready.** This step creates the NNCPs, so the storage team must have finished [4.1](#41-nas-configuration-storage-team-not-us) first.
 
 ```bash
-cat <<EOF > 26-kyverno-nncp-per-node.yaml
+cat <<EOF > 27-kyverno-nncp-per-node.yaml
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -1266,7 +1361,7 @@ spec:
                 # ike: aes256-sha2;dh20
 EOF
 
-oc apply -f 26-kyverno-nncp-per-node.yaml
+oc apply -f 27-kyverno-nncp-per-node.yaml
 oc get clusterpolicy ipsec-nncp-per-node         # READY must be True
 ```
 
@@ -1309,6 +1404,95 @@ done
 
 Then **revoke** that node's certificate at the CA, following our CA process. Option B makes this possible because each node has its own certificate.
 
+### Step B.12 – Metrics in Observe, alerts and a dashboard
+
+The `collector` and `metrics` containers from Step B.8 already produce the numbers. This step makes OpenShift collect them, adds alerts, and ships a Grafana dashboard.
+
+What every node reports:
+
+| Metric | Meaning |
+|---|---|
+| `ipsec_nas_tunnel_up` | `1` if the node has an established tunnel to the NAS, `0` if not |
+| `ipsec_nas_tunnel_out_bytes_total`, `ipsec_nas_tunnel_in_bytes_total` | Traffic through the tunnel. NFS shows up here. |
+| `ipsec_nas_tunnel_established_timestamp_seconds` | When the current tunnel came up |
+| `ipsec_nas_tunnel_info` | The identity the NAS presented (label `peer_id`) |
+| `ipsec_nas_certificate_not_after_timestamp_seconds` | When the certificate in the node's NSS database expires |
+| `ipsec_nas_certificate_import_timestamp_seconds` | When cert-sync last imported a certificate |
+| `ipsec_nas_collect_success`, `ipsec_nas_collect_timestamp_seconds` | Whether libreswan answered, and when the collector last ran |
+| `ipsec_nas_libreswan_info` | The libreswan version (label `version`) |
+
+Every metric carries a `node` label with the node's name.
+
+**1. Check that user workload monitoring is on.** It is what scrapes metrics outside the `openshift-*` namespaces.
+
+```bash
+oc get pods -n openshift-user-workload-monitoring
+```
+
+✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
+
+**2. Apply the Service and ServiceMonitor, the alert rules and the dashboard**, from the repository root:
+
+```bash
+oc apply -f manifests/option-b-per-node-certs/28-metrics-servicemonitor.yaml
+oc apply -f manifests/option-b-per-node-certs/29-prometheus-rule.yaml
+oc apply -f manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
+
+oc get servicemonitor,prometheusrule -n kcs-ipsec
+```
+
+**3. See it in the console.** Open **Observe → Metrics**, run the query `ipsec_nas_tunnel_up`, and you get one row per worker. The alerts are under **Observe → Alerting → Alerting rules** (filter by source *User*).
+
+✅ **Expected:** value `1` for every worker, with labels `node` and `connection="ipsec-nas"`.
+
+The alerts:
+
+| Alert | Fires when | Severity |
+|---|---|---|
+| `IpsecNasTunnelDown` | A node has had no tunnel for 5 minutes | critical |
+| `IpsecNasLibreswanNotAnswering` | libreswan on a node has not answered the collector for 5 minutes | warning |
+| `IpsecNasCertificateExpiringSoon` | A node's certificate has less than 14 days left. cert-manager renews at 30 days, so this means a renewal did not reach the node. | warning |
+| `IpsecNasCertificateExpired` | A node's certificate has expired | critical |
+| `IpsecNasMetricsStale` | A node's metrics are more than 5 minutes old (the collector stopped) | warning |
+| `IpsecNasExporterMissing` | A worker reports no metrics at all for 15 minutes | warning |
+
+**4. Grafana (optional).** The dashboard is a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
+
+```bash
+cat <<'EOF' > 31-grafana-dashboard-cr.yaml
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: ipsec-nas
+  namespace: kcs-ipsec
+spec:
+  allowCrossNamespaceImport: true      # the Grafana instance lives in another namespace
+  resyncPeriod: 10m
+  instanceSelector:
+    matchLabels:
+      dashboards: grafana              # CHANGE: the labels on the central Grafana instance
+  configMapRef:
+    name: ipsec-nas-grafana-dashboard
+    key: ipsec-nas.json
+  datasources:
+  - inputName: DS_PROMETHEUS
+    datasourceName: openshift-thanos   # CHANGE: that Grafana's Prometheus (Thanos) datasource
+EOF
+
+oc apply -f 31-grafana-dashboard-cr.yaml
+```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/grafana-ipsec-nas.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/grafana-ipsec-nas.light.png">
+  <img alt="The IPsec to the NAS dashboard in Grafana: 2 tunnels up, 0 down, 2 workers reporting, 29.9 days until the soonest certificate expiry, both nodes UP, a traffic graph and per-node tunnel age, metrics age and libreswan version." src="images/grafana-ipsec-nas.light.png">
+</picture>
+
+*The dashboard in the Lima lab on 2026-10-02, fed by two stand-in workers: 2 tunnels up, 0 down, 29.9 days to the soonest certificate expiry (the lab's test certificates last 30 days, hence yellow), and the traffic of a 5 MiB test write on each node.*
+
+> [!NOTE]
+> **What was tested, and where.** The collector and the metrics container were run on the lab workers against live tunnels, including taking a tunnel down and stopping libreswan. The alert rules pass `promtool` unit tests (`tests/test-alert-rules.sh`) and loaded in a real Prometheus. The dashboard was loaded in a real Grafana 13.2.3 and all of its queries returned data. **Not tested yet:** the ServiceMonitor and PrometheusRule on an OpenShift cluster, and the `GrafanaDashboard` object against a central Grafana; no such Grafana exists on our cluster today.
+
 ### ✅ Option B checklist
 
 - [ ] All `Certificate`s `Ready`
@@ -1316,6 +1500,7 @@ Then **revoke** that node's certificate at the CA, following our CA process. Opt
 - [ ] All workers labelled `ipsec.kcs.io/cert-ready=true`
 - [ ] One NNCP per worker, all NNCEs `Available`
 - [ ] Scale-up test passed
+- [ ] `ipsec_nas_tunnel_up` is `1` for every worker in **Observe → Metrics**
 - [ ] Red Hat support stance recorded in the change ticket
 
 ---
@@ -1428,6 +1613,9 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 |---|---|---|
 | No Kyverno pods; `oc get events -n kyverno` shows `unable to validate against any security context constraint` | Chart sets a fixed user ID that `restricted-v2` rejects | Apply the SCC setting in Step 1.6.3, then `helm upgrade` with the same flags |
 | `clusterpolicy` READY = False | Policy syntax or missing RBAC | `oc describe clusterpolicy <name>`; re-check Step 1.7 |
+| Alert `IpsecNasTunnelDown` for a node (B) | That node's tunnel is not established | `oc debug node/<node> -- chroot /host ipsec trafficstatus`; then `journalctl -u ipsec` on the node. Check the NNCE for that node. |
+| `ipsec_nas_tunnel_up` returns nothing in Observe → Metrics (B) | Metrics are not scraped | `oc get servicemonitor -n kcs-ipsec`; `oc get pods -n openshift-user-workload-monitoring`; the pods must be `3/3` (Step B.8) |
+| Alert `IpsecNasMetricsStale` (B) | The `collector` container stopped | `oc logs -n kcs-ipsec <pod> -c collector`; delete the pod to restart it |
 | No NNCP / Certificate created | Kyverno generate error | `oc get updaterequests -n kyverno`; `oc logs -n kyverno deploy/kyverno-background-controller` |
 | Certificate not `Ready` (B) | Issuer rejected the request | `oc describe certificate ipsec-<node> -n kcs-ipsec`; `oc get certificaterequest -n kcs-ipsec`; check the issuer: `oc get clusterissuer "${CLUSTER_ISSUER}"` |
 | cert-sync pod `ContainerCreating`, event says `secret "ipsec-cert-unassigned" not found` (B) | Kyverno mutation did not run | Check policy `ipsec-cert-sync-mount` is Ready, then `oc delete pod <pod> -n kcs-ipsec` |

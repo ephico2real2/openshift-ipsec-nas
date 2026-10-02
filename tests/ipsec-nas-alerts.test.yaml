@@ -1,0 +1,123 @@
+# promtool unit tests for the alert rules in
+# manifests/option-b-per-node-certs/29-prometheus-rule.yaml.
+# tests/test-alert-rules.sh extracts the rules and runs these.
+rule_files:
+- ipsec-nas.rules.yaml
+
+evaluation_interval: 1m
+
+tests:
+# One healthy worker, one whose tunnel goes down at minute 10, and a third worker with no exporter.
+- interval: 1m
+  input_series:
+  - series: 'ipsec_nas_tunnel_up{node="worker-0",connection="ipsec-nas"}'
+    values: '1x30'
+  - series: 'ipsec_nas_tunnel_up{node="worker-1",connection="ipsec-nas"}'
+    values: '1x9 0x20'
+  - series: 'ipsec_nas_collect_success{node="worker-0"}'
+    values: '1x30'
+  - series: 'ipsec_nas_collect_success{node="worker-1"}'
+    values: '1x30'
+  # collected every minute: the timestamp advances with the clock
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="worker-0"}'
+    values: '0+60x30'
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="worker-1"}'
+    values: '0+60x30'
+  - series: 'kube_node_role{node="worker-0",role="worker"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="worker-1",role="worker"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="worker-2",role="worker"}'
+    values: '1x30'
+  - series: 'kube_node_role{node="master-0",role="master"}'
+    values: '1x30'
+  alert_rule_test:
+  # down since minute 10, "for: 5m" not yet served at minute 13
+  - eval_time: 13m
+    alertname: IpsecNasTunnelDown
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: IpsecNasTunnelDown
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        node: worker-1
+        connection: ipsec-nas
+      exp_annotations:
+        summary: "Node worker-1 has no IPsec tunnel to the NAS"
+        description: "NFS from this node to the NAS is not encrypted, or is failing if the NAS rejects cleartext. On the node: ipsec trafficstatus, then journalctl -u ipsec."
+  # the worker without an exporter is reported after 15 minutes; the master never is
+  - eval_time: 14m
+    alertname: IpsecNasExporterMissing
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: IpsecNasExporterMissing
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        node: worker-2
+        role: worker
+      exp_annotations:
+        summary: "Worker worker-2 reports no IPsec metrics"
+        description: "No ipsec-cert-sync pod is being scraped on this worker, so nothing is watching its tunnel. oc get pods -n kcs-ipsec -o wide."
+  - eval_time: 16m
+    alertname: IpsecNasMetricsStale
+    exp_alerts: []
+  - eval_time: 16m
+    alertname: IpsecNasLibreswanNotAnswering
+    exp_alerts: []
+
+# The collector stops at minute 5 (its timestamp freezes) and libreswan stops answering on another node.
+- interval: 1m
+  input_series:
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="worker-0"}'
+    values: '0+60x5 300x25'
+  - series: 'ipsec_nas_collect_success{node="worker-1"}'
+    values: '1x4 0x26'
+  alert_rule_test:
+  # frozen at 300s; older than 300s from minute 11; plus "for: 5m"
+  - eval_time: 14m
+    alertname: IpsecNasMetricsStale
+    exp_alerts: []
+  - eval_time: 17m
+    alertname: IpsecNasMetricsStale
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        node: worker-0
+      exp_annotations:
+        summary: "IPsec metrics from node worker-0 are 12m 0s old"
+        description: "The collector container in the ipsec-cert-sync pod on that node has stopped writing."
+  - eval_time: 11m
+    alertname: IpsecNasLibreswanNotAnswering
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        node: worker-1
+      exp_annotations:
+        summary: "libreswan on node worker-1 does not answer"
+        description: "The collector could not run \"ipsec trafficstatus\" on the node, so the tunnel state is unknown. On the node: systemctl status ipsec."
+
+# Certificates: one with 10 days left, one already expired, one with 60 days left.
+- interval: 1m
+  input_series:
+  - series: 'ipsec_nas_certificate_not_after_timestamp_seconds{node="worker-0",nickname="left_server"}'
+    values: '864000x120'      # 10 days after time 0
+  - series: 'ipsec_nas_certificate_not_after_timestamp_seconds{node="worker-1",nickname="left_server"}'
+    values: '60x120'          # expired one minute in
+  - series: 'ipsec_nas_certificate_not_after_timestamp_seconds{node="worker-2",nickname="left_server"}'
+    values: '5184000x120'     # 60 days
+  alert_rule_test:
+  - eval_time: 30m
+    alertname: IpsecNasCertificateExpiringSoon
+    exp_alerts: []            # "for: 1h" not served yet
+  - eval_time: 5m
+    alertname: IpsecNasCertificateExpired
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        node: worker-1
+        nickname: left_server
+      exp_annotations:
+        summary: "The IPsec certificate on node worker-1 has expired"
+        description: "The NAS will refuse this node. Renew the Certificate ipsec-worker-1 in kcs-ipsec."

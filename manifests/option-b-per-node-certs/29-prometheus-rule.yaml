@@ -1,0 +1,78 @@
+# Alerts on the per-node IPsec tunnel to the NAS. They appear under Observe > Alerting.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ipsec-nas
+  namespace: kcs-ipsec
+  labels:
+    app: ipsec-cert-sync
+spec:
+  groups:
+  - name: ipsec-nas
+    rules:
+    - alert: IpsecNasTunnelDown
+      expr: ipsec_nas_tunnel_up == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.node }} has no IPsec tunnel to the NAS"
+        description: >-
+          NFS from this node to the NAS is not encrypted, or is failing if the NAS rejects
+          cleartext. On the node: ipsec trafficstatus, then journalctl -u ipsec.
+
+    - alert: IpsecNasLibreswanNotAnswering
+      expr: ipsec_nas_collect_success == 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "libreswan on node {{ $labels.node }} does not answer"
+        description: >-
+          The collector could not run "ipsec trafficstatus" on the node, so the tunnel state is
+          unknown. On the node: systemctl status ipsec.
+
+    # cert-manager renews 30 days before expiry and cert-sync imports the new certificate within
+    # five minutes. Less than 14 days left means a renewal did not reach this node.
+    - alert: IpsecNasCertificateExpiringSoon
+      expr: (ipsec_nas_certificate_not_after_timestamp_seconds - time()) < 14 * 86400
+      for: 1h
+      labels:
+        severity: warning
+      annotations:
+        summary: "The IPsec certificate on node {{ $labels.node }} expires in {{ $value | humanizeDuration }}"
+        description: >-
+          Check the Certificate ipsec-{{ $labels.node }} in kcs-ipsec and the cert-sync pod's log
+          on that node.
+
+    - alert: IpsecNasCertificateExpired
+      expr: ipsec_nas_certificate_not_after_timestamp_seconds < time()
+      labels:
+        severity: critical
+      annotations:
+        summary: "The IPsec certificate on node {{ $labels.node }} has expired"
+        description: "The NAS will refuse this node. Renew the Certificate ipsec-{{ $labels.node }} in kcs-ipsec."
+
+    # The metrics container keeps serving the last file if the collector stops, so a stopped
+    # collector shows up here and nowhere else.
+    - alert: IpsecNasMetricsStale
+      expr: (time() - ipsec_nas_collect_timestamp_seconds) > 300
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "IPsec metrics from node {{ $labels.node }} are {{ $value | humanizeDuration }} old"
+        description: "The collector container in the ipsec-cert-sync pod on that node has stopped writing."
+
+    # kube_node_role comes from the platform's kube-state-metrics. User-defined rules are
+    # evaluated through Thanos, which can read it.
+    - alert: IpsecNasExporterMissing
+      expr: kube_node_role{role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Worker {{ $labels.node }} reports no IPsec metrics"
+        description: >-
+          No ipsec-cert-sync pod is being scraped on this worker, so nothing is watching its
+          tunnel. oc get pods -n kcs-ipsec -o wide.

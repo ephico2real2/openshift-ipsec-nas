@@ -51,7 +51,8 @@ docs/diagrams/mermaid/               Mermaid text versions of the same figures (
 docs/diagrams/render.py              re-renders the figures from source.html
 manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC
 manifests/option-a-shared-cert/      Part 2: Butane MachineConfig + NNCP generate policy
-manifests/option-b-per-node-certs/   Part 3: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet
+manifests/option-b-per-node-certs/   Part 3: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet,
+                                     metrics scripts, ServiceMonitor, alert rules, Grafana dashboard
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
 lab/lab.sh                           creates and verifies the Lima lab (runs on the Mac)
@@ -59,6 +60,8 @@ lab/lima/                            Lima templates: lab VMs, and a NAS VM that 
 lab/pki/                             throwaway test CA and certificates
 lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
 lab/container/                       the test NAS as a container image
+tests/                               unit tests: metrics parser, alert rules (promtool)
+docs/images/                         screenshots
 ```
 
 Files ending in `.tmpl` contain `${NODE_DOMAIN}`, `${NAS_FQDN}`, `${NAS_IP}`, `${NAS_EXPORT}`, `${CLUSTER_ISSUER}` or `${OCP_VERSION}`.
@@ -74,7 +77,7 @@ export CLUSTER_ISSUER="company-issuer-rnd"   # placeholder: the enterprise CA Cl
 Then follow the guide. The cluster-level patches (`routingViaHost`, `ipsecConfig.mode: External`),
 the Kyverno Helm install and the cert/CA steps are commands in the guide, not manifests here.
 Apply the files in numeric order **only as the guide tells you** — e.g. in Option B,
-`24-kyverno-cert-sync-mount.yaml` must be Ready before `25-cert-sync-daemonset.yaml`.
+`24-kyverno-cert-sync-mount.yaml` must be Ready before `26-cert-sync-daemonset.yaml`.
 
 ## Requirements (summary)
 
