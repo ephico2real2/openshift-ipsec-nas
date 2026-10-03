@@ -158,6 +158,16 @@ The application in the Argo CD user interface, with every component deployed, as
 
 *Screenshot 21b. The same application as a list, with the `SYNC ORDER` column: the waves of Figure 2.*
 
+The same application after the switch to the CEL policies (the next section), on 2026-10-03:
+
+<img alt="Browser screenshot of the Argo CD application ipsec-nas in tree view after the switch to the CEL policies: App Health Healthy, Synced to main, Sync OK, 20 resources Synced; the tree shows the Service, ServiceAccount, DaemonSet, PrometheusRule, ServiceMonitor, the MutatingPolicy ipsec-cert-sync-mount, the NamespacedDeletingPolicy ipsec-orphaned-node-secrets, two GeneratingPolicies, ConfigMaps, ClusterRoles, Roles and RoleBindings, each with a green check." src="images/crc/33-argocd-app-cel-tree.png" width="820">
+
+*Screenshot 33a. With the CEL policies: `Healthy`, `Synced`, all 20 objects, including the `MutatingPolicy`, the `NamespacedDeletingPolicy` and two `GeneratingPolicy` objects.*
+
+<img alt="Browser screenshot of the Argo CD application ipsec-nas in list view with the CEL policies: 20 resources, each Synced; the Sync Order column shows minus 2 for the RBAC objects, ServiceAccount and ConfigMaps, minus 1 for the NamespacedDeletingPolicy, the MutatingPolicy and the GeneratingPolicy ipsec-node-certificate, no number for the DaemonSet (wave 0), and 1 for the GeneratingPolicy ipsec-nncp-per-node, the ServiceMonitor, the PrometheusRule and the Service." src="images/crc/33-argocd-app-cel-list.png" width="820">
+
+*Screenshot 33b. The same as a list: the CEL policies the DaemonSet depends on are in wave -1, the NNCP policy in wave 1, as the legacy ones were.*
+
 ## Step I.6 – Remove it with Helm
 
 Deleting the chart's objects does not undo what they did: the tunnel stays on the node, and the node keeps its certificate and key. Kyverno cannot clean up here, because the uninstall takes its policies and its permissions away in the same moment ([Gotcha 11](20-option-b-per-node-certificates.md#gotcha-11--removing-the-setup-leaves-the-certificate-and-key-on-the-node)). So the chart runs `files/uninstall.sh` **before** anything is removed, as a Helm pre-delete hook.
