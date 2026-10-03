@@ -77,6 +77,24 @@ The next section is the request to the NAS team.
 
 ## For the NAS team: what Option C needs
 
+### Measured: which NAS settings make Option C work
+
+Every combination below was run with one wildcard certificate (`*.internal`) on two stand-in workers against a libreswan 5.4 NAS (`lab/lab.sh option-c`, [`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt)):
+
+| # | Worker identity | NAS `rightid` | NAS `uniqueids` | Result |
+|---|---|---|---|---|
+| 1 | certificate DN | `%fromcert` | yes | One tunnel at a time; the nodes keep replacing each other |
+| 2 | certificate DN | `%fromcert` | no | **2 tunnels, both NFS writes pass (C1)** |
+| 3 | own FQDN | `%fromcert` | yes | One tunnel; the NAS uses the certificate DN instead |
+| 4 | own FQDN | `%any` | yes | Refused: `AUTHENTICATION_FAILED` |
+| 5 | own FQDN | `@*.internal` | yes | One tunnel; both recorded as `@*.internal` |
+| 6 | own FQDN | `@*.internal` | no | 2 tunnels, both NFS writes pass |
+| 7 | own FQDN | `%fromcert` | no | **2 tunnels, both NFS writes pass (C2)** |
+| negative | a name outside the wildcard | `@*.internal` | no | Accepted: the claimed name is not enforced |
+
+- **Required:** allow several peers with the same certificate identity (libreswan `uniqueids=no`), and take the peer's identity from its certificate (`rightid=%fromcert`). Rows 2 and 7 are the two working setups, for C1 and C2.
+- **Security:** because a node's claimed name is not checked (negative row), the security rests on the CA the NAS trusts, the worker-subnet firewall and rejecting cleartext NFS.
+
 Option C needs the NAS set up as for Option B ([00-prepare-the-cluster.md, 3.1](00-prepare-the-cluster.md#31-nas-configuration-storage-team-not-us)): its own certificate from the enterprise CA, IKEv2 with certificates, the worker subnet as peers, and cleartext NFS rejected. **One setting is added: the NAS must accept several peers that present the same certificate identity at the same time.** Without it, the NAS keeps one tunnel and the nodes keep replacing each other (case 1 above: connection instance 444 by the end of the case).
 
 ### What we send the NAS team
