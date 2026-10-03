@@ -114,11 +114,7 @@ IP 192.168.64.1.58166 > 192.168.64.6.isakmp:  [|isakmp]
 
 ## Part B – A tunnel that works through the NAT
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/crc-nat/nat-tunnel-mode.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/crc-nat/nat-tunnel-mode.light.png">
-  <img alt="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address. The CRC node itself was then measured with the same tunnel-mode connection." src="diagrams/crc-nat/nat-tunnel-mode.light.png">
-</picture>
+<img alt="Behind NAT, the NAS refuses an IKEv2 transport-mode tunnel with TS_UNACCEPTABLE because the client proposes its own private address while the NAS sees the NAT's address. In tunnel mode the same client gets a tunnel, with ESP wrapped in UDP port 4500, and NFS arrives at the NAS from the client's own address. The CRC node itself was then measured with the same tunnel-mode connection." src="diagrams/crc-nat/nat-tunnel-mode.light.png">
 
 *Figure 1. Behind NAT, the NAS refuses a transport-mode tunnel because the client proposes an address the NAS never sees. Tunnel mode works through the same NAT, with ESP wrapped in UDP 4500. Measured first with a stand-in VM, then from the CRC node itself ([10-option-a-shared-certificate.md](10-option-a-shared-certificate.md#part-f--option-a-the-shared-certificate-installed-and-measured)).*
 

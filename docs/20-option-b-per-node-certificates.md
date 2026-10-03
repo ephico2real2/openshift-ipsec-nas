@@ -18,11 +18,7 @@ This is our standard for every cluster. It is also called **Option B** in file n
 
 Each worker gets **its own** certificate, issued automatically by the cluster's existing enterprise CA `ClusterIssuer` (`${CLUSTER_ISSUER}`; `company-issuer-rnd` is the placeholder name). No MachineConfig is used, so **nothing reboots** when nodes are added or certificates renew.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/option-b-per-node-certs.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/option-b-per-node-certs.light.png">
-  <img alt="Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it into the node's NSS database and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot." src="diagrams/ipsec-nas/option-b-per-node-certs.light.png">
-</picture>
+<img alt="Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it into the node's NSS database and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot." src="diagrams/ipsec-nas/option-b-per-node-certs.light.png">
 
 *Figure 2. Our standard (Option B): when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot. This certificate delivery is the guide's own design, not a Red Hat procedure.*
 

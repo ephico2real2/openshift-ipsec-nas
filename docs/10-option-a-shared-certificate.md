@@ -20,11 +20,7 @@ This is the procedure Red Hat documents: **one** certificate and private key for
 
 This is the **Red Hat documented** method. One certificate and private key are copied to **every worker** through a MachineConfig. You create the certificate by hand, so **every worker reboots** each time it changes.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/option-a-shared-cert.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/option-a-shared-cert.light.png">
-  <img alt="Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker and the tunnel comes up. Adding a worker or renewing the certificate repeats the manual steps and reboots every worker again." src="diagrams/ipsec-nas/option-a-shared-cert.light.png">
-</picture>
+<img alt="Option A: you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker and the tunnel comes up. Adding a worker or renewing the certificate repeats the manual steps and reboots every worker again." src="diagrams/ipsec-nas/option-a-shared-cert.light.png">
 
 *Figure 3. Option A (not our standard): you create one certificate that names every worker, a MachineConfig copies it to all workers and reboots them one at a time, then Kyverno generates one NNCP per worker. Adding a worker or renewing the certificate repeats steps 1 to 5 by hand and reboots every worker again.*
 

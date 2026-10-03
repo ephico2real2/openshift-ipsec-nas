@@ -13,11 +13,7 @@ Steps I.4 and I.5, a node deleted and a node restarted, are in [20-option-b-per-
 
 [20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md) applies the manifests one by one. `charts/ipsec-nas` packages exactly those objects as one Helm release (`tests/test-chart.sh` compares them object by object), so that a cluster can be set up from Git. This doc installs it both ways and removes it both ways.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/deploy-flow/gitops-deploy-flow.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/deploy-flow/gitops-deploy-flow.light.png">
-  <img alt="Deployment through GitOps: a change merged to the Git repository is pulled by Argo CD, which renders the Helm chart and applies it to the cluster in four sync waves, permissions and files first, then the Kyverno policies, then the DaemonSet, then the NNCP policy and monitoring. cert-manager with the enterprise CA issuer, Kyverno, NMState and libreswan are already on the cluster and are not installed by the chart. After that the cluster gives every node a certificate and a tunnel by itself." src="diagrams/deploy-flow/gitops-deploy-flow.light.png">
-</picture>
+<img alt="Deployment through GitOps: a change merged to the Git repository is pulled by Argo CD, which renders the Helm chart and applies it to the cluster in four sync waves, permissions and files first, then the Kyverno policies, then the DaemonSet, then the NNCP policy and monitoring. cert-manager with the enterprise CA issuer, Kyverno, NMState and libreswan are already on the cluster and are not installed by the chart. After that the cluster gives every node a certificate and a tunnel by itself." src="diagrams/deploy-flow/gitops-deploy-flow.light.png">
 
 *Figure 2. From Git to a tunnel on every node. cert-manager, Kyverno, NMState and libreswan are prerequisites: the chart checks for them and never installs them.*
 

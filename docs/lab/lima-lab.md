@@ -11,11 +11,7 @@ This guide shows how to use **Lima** (`limactl`) to run real Linux VMs on a Mac,
 | NAS variants tested | RHEL-style host ([`test-nas-rhel.md`](test-nas-rhel.md)) and container ([`lab/container/`](../../lab/container/)) |
 | Not in this lab | An OpenShift cluster. The workers are plain libreswan hosts. See [What the lab does not cover](#9-what-the-lab-does-not-cover). |
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/lima-lab/lab-checks.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="../diagrams/lima-lab/lab-checks.light.png">
-  <img alt="The Lima lab runs a test NAS and two stand-in workers as VMs on one network. It checks three things: cleartext NFS is dropped by the NAS, each worker gets an IKEv2 tunnel using certificates, and data written to the NFS mount is counted on the tunnel as ESP." src="../diagrams/lima-lab/lab-checks.light.png">
-</picture>
+<img alt="The Lima lab runs a test NAS and two stand-in workers as VMs on one network. It checks three things: cleartext NFS is dropped by the NAS, each worker gets an IKEv2 tunnel using certificates, and data written to the NFS mount is counted on the tunnel as ESP." src="../diagrams/lima-lab/lab-checks.light.png">
 
 *Figure 1. The lab runs a test NAS and two stand-in workers as Lima VMs on one network and checks three things: cleartext NFS is dropped, each worker gets a certificate-authenticated IKEv2 tunnel, and data written to the mount is counted on the tunnel as ESP. The workers are plain libreswan hosts using the NNCP's settings; no OpenShift cluster is involved.*
 

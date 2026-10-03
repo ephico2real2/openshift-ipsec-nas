@@ -23,11 +23,7 @@ It comes in two variants, both measured:
 ## C.0 How it works
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/option-c/option-c-wildcard-cert.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/option-c/option-c-wildcard-cert.light.png">
-  <img alt="Option C with the settings that worked: you make one key and CSR for the wildcard name, the enterprise CA signs it for two years, a script checks it and renders a MachineConfig, and every node of the pool reboots once and imports the certificate as left_server before libreswan starts. C1 uses one NNCP for the pool with the certificate's identity; C2 uses a Kyverno policy that makes one NNCP per node with the node's own name. The NAS takes the identity from the certificate (rightid=%fromcert) and allows several peers with one identity (uniqueids=no). Measured: two nodes, two tunnels, both NFS writes through IPsec, for C1 and for C2." src="diagrams/option-c/option-c-wildcard-cert.light.png">
-</picture>
+<img alt="Option C with the settings that worked: you make one key and CSR for the wildcard name, the enterprise CA signs it for two years, a script checks it and renders a MachineConfig, and every node of the pool reboots once and imports the certificate as left_server before libreswan starts. C1 uses one NNCP for the pool with the certificate's identity; C2 uses a Kyverno policy that makes one NNCP per node with the node's own name. The NAS takes the identity from the certificate (rightid=%fromcert) and allows several peers with one identity (uniqueids=no). Measured: two nodes, two tunnels, both NFS writes through IPsec, for C1 and for C2." src="diagrams/option-c/option-c-wildcard-cert.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Figure 4. Option C with the settings that worked: one wildcard certificate in a MachineConfig, C1 or C2 for the tunnel, and a NAS that takes the identity from the certificate (`rightid=%fromcert`) and allows several peers with one identity (`uniqueids=no`). The combinations that failed are in the [table for the NAS team](#for-the-nas-team-what-option-c-needs), not in the figure.*

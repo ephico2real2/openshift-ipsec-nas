@@ -3,11 +3,7 @@
 These docs encrypt NFS traffic between OpenShift nodes and an external NAS with IPsec (libreswan, IKEv2, certificate authentication), configured through the **NMState Operator** and automated per node with **Kyverno** and **cert-manager**. Every procedure here was run end to end on OpenShift Local (CRC) against a NAS that refuses NFS unless it arrives through IPsec; each measured result links to its saved output.
 
 <!-- markdownlint-disable MD033 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/overview.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/overview.light.png">
-  <img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="diagrams/ipsec-nas/overview.light.png">
-</picture>
+<img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="diagrams/ipsec-nas/overview.light.png">
 <!-- markdownlint-enable MD033 -->
 
 *Figure 1. Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted. The figure as text is in [00-prepare-the-cluster.md](00-prepare-the-cluster.md#overview--how-ipsec-to-the-nas-works).*

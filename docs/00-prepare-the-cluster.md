@@ -14,11 +14,7 @@ This doc prepares what every setup option needs: the cluster settings, the opera
 
 ## Overview – how IPsec to the NAS works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/ipsec-nas/overview.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/ipsec-nas/overview.light.png">
-  <img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="diagrams/ipsec-nas/overview.light.png">
-</picture>
+<img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="diagrams/ipsec-nas/overview.light.png">
 
 *Figure 1. Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. The figure is drawn from these docs and their manifests; it has not been measured on a running cluster.*
 
@@ -565,7 +561,7 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 
 ## Diagram sources
 
-The three figures of these docs are rendered from one hand-authored page, `docs/diagrams/ipsec-nas/source.html` (inline SVG, light and dark palettes). `docs/diagrams/render.py` screenshots each figure in both themes at twice the pixel density and checks the page at phone width. It needs Playwright's Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). From the repository root:
+Figures 1 to 3 are rendered from one hand-authored page, `docs/diagrams/ipsec-nas/source.html`, and Figure 4 from `docs/diagrams/option-c/source.html` (inline SVG, light and dark palettes). The docs show the light version of every figure; the dark one is rendered next to it. `docs/diagrams/render.py` screenshots each figure in both themes at twice the pixel density and checks the page at phone width. It needs Playwright's Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). From the repository root:
 
 ```bash
 python3 docs/diagrams/render.py docs/diagrams/ipsec-nas/source.html docs/diagrams/ipsec-nas \
