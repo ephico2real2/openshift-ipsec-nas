@@ -1,7 +1,7 @@
 #!/bin/bash
 # Turns a RHEL 10 (or CentOS Stream 10) host into the test NAS:
 # an NFSv4 server that only accepts NFS arriving through IPsec (libreswan, IKEv2, transport mode,
-# certificate authentication). Run as root. docs/test-nas-rhel-guide.md walks through each step.
+# certificate authentication). Run as root. docs/lab/test-nas-rhel.md walks through each step.
 #
 #   WORKER_SUBNET=192.168.104.0/24 PKI_DIR=/root/ipsec-pki ./setup-nas.sh
 #

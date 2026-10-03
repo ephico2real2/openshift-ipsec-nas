@@ -2,20 +2,20 @@
 
 **Team:** KCS OpenShift  **Audience:** junior/new platform engineers  **Purpose:** a NAS to test against, not a production NAS
 
-The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) needs a NAS that speaks IPsec with certificates. This guide builds a small one on a RHEL 10 host: an **NFSv4 server that only accepts NFS arriving through IPsec** (libreswan, IKEv2, transport mode, certificate authentication). It sits **outside** the OpenShift cluster, like a real NAS.
+The setup docs ([`docs/README.md`](../README.md)) need a NAS that speaks IPsec with certificates. This guide builds a small one on a RHEL 10 host: an **NFSv4 server that only accepts NFS arriving through IPsec** (libreswan, IKEv2, transport mode, certificate authentication). It sits **outside** the OpenShift cluster, like a real NAS.
 
 | | |
 |---|---|
 | Tested on | CentOS Stream 10 (libreswan 5.4), the public upstream of RHEL 10, as Lima VMs on 2026-10-02 |
 | Not tested on | RHEL itself, a host with firewalld running, or a real OpenShift cluster as the client |
 | On RHEL 9 | The same steps were run once on CentOS Stream 9. See [On RHEL 9: what to watch out for](#on-rhel-9-what-to-watch-out-for). |
-| Same steps as a script | [`lab/rhel/setup-nas.sh`](../lab/rhel/setup-nas.sh) |
-| Same NAS as a container | [`lab/container/`](../lab/container/), see [Run it as a container instead](#run-it-as-a-container-instead) |
-| A lab to try it on a Mac | [`lab-lima-guide.md`](lab-lima-guide.md) |
+| Same steps as a script | [`lab/rhel/setup-nas.sh`](../../lab/rhel/setup-nas.sh) |
+| Same NAS as a container | [`lab/container/`](../../lab/container/), see [Run it as a container instead](#run-it-as-a-container-instead) |
+| A lab to try it on a Mac | [`lima-lab.md`](lima-lab.md) |
 | A client behind NAT (CRC) | [One client behind NAT](#one-client-behind-nat) |
 
 > [!NOTE]
-> **Why certificates and not a pre-shared key?** Many NFS-over-IPsec examples use `authby=secret` with a pre-shared key. That cannot pair with this project: the NNCP in the main guide authenticates with a certificate (`leftcert: left_server`, `leftid: '%fromcert'`). The test NAS must do the same, or the tunnel will not come up.
+> **Why certificates and not a pre-shared key?** Many NFS-over-IPsec examples use `authby=secret` with a pre-shared key. That cannot pair with this project: the NNCP in the setup docs authenticates with a certificate (`leftcert: left_server`, `leftid: '%fromcert'`). The test NAS must do the same, or the tunnel will not come up.
 
 ---
 
@@ -28,7 +28,7 @@ The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) needs a NAS that spe
   - `nas.p12`: this NAS's certificate and private key, **empty password**, friendly name `nas`.
 - [ ] firewalld is **not** running. The cloud images used for testing do not install it, and this guide loads its own nftables rules. A host with firewalld active has not been tested.
 
-In real use the enterprise CA issues `nas.p12`. For a lab, [`lab/pki/make-test-pki.sh`](../lab/pki/make-test-pki.sh) creates a throwaway CA, the NAS certificate and the worker certificates in one go:
+In real use the enterprise CA issues `nas.p12`. For a lab, [`lab/pki/make-test-pki.sh`](../../lab/pki/make-test-pki.sh) creates a throwaway CA, the NAS certificate and the worker certificates in one go:
 
 ```bash
 # <out-dir> <nas-fqdn> <worker-fqdn> [<worker-fqdn> ...]
@@ -47,7 +47,7 @@ Run every block as `root`, in **one** shell, in order. Become root first with `s
 
 After each step, compare what you see with the **Expected** line. If it does not match, stop and fix that step before going on. The libreswan log is the first place to look: `journalctl -u ipsec --no-pager -n 40`.
 
-New to the terms (IPsec, IKEv2, ESP, NSS database, `.p12`)? They are explained in [Words you will see](lab-lima-guide.md#words-you-will-see) in the lab guide.
+New to the terms (IPsec, IKEv2, ESP, NSS database, `.p12`)? They are explained in [Words you will see](lima-lab.md#words-you-will-see) in the lab guide.
 
 ### Step 0 – Variables
 
@@ -70,7 +70,7 @@ dnf -y install libreswan nfs-utils nss-tools nftables
 
 ### Step 2 – Certificates into the libreswan NSS database
 
-These are the same three commands the workers run in the main guide, with the nickname `nas` instead of `left_server`.
+These are the same three commands the workers run in the setup docs, with the nickname `nas` instead of `left_server`.
 
 ```bash
 ipsec checknss
@@ -84,7 +84,7 @@ certutil -L -d /var/lib/ipsec/nss
 
 ### Step 3 – libreswan connection for the workers
 
-The NAS is the `left` side here, and it answers **any** peer that holds a certificate from the same CA. This is the mirror image of the NNCP in the main guide.
+The NAS is the `left` side here, and it answers **any** peer that holds a certificate from the same CA. This is the mirror image of the NNCP in the setup docs.
 
 ```bash
 cat > /etc/ipsec.d/nas-workers.conf <<CONF
@@ -124,7 +124,7 @@ ipsec status | grep -E '"workers":.*%any|uniqueids='
 > systemctl restart ipsec
 > ```
 >
-> The lab reproduces both the problem and the fix: see [the lab guide](lab-lima-guide.md#8-what-the-lab-showed).
+> The lab reproduces both the problem and the fix: see [the lab guide](lima-lab.md#8-what-the-lab-showed).
 
 ### Step 4 – Firewall: IKE and ESP from the workers, NFS only through IPsec
 
@@ -177,7 +177,7 @@ cat /proc/fs/nfsd/versions
 
 ## Check it from a client
 
-What to put in the main guide's variables for this NAS:
+What to put in the setup docs' variables ([Part 0.3](../00-prepare-the-cluster.md#03-open-a-shell-and-set-variables)) for this NAS:
 
 | Main guide variable | Value |
 |---|---|
@@ -191,13 +191,13 @@ ipsec trafficstatus                                  # one line per connected wo
 nft list table inet nas_ipsec_only | grep counter    # nfs-over-ipsec grows; nfs-cleartext-dropped counts refused packets
 ```
 
-No cluster yet? [`lab/rhel/setup-worker.sh`](../lab/rhel/setup-worker.sh) turns a second RHEL host into a stand-in worker that uses the same libreswan keys as the NNCP, and [`lab/rhel/verify-worker.sh`](../lab/rhel/verify-worker.sh) proves the data went through the tunnel. The [lab guide](lab-lima-guide.md) runs both.
+No cluster yet? [`lab/rhel/setup-worker.sh`](../../lab/rhel/setup-worker.sh) turns a second RHEL host into a stand-in worker that uses the same libreswan keys as the NNCP, and [`lab/rhel/verify-worker.sh`](../../lab/rhel/verify-worker.sh) proves the data went through the tunnel. The [lab guide](lima-lab.md) runs both.
 
 ---
 
 ## One client behind NAT
 
-If a client reaches the NAS **through NAT**, the transport-mode connection in Step 3 does not work for it: the IKE login succeeds, and then the NAS refuses the tunnel with `TS_UNACCEPTABLE`, because the client proposes its own address while the NAS only sees the NAT's address. This was measured; [`crc-integration-guide.md`](crc-integration-guide.md) has the logs. A CRC cluster on the same Mac as the NAS is such a client.
+If a client reaches the NAS **through NAT**, the transport-mode connection in Step 3 does not work for it: the IKE login succeeds, and then the NAS refuses the tunnel with `TS_UNACCEPTABLE`, because the client proposes its own address while the NAS only sees the NAT's address. This was measured; [`40-lab-crc-and-nas.md`](../40-lab-crc-and-nas.md) has the logs. A CRC cluster on the same Mac as the NAS is such a client.
 
 Tunnel mode works through the same NAT. The script builds it when you name the client's own address:
 
@@ -242,7 +242,7 @@ Steps 3, 4 and 5 ran unchanged on both.
 
 ## Run it as a container instead
 
-[`lab/container/`](../lab/container/) packages the same five steps as an image. It still needs a Linux host: the container uses the host's kernel for IPsec and for the NFS server.
+[`lab/container/`](../../lab/container/) packages the same five steps as an image. It still needs a Linux host: the container uses the host's kernel for IPsec and for the NFS server.
 
 ```bash
 # on a Linux host with podman (or CONTAINER_ENGINE=docker), as root, with ca.pem and nas.p12 in /root/ipsec-pki

@@ -1,5 +1,5 @@
 # ipsec-nas: per-node IPsec tunnels from OpenShift nodes to an external NAS.
-# docs/ipsec-nas-guide.md, Part 2, explains every object this chart creates.
+# docs/20-option-b-per-node-certificates.md explains every object this chart creates.
 
 # -- DNS domain of the nodes. A node named worker-0 gets a certificate for worker-0.<nodeDomain>.
 nodeDomain: ""

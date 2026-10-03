@@ -1,6 +1,6 @@
 #!/bin/bash
 # CRC ONLY. Puts libreswan on the CRC node as a systemd system extension (sysext), because CRC
-# cannot install the OpenShift "ipsec" OS extension (docs/crc-integration-guide.md, Step D.4).
+# cannot install the OpenShift "ipsec" OS extension (docs/40-lab-crc-and-nas.md, Step D.4).
 # The files come from OpenShift's own extensions image; rpm-ostree is not involved, so the
 # packages the CRC image already layers are left alone. Runs on the Mac, logged in as cluster-admin.
 #

@@ -1,27 +1,27 @@
 # ipsec-nas Helm chart
 
-Installs **per-node IPsec tunnels from OpenShift nodes to an external NAS**: Part 2 of [`docs/ipsec-nas-guide.md`](../../docs/ipsec-nas-guide.md), our standard setup, as one Helm release. Read that guide first; this page only covers what is different when you use the chart.
+Installs **per-node IPsec tunnels from OpenShift nodes to an external NAS**: Option B, our standard setup and the enterprise north star ([`docs/20-option-b-per-node-certificates.md`](../../docs/20-option-b-per-node-certificates.md)), as one Helm release. [`docs/30-option-b-automated-helm-argocd.md`](../../docs/30-option-b-automated-helm-argocd.md) has the install and removal steps as measured; this page is the reference for the chart's values and behaviour.
 
-The chart creates exactly the objects of `manifests/option-b-per-node-certs/` and `manifests/common/03-kyverno-rbac.yaml`. `tests/test-chart.sh` renders both and compares every object, so the chart cannot drift from the manifests that were measured on a cluster.
+The chart creates exactly the objects of `manifests/option-b-per-node-certs/` (with `kyverno.legacyPolicies: true`, those of its `kyverno-legacy/` in place of their namesakes) and `manifests/common/03-kyverno-rbac.yaml`. `tests/test-chart.sh` renders both and compares every object, for both policy sets, so the chart cannot drift from the manifests that were measured on a cluster.
 
 ## Prerequisites
 
 These must **already be on the cluster**. They are prerequisites, not dependencies: the chart uses them, checks for them, and never installs or upgrades them. If one is missing, `helm install` stops with a message that names it.
 
-| Prerequisite | Why | Main guide | Checked by the chart |
+| Prerequisite | Why | Where it is set up | Checked by the chart |
 |---|---|---|---|
-| **cert-manager**, with a `ClusterIssuer` for the enterprise CA | Issues one certificate per node. The chart never creates an issuer | Step B.1 | The API `cert-manager.io/v1` is served; the `ClusterIssuer` named in `clusterIssuer` exists |
-| **Kyverno** 1.19 or later (or 1.13 or later with `kyverno.legacyPolicies: true`), which does **not** filter out Nodes | Creates the Certificate and the NNCP for each node, gives each pod its node's secret, removes a deleted node's Secret | Steps 1.6 and 1.6.3 | The API `policies.kyverno.io/v1` is served (`kyverno.io/v1`, and `kyverno.io/v2` for the cleanup, with the legacy policies); `[Node,*,*]` is not in Kyverno's `resourceFilters` |
-| **NMState Operator** with an `NMState` instance | Builds the tunnel on the node from the NNCP | Step 1.5 | The API `nmstate.io/v1` is served |
-| **libreswan on the nodes** | The tunnel itself | Steps 1.3 and 1.4 (`routingViaHost`, `ipsecConfig.mode: External`) | Not checked |
-| **The namespace**, with the privileged pod-security labels | The cert-sync pod runs privileged | Step B.2 | Not checked: create it before installing |
-| **The NAS side** | Its own certificate from the same CA, and its IPsec settings | Section 3.1 | Not checked |
-| User workload monitoring | Only for `metrics.serviceMonitor` and `metrics.prometheusRule` | Step B.12 | Not checked |
+| **cert-manager**, with a `ClusterIssuer` for the enterprise CA | Issues one certificate per node. The chart never creates an issuer | 00, Part 0.2; 20, Step B.1 | The API `cert-manager.io/v1` is served; the `ClusterIssuer` named in `clusterIssuer` exists |
+| **Kyverno** 1.19 or later (or 1.13 or later with `kyverno.legacyPolicies: true`), which does **not** filter out Nodes | Creates the Certificate and the NNCP for each node, gives each pod its node's secret, removes a deleted node's Secret | 00, Steps 1.6 and 1.7 | The API `policies.kyverno.io/v1` is served (`kyverno.io/v1`, and `kyverno.io/v2` for the cleanup, with the legacy policies); `[Node,*,*]` is not in Kyverno's `resourceFilters` |
+| **NMState Operator** with an `NMState` instance | Builds the tunnel on the node from the NNCP | 00, Step 1.5 | The API `nmstate.io/v1` is served |
+| **libreswan on the nodes** | The tunnel itself | 00, Steps 1.3 and 1.4 (`routingViaHost`, `ipsecConfig.mode: External`) | Not checked |
+| **The namespace**, with the privileged pod-security labels | The cert-sync pod runs privileged | 20, Step B.2 | Not checked: create it before installing |
+| **The NAS side** | Its own certificate from the same CA, and its IPsec settings | 00, Part 3.1 | Not checked |
+| User workload monitoring | Only for `metrics.serviceMonitor` and `metrics.prometheusRule` | 20, Step B.12 | Not checked |
 
 ## Install
 
 ```bash
-# 1. The namespace (main guide, Step B.2)
+# 1. The namespace (docs/20-option-b-per-node-certificates.md, Step B.2)
 oc apply -f manifests/option-b-per-node-certs/20-namespace.yaml
 
 # 2. Your values. Only these five are required.
@@ -33,7 +33,7 @@ nas:
 clusterIssuer: company-issuer-rnd    # the EXISTING enterprise CA issuer: oc get clusterissuer
 EOF
 
-# 3. Install. enterprise-root.pem is the enterprise ROOT CA certificate (main guide, Step B.3).
+# 3. Install. enterprise-root.pem is the enterprise ROOT CA certificate (docs/20-option-b-per-node-certificates.md, Step B.3).
 helm install ipsec-nas charts/ipsec-nas -n kcs-ipsec -f my-values.yaml \
   --set-file trustCA.pem=enterprise-root.pem
 ```
@@ -64,7 +64,7 @@ oc apply -f charts/ipsec-nas/examples/argocd-application.yaml                   
 oc get application -n openshift-gitops ipsec-nas
 ```
 
-Measured on CRC with Argo CD 3.4.7: `Synced` and `Healthy` 12 seconds after the sync started, tunnel up within 23 seconds of applying the Application. [`docs/crc-integration-guide.md`](../../docs/crc-integration-guide.md#part-i--the-same-setup-as-a-helm-chart-with-helm-and-with-argo-cd) has the steps, the diagram and screenshots of the application.
+Measured on CRC with Argo CD 3.4.7: `Synced` and `Healthy` 12 seconds after the sync started, tunnel up within 23 seconds of applying the Application. [`docs/30-option-b-automated-helm-argocd.md`](../../docs/30-option-b-automated-helm-argocd.md#step-i3--install-with-argo-cd-from-git) has the steps, the diagram and screenshots of the application.
 
 Argo CD renders the chart without a cluster connection, so the checks that read objects (the `ClusterIssuer`, Kyverno's Node filter) do not run there; the checks for the served APIs do.
 
@@ -86,7 +86,7 @@ Argo CD renders the chart without a cluster connection, so the checks that read 
 | `certificate.duration` / `renewBefore` / `keySize` | `8760h` / `720h` / `3072` | The per-node certificate |
 | `images.cli`, `images.python` | OpenShift `cli`, UBI 9 Python 3.12 | Mirror them on a disconnected cluster |
 | `kyverno.legacyPolicies` | `false` | `false`: Kyverno's CEL policies (`policies.kyverno.io/v1`), `templates/kyverno/`. `true`: the legacy `ClusterPolicy` and `CleanupPolicy`, `templates/kyverno-legacy/`, deprecated in Kyverno 1.19. See [Kyverno policies: CEL or legacy](#kyverno-policies-cel-or-legacy) |
-| `kyvernoRBAC.create` | `true` | The two ClusterRoles of the main guide's Step 1.7 |
+| `kyvernoRBAC.create` | `true` | The two ClusterRoles of `docs/00-prepare-the-cluster.md`, Step 1.7 |
 | `scc.bind` | `true` | Binds the `privileged` SCC to the cert-sync service account |
 | `metrics.serviceMonitor` / `prometheusRule` / `grafanaDashboard` | `true` / `true` / `false` | Observe, the six alerts, the dashboard ConfigMap |
 | `nodeCleanup.deleteCertificate` / `deleteOrphanedSecrets` / `schedule` | `true` / `true` / `*/5 * * * *` | What is removed when a Node is deleted |
@@ -94,7 +94,7 @@ Argo CD renders the chart without a cluster connection, so the checks that read 
 | `prerequisites.skipCheck` | `false` | Only for `helm template` without a cluster |
 | `prerequisites.kyvernoNamespace` | `kyverno` | Where to look for Kyverno's configuration |
 
-`values-crc.yaml` holds the values used on OpenShift Local in [`docs/crc-integration-guide.md`](../../docs/crc-integration-guide.md). Tunnel mode, `%defaultroute` and an IP as `right` are for that lab only.
+`values-crc.yaml` holds the values used on OpenShift Local in [`docs/30-option-b-automated-helm-argocd.md`](../../docs/30-option-b-automated-helm-argocd.md). Tunnel mode, `%defaultroute` and an IP as `right` are for that lab only.
 
 ## What is cleaned up, and when
 

@@ -13,7 +13,7 @@ set -euo pipefail
 export NAS_EXPORT="${NAS_EXPORT:-/export}"
 OCP_VERSION="${OCP_VERSION:-$(oc get clusterversion version -o jsonpath='{.status.desired.version}' | cut -d. -f1,2).0}"
 export OCP_VERSION
-# Overrides for a cluster that differs from the guide's (docs/crc-integration-guide.md uses all four).
+# Overrides for a cluster that differs from a production one (the CRC lab, docs/40-lab-crc-and-nas.md, uses all four).
 # Left unset, they give the guide's values: worker pool, transport mode, left = the node's FQDN, right = the NAS FQDN.
 export MCP_ROLE="${MCP_ROLE:-worker}"
 export IPSEC_TYPE="${IPSEC_TYPE:-transport}"

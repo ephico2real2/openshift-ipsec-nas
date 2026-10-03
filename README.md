@@ -4,16 +4,17 @@ Encrypts NFS traffic between OpenShift worker nodes and an external NAS with IPs
 (libreswan, IKEv2, transport mode), configured through the **NMState Operator** and
 automated per node with **Kyverno**.
 
-📖 **Full step-by-step procedure:** [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md)
+📖 **Start here:** [`docs/README.md`](docs/README.md): the setup options, which doc to read, the prerequisites and the examples. **Option B, one certificate per node, is our enterprise north star.**
 
-| Guide | What it is for |
+| Doc | What it is for |
 |---|---|
-| [`docs/ipsec-nas-guide.md`](docs/ipsec-nas-guide.md) | The OpenShift side: cluster preparation, certificates, NNCPs, verification |
-| [`docs/test-nas-rhel-guide.md`](docs/test-nas-rhel-guide.md) | A test NAS on RHEL 10 (NFS behind IPsec with certificates), as a host or a container |
-| [`docs/lab-lima-guide.md`](docs/lab-lima-guide.md) | Lima on a Mac, and a lab with that test NAS and two stand-in workers |
-| [`docs/crc-integration-guide.md`](docs/crc-integration-guide.md) | OpenShift Local (CRC) to the test NAS, step by step with captures and screenshots: the shared certificate (Option A) installed, measured, costed and removed; the standard per-node setup (Option B) with a demo application and metrics in Observe; the Helm chart deployed with Helm and with Argo CD from Git; node deletion, restart and removal; and a Gotchas section |
-| [`docs/nas-consumer-app-guide.md`](docs/nas-consumer-app-guide.md) | An application that stores data on the NAS: static PV and PVC with a demo app and Route, and dynamic provisioning with the NFS CSI driver |
-| [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart for the standard setup: prerequisites it checks, install with Helm or Argo CD (sync waves), what is cleaned up when a node is deleted or the chart is removed |
+| [`docs/00-prepare-the-cluster.md`](docs/00-prepare-the-cluster.md) | Every option starts here: cluster preparation, Kyverno, the NAS side, verification, troubleshooting |
+| [`docs/20-option-b-per-node-certificates.md`](docs/20-option-b-per-node-certificates.md) | **Option B, our standard:** one certificate per node, step by step, and its run on CRC |
+| [`docs/30-option-b-automated-helm-argocd.md`](docs/30-option-b-automated-helm-argocd.md) | Option B as a Helm chart, installed with Helm or from Git with Argo CD; Kyverno's CEL or legacy policies |
+| [`docs/10-option-a-shared-certificate.md`](docs/10-option-a-shared-certificate.md) | Option A, the shared certificate Red Hat documents: documented, measured and costed, not used |
+| [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
+| [`docs/lab/`](docs/lab/) | A test NAS on RHEL 10, the Lima lab, and an application that uses the NAS |
+| [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart: every value, the prerequisites it checks, cleanup on node deletion and uninstall |
 
 ## How it works
 
@@ -23,13 +24,13 @@ automated per node with **Kyverno**.
   <img alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted." src="docs/diagrams/ipsec-nas/overview.light.png">
 </picture>
 
-*Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted. The guide has the same figure with a text version, plus one figure for each certificate option.*
+*Cluster settings put libreswan, a certificate and one tunnel definition on each worker. The node and the NAS then authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP in transport mode. Pod-to-pod traffic is not encrypted. The docs have the same figure with a text version, plus one figure for each certificate option.*
 
 ## Certificate delivery: one certificate per node
 
-Our standard for a production cluster is **one certificate per node** (Option B): cert-manager issues it from the cluster's enterprise CA and a DaemonSet imports it. The shared-certificate method Red Hat documents (Option A) is kept in the guide's Appendix A for reference and is not used.
+Our standard for a production cluster, and the enterprise north star, is **one certificate per node** (Option B): cert-manager issues it from the cluster's enterprise CA and a DaemonSet imports it. The shared-certificate method Red Hat documents (Option A) is kept for reference and is not used.
 
-| | Per-node certificates (our standard) | Shared certificate (Appendix A, not used) |
+| | Per-node certificates (Option B, our standard) | Shared certificate (Option A, not used) |
 |---|---|---|
 | Cert delivery | cert-manager per node + import DaemonSet | One `.p12` in a MachineConfig |
 | Red Hat documented | NMState/IPsec part yes; cert delivery is custom | Yes |
@@ -43,34 +44,26 @@ Our standard for a production cluster is **one certificate per node** (Option B)
 ## Layout
 
 ```
-docs/ipsec-nas-guide.md              the guide (source of truth)
-docs/test-nas-rhel-guide.md          a test NAS on RHEL 10
-docs/lab-lima-guide.md               Lima on a Mac and the lab
-docs/nas-consumer-app-guide.md       an application that uses the NAS through a PVC
-docs/crc-integration-guide.md        OpenShift Local (CRC) to the test NAS
-docs/diagrams/ipsec-nas/             the figures shown in the guide (source.html + rendered PNGs)
-docs/diagrams/lima-lab/              the lab figure (source.html + rendered PNGs)
-docs/diagrams/crc-nat/               the NAT figure (source.html + rendered PNGs)
-docs/diagrams/deploy-flow/           the Git, Argo CD and Helm deployment figure
-docs/evidence/crc/                   saved command output behind the CRC guide's captures
+docs/README.md                       start page: the options, reading order, prerequisites, examples
+docs/00-prepare-the-cluster.md       cluster preparation, Kyverno, the NAS side, verification, troubleshooting
+docs/10-option-a-shared-certificate.md  Option A (documented, not used), measured on CRC
+docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
+docs/30-option-b-automated-helm-argocd.md  Option B with Helm and Argo CD; CEL or legacy Kyverno policies
+docs/40-lab-crc-and-nas.md           the CRC lab, testing with an application, gotchas
+docs/lab/                            a test NAS on RHEL 10, the Lima lab, an application that uses the NAS
+docs/diagrams/                       the figures (source.html + rendered PNGs) and their Mermaid text versions
+docs/evidence/crc/                   saved command output behind the captures
 docs/images/crc/                     those captures as images (render-terminal.py makes them)
-docs/diagrams/mermaid/               Mermaid text versions of the same figures (not displayed)
-docs/diagrams/render.py              re-renders the figures from source.html
-manifests/common/                    Part 1: NMState Operator, NMState instance, Kyverno RBAC
-manifests/option-a-shared-cert/      Appendix A (not used): Butane MachineConfig + NNCP generate policy
-manifests/option-b-per-node-certs/   Part 2, our standard: namespace, Certificate/mount/NNCP policies, cert-sync DaemonSet,
-                                     metrics scripts, ServiceMonitor, alert rules, Grafana dashboard
+manifests/common/                    NMState Operator, NMState instance, Kyverno RBAC
+manifests/option-a-shared-cert/      Option A: Butane MachineConfig + NNCP generate policy
+manifests/option-b-per-node-certs/   Option B: namespace, Kyverno CEL policies, cert-sync DaemonSet, metrics,
+                                     ServiceMonitor, alert rules, Grafana dashboard, orphaned-Secret cleanup
+manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as legacy ClusterPolicy/CleanupPolicy
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
-lab/lab.sh                           creates and verifies the Lima lab (runs on the Mac)
-lab/lima/                            Lima templates: lab VMs, and a NAS VM that CRC can reach
-lab/pki/                             throwaway test CA and certificates
-lab/rhel/                            NAS, stand-in worker and verification scripts (run in the VMs)
-lab/container/                       the test NAS as a container image
-lab/crc/                             CRC only: libreswan on the node as a system extension (remove is not run yet)
-charts/ipsec-nas/                    Helm chart of the standard setup (the same objects as manifests/option-b-per-node-certs)
-tests/                               tests: metrics parser, alert rules (promtool), chart equals manifests
-docs/images/                         screenshots
+charts/ipsec-nas/                    Helm chart of Option B (the same objects as the manifests)
+lab/                                 the Lima lab, CRC's libreswan extension, test PKI, NAS scripts, NAS container
+tests/                               chart equals manifests, metrics parser, alert rules, doc links
 ```
 
 Files ending in `.tmpl` contain `${NODE_DOMAIN}`, `${NAS_FQDN}`, `${NAS_IP}`, `${NAS_EXPORT}`, `${CLUSTER_ISSUER}` or `${OCP_VERSION}`.
@@ -83,16 +76,16 @@ export CLUSTER_ISSUER="company-issuer-rnd"   # placeholder: the enterprise CA Cl
 ./render.sh
 ```
 
-Then follow the guide. The cluster-level patches (`routingViaHost`, `ipsecConfig.mode: External`),
-the Kyverno Helm install and the cert/CA steps are commands in the guide, not manifests here.
-Apply the files in numeric order **only as the guide tells you** — e.g.
+Then follow [`docs/00-prepare-the-cluster.md`](docs/00-prepare-the-cluster.md). The cluster-level patches
+(`routingViaHost`, `ipsecConfig.mode: External`), the Kyverno Helm install and the cert/CA steps are commands
+in the docs, not manifests here. Apply the files **only in the order the docs give**: for example
 `24-kyverno-cert-sync-mount.yaml` must be Ready before `26-cert-sync-daemonset.yaml`.
 
 ## Requirements (summary)
 
 - OpenShift 4.19 (design target), RHCOS workers, bare metal / vSphere / RHOSP / GCP
-- Kyverno ≥ 1.13 (community software, not Red Hat supported)
-- cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the guide is a placeholder for its name (`CLUSTER_ISSUER`).
+- Kyverno 1.19 or later for the CEL policies (1.13 or later with the legacy ones; community software, not Red Hat supported)
+- cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the docs is a placeholder for its name (`CLUSTER_ISSUER`).
 - NAS supporting IKEv2 transport mode with PKI auth, chaining to the same enterprise root CA
 
 ## Security

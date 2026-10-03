@@ -2,12 +2,12 @@
 
 **Team:** KCS OpenShift  **Audience:** junior/new platform engineers  **Purpose:** give an application storage on the NAS, and prove the data travels through IPsec
 
-The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) builds the IPsec tunnel from every worker to the NAS. This guide is the next step: an application that **stores data on the NAS** through a PersistentVolumeClaim, with a small demo app whose web page shows what is on the NAS.
+The setup docs ([`docs/README.md`](../README.md)) build the IPsec tunnel from every worker to the NAS. This guide is the next step: an application that **stores data on the NAS** through a PersistentVolumeClaim, with a small demo app whose web page shows what is on the NAS.
 
 | | |
 |---|---|
 | Namespace | `ipsec-nas-demo` (never `default`) |
-| Method 1 | A static PersistentVolume and PersistentVolumeClaim, plus the demo app and a Route. Manifests: [`manifests/demo-app/`](../manifests/demo-app/) |
+| Method 1 | A static PersistentVolume and PersistentVolumeClaim, plus the demo app and a Route. Manifests: [`manifests/demo-app/`](../../manifests/demo-app/) |
 | Method 2 | Dynamic provisioning with the NFS CSI driver (`csi-driver-nfs`), installed with Helm |
 | Tested so far | The demo app's two containers, run with podman on a lab worker against the lab NAS on 2026-10-02, with the same commands and the same NFS mount options as the manifests. The OpenShift objects were validated against an OpenShift 4.22.7 API with dry runs. |
 | **Not tested yet** | Running it on an OpenShift cluster connected to the NAS. No such cluster exists for this project yet, so every `oc` output below is what the objects should show, not a measurement. |
@@ -16,7 +16,7 @@ The main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)) builds the IPsec tun
 
 ## Before you start
 
-- [ ] The main guide is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel (main guide, section 3.2).
+- [ ] The setup is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel ([verify end to end](../00-prepare-the-cluster.md#32-verify-end-to-end)).
 - [ ] You know the NAS IP and the path it exports.
 - [ ] You are logged in with `oc` as `cluster-admin`. A PersistentVolume is a cluster-wide object.
 
@@ -41,7 +41,7 @@ With a PVC, the **node** mounts the NFS share and hands the directory to the pod
 
 ```bash
 # ---- CHANGE THESE ----
-export NAS_IP="10.10.10.50"       # the NAS NFS data IP, the same value as in the main guide
+export NAS_IP="10.10.10.50"       # the NAS NFS data IP, the same value as in the setup docs
 export NAS_EXPORT="/export"       # the path the NAS exports
 # ----------------------
 ```
@@ -267,7 +267,7 @@ To use it in the demo app, change `claimName: nas-data` to `claimName: app-data`
 ### What IPsec changes for the CSI driver
 
 - The **node** pods mount the share for application pods, from the node's own address. That is the traffic the tunnel covers.
-- The **controller** pod also mounts the share, to create and delete the per-claim directories. It uses the host network of whichever node it runs on, so **that node needs a tunnel too**. The main guide builds tunnels on worker nodes only; the chart's default keeps the controller off the control plane (`controller.runOnControlPlane: false`), which is what we want. Do not change it.
+- The **controller** pod also mounts the share, to create and delete the per-claim directories. It uses the host network of whichever node it runs on, so **that node needs a tunnel too**. The setup builds tunnels on worker nodes only; the chart's default keeps the controller off the control plane (`controller.runOnControlPlane: false`), which is what we want. Do not change it.
 - If the controller cannot reach the NAS, new claims stay `Pending` while existing volumes keep working.
 
 ---
@@ -278,7 +278,7 @@ To use it in the demo app, change `claimName: nas-data` to `claimName: app-data`
 |---|---|---|
 | PVC stays `Pending` (Method 1) | The claim and the volume do not match | `oc describe pvc nas-data -n ipsec-nas-demo`; the class name, access mode and `volumeName` must match the PV, and the PV's `claimRef` must name this claim |
 | PVC stays `Pending` (Method 2) | The CSI controller cannot mount the share | `oc logs -n kube-system deploy/csi-nfs-controller -c nfs --tail=30`; check the tunnel on the node the controller runs on |
-| Pod stuck in `ContainerCreating`; `oc describe pod` shows a mount that timed out | The node has no working tunnel, so the NAS drops its NFS | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `ipsec-nas` line means the tunnel is down; go to the main guide's troubleshooting |
+| Pod stuck in `ContainerCreating`; `oc describe pod` shows a mount that timed out | The node has no working tunnel, so the NAS drops its NFS | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `ipsec-nas` line means the tunnel is down; go to the setup docs' troubleshooting |
 | Pod is `Running` but `writer` logs `Permission denied` | The export directory is not writable for the pod's user ID | The pod runs with a random user ID. The share (or the sub-directory) must allow it to write, for example mode `0777` on a test share |
 | The page shows old data | The `writer` container stopped | `oc logs -n ipsec-nas-demo deploy/nas-demo -c writer --tail=20` |
 

@@ -1,4 +1,4 @@
-# Values for OpenShift Local (CRC) with the lab NAS, as measured in docs/crc-integration-guide.md.
+# Values for OpenShift Local (CRC) with the lab NAS, as measured in docs/30-option-b-automated-helm-argocd.md.
 # Tunnel mode, "%defaultroute" and the NAS IP as "right" are CRC-only settings (NAT, no DNS names).
 # Also pass: --set-file trustCA.pem=enterprise-root.pem
 nodeDomain: crc.testing

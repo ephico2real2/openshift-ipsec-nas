@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds and starts the containerized test NAS on this Linux host. Run as root.
 # The host needs podman or docker, and the kernel modules for NFS serving and IPsec (any RHEL-like
-# host has them). docs/lab-lima-guide.md shows it running in a Lima VM.
+# host has them). docs/lab/lima-lab.md shows it running in a Lima VM.
 #
 #   WORKER_SUBNET=192.168.104.0/24 PKI_DIR=/root/ipsec-pki ./run-nas.sh
 #

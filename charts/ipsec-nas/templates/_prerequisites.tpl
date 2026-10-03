@@ -13,11 +13,11 @@ The checks that read objects only run against a real cluster ("helm template" ha
 {{- if not .Values.prerequisites.skipCheck -}}
 {{- $apis := dict "cert-manager.io/v1" "cert-manager" "nmstate.io/v1" "the NMState Operator with an NMState instance (Step 1.5)" -}}
 {{- if .Values.kyverno.legacyPolicies -}}
-{{- $_ := set $apis "kyverno.io/v1" "Kyverno (docs/ipsec-nas-guide.md, Step 1.6)" -}}
+{{- $_ := set $apis "kyverno.io/v1" "Kyverno (docs/00-prepare-the-cluster.md, Step 1.6)" -}}
 {{- if .Values.nodeCleanup.deleteOrphanedSecrets }}{{ $_ := set $apis "kyverno.io/v2" "Kyverno's CleanupPolicy (kyverno.io/v2)" }}{{ end -}}
 {{- else if not (.Capabilities.APIVersions.Has "policies.kyverno.io/v1") -}}
 {{- if .Capabilities.APIVersions.Has "kyverno.io/v1" }}{{ fail "prerequisite missing: Kyverno's CEL policies. The cluster does not serve policies.kyverno.io/v1 (Kyverno 1.19 or later). Upgrade Kyverno, or set kyverno.legacyPolicies=true to use the legacy ClusterPolicy kinds." }}{{ end -}}
-{{- $_ := set $apis "policies.kyverno.io/v1" "Kyverno 1.19 or later (docs/ipsec-nas-guide.md, Step 1.6)" -}}
+{{- $_ := set $apis "policies.kyverno.io/v1" "Kyverno 1.19 or later (docs/00-prepare-the-cluster.md, Step 1.6)" -}}
 {{- end -}}
 {{- range $api, $what := $apis -}}
 {{- if not ($.Capabilities.APIVersions.Has $api) }}{{ fail (printf "prerequisite missing: %s. The cluster does not serve %s. Install it first; this chart does not install it. (Without a cluster, use --set prerequisites.skipCheck=true.)" $what $api) }}{{ end -}}
@@ -26,7 +26,7 @@ The checks that read objects only run against a real cluster ("helm template" ha
 {{- if not (lookup "cert-manager.io/v1" "ClusterIssuer" "" .Values.clusterIssuer) }}{{ fail (printf "prerequisite missing: ClusterIssuer %q does not exist. Set clusterIssuer to the existing enterprise CA issuer (oc get clusterissuer). This chart does not create one." .Values.clusterIssuer) }}{{ end -}}
 {{- $kyverno := lookup "v1" "ConfigMap" .Values.prerequisites.kyvernoNamespace "kyverno" -}}
 {{- if $kyverno -}}
-{{- if contains "[Node,*,*]" (get $kyverno.data "resourceFilters" | default "") }}{{ fail "prerequisite missing: Kyverno ignores Node objects ([Node,*,*] is in its resourceFilters), so the policies of this chart would do nothing. Fix: docs/ipsec-nas-guide.md, Step 1.6.3 (config.resourceFiltersExclude)." }}{{ end -}}
+{{- if contains "[Node,*,*]" (get $kyverno.data "resourceFilters" | default "") }}{{ fail "prerequisite missing: Kyverno ignores Node objects ([Node,*,*] is in its resourceFilters), so the policies of this chart would do nothing. Fix: docs/00-prepare-the-cluster.md, Step 1.6.3 (config.resourceFiltersExclude)." }}{{ end -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}

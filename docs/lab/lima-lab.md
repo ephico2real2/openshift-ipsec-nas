@@ -2,19 +2,19 @@
 
 **Team:** KCS OpenShift  **Audience:** junior/new platform engineers  **Purpose:** try the NAS side of the IPsec design on a laptop before touching a cluster
 
-This guide shows how to use **Lima** (`limactl`) to run real Linux VMs on a Mac, and then uses it to build a small lab: one **test NAS** and two **stand-in workers**. The lab proves that NFS to the NAS only works through an IPsec tunnel set up with the same libreswan settings as the NNCP in the main guide ([`ipsec-nas-guide.md`](ipsec-nas-guide.md)).
+This guide shows how to use **Lima** (`limactl`) to run real Linux VMs on a Mac, and then uses it to build a small lab: one **test NAS** and two **stand-in workers**. The lab proves that NFS to the NAS only works through an IPsec tunnel set up with the same libreswan settings as the NNCP in the setup docs ([`docs/README.md`](../README.md)).
 
 | | |
 |---|---|
 | Measured on | 2026-10-02, Apple silicon Mac, macOS 26.5, Lima 2.2.0 |
-| Guest | CentOS Stream 10 (libreswan 5.4), the public upstream of RHEL 10. What differed on Stream 9 is listed in the [RHEL guide](test-nas-rhel-guide.md#on-rhel-9-what-to-watch-out-for). |
-| NAS variants tested | RHEL-style host ([`test-nas-rhel-guide.md`](test-nas-rhel-guide.md)) and container ([`lab/container/`](../lab/container/)) |
+| Guest | CentOS Stream 10 (libreswan 5.4), the public upstream of RHEL 10. What differed on Stream 9 is listed in the [RHEL guide](test-nas-rhel.md#on-rhel-9-what-to-watch-out-for). |
+| NAS variants tested | RHEL-style host ([`test-nas-rhel.md`](test-nas-rhel.md)) and container ([`lab/container/`](../../lab/container/)) |
 | Not in this lab | An OpenShift cluster. The workers are plain libreswan hosts. See [What the lab does not cover](#9-what-the-lab-does-not-cover). |
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="diagrams/lima-lab/lab-checks.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="diagrams/lima-lab/lab-checks.light.png">
-  <img alt="The Lima lab runs a test NAS and two stand-in workers as VMs on one network. It checks three things: cleartext NFS is dropped by the NAS, each worker gets an IKEv2 tunnel using certificates, and data written to the NFS mount is counted on the tunnel as ESP." src="diagrams/lima-lab/lab-checks.light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="../diagrams/lima-lab/lab-checks.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../diagrams/lima-lab/lab-checks.light.png">
+  <img alt="The Lima lab runs a test NAS and two stand-in workers as VMs on one network. It checks three things: cleartext NFS is dropped by the NAS, each worker gets an IKEv2 tunnel using certificates, and data written to the NFS mount is counted on the tunnel as ESP." src="../diagrams/lima-lab/lab-checks.light.png">
 </picture>
 
 *Figure 1. The lab runs a test NAS and two stand-in workers as Lima VMs on one network and checks three things: cleartext NFS is dropped, each worker gets a certificate-authenticated IKEv2 tunnel, and data written to the mount is counted on the tunnel as ESP. The workers are plain libreswan hosts using the NNCP's settings; no OpenShift cluster is involved.*
@@ -91,7 +91,7 @@ The NAS runs either as a RHEL-style host (systemd services) or as one privileged
 | **Certificate / CA** | A certificate proves a machine's identity. The CA (certificate authority) signs certificates; both sides trust the same CA. |
 | **`.p12`** | One file holding a certificate together with its private key. |
 | **NSS database** | The place where libreswan keeps certificates: `/var/lib/ipsec/nss`. |
-| **NNCP** | The OpenShift object from the main guide that configures the tunnel on a node. The stand-in workers copy its settings. |
+| **NNCP** | The OpenShift object from the setup docs that configures the tunnel on a node. The stand-in workers copy its settings. |
 
 ---
 
@@ -105,7 +105,7 @@ That is what this lab needs. IPsec and the NFS server both live in the kernel, a
 
 | Lima capability | What it gives the lab | Used as |
 |---|---|---|
-| Templates per distribution | RHEL-family guests without building images. `limactl create --list-templates` lists `centos-stream-10`, `almalinux-10`, `rocky-10`, `oraclelinux-10` and many more. | [`lab/lima/stream10.yaml`](../lab/lima/stream10.yaml) |
+| Templates per distribution | RHEL-family guests without building images. `limactl create --list-templates` lists `centos-stream-10`, `almalinux-10`, `rocky-10`, `oraclelinux-10` and many more. | [`lab/lima/stream10.yaml`](../../lab/lima/stream10.yaml) |
 | Your own template on top of a base | One small file fixes CPU, memory, disk and network for every lab VM. | `base: template:_images/centos-stream-10` |
 | `vmType: vz` | Apple's Virtualization.framework. Lima's documentation says it is the default on macOS 13.5 or later. | set explicitly in the template |
 | `plain: true` | A plain server: no host directories mounted into the VM, no port forwarding, no containerd. | set in the template |
@@ -123,7 +123,7 @@ That is what this lab needs. IPsec and the NFS server both live in the kernel, a
 | `vzNAT` | Not tested here | Yes, per Lima's documentation; the address range is not user-specifiable | None (vz only) | No |
 | `socket_vmnet` (shared, bridged) | Not tested here | Yes, per Lima's documentation | Build and install `socket_vmnet`, plus a sudoers file | No |
 
-Measured in this lab on `user-v2`: the tunnel between VMs carried native **ESP** (IP protocol 50), with no UDP encapsulation, so the lab exercises the same packet path the main guide's firewall section asks for.
+Measured in this lab on `user-v2`: the tunnel between VMs carried native **ESP** (IP protocol 50), with no UDP encapsulation, so the lab exercises the same packet path the setup docs' firewall section asks for.
 
 Sources: [Lima documentation](https://lima-vm.io/docs/), [network: user-v2](https://lima-vm.io/docs/config/network/user-v2/), [network: user](https://lima-vm.io/docs/config/network/user/), [network: vmnet](https://lima-vm.io/docs/config/network/vmnet/), [VM types](https://lima-vm.io/docs/config/vmtype/).
 
@@ -177,20 +177,20 @@ exit                         # leave root, then exit again to return to the Mac
 | `lab-worker1` | Stand-in worker with its own certificate | `lima-lab-worker1.internal` |
 | `lab-worker2` | Stand-in worker with its own certificate | `lima-lab-worker2.internal` |
 
-Files, all under [`lab/`](../lab/):
+Files, all under [`lab/`](../../lab/):
 
 | File | Runs on | What it does |
 |---|---|---|
 | `lab.sh` | the Mac | Creates the VMs and runs everything below |
 | `lima/stream10.yaml` | the Mac | Lima template for the lab VMs (CentOS Stream 10) |
 | `pki/make-test-pki.sh` | the NAS VM | Throwaway CA, NAS certificate, one certificate per worker, and one shared certificate |
-| `rhel/setup-nas.sh` | the NAS VM | The five steps of the [RHEL 10 NAS guide](test-nas-rhel-guide.md) |
+| `rhel/setup-nas.sh` | the NAS VM | The five steps of the [RHEL 10 NAS guide](test-nas-rhel.md) |
 | `rhel/setup-worker.sh` | each worker VM | libreswan with the NNCP's settings, then mounts the NAS |
 | `rhel/verify-worker.sh` | each worker VM | Writes 5 MiB and checks the tunnel counter grew by at least that much |
 | `rhel/switch-worker-cert.sh` | each worker VM | Swaps the worker's certificate (used by the shared-certificate scenario) |
 | `container/` | the NAS VM | The NAS as a container image, and `run-nas.sh` to start it |
 
-A stand-in worker is **not** an OpenShift node. It is a host whose libreswan connection uses the same keys, in the same order, as the NNCP in the main guide:
+A stand-in worker is **not** an OpenShift node. It is a host whose libreswan connection uses the same keys, in the same order, as the NNCP in the setup docs:
 
 ```text
 conn ipsec-nas
@@ -309,7 +309,7 @@ limactl shell lab-nas sudo install -D -m 0644 -t /root/ipsec-pki /tmp/pki/ca.pem
 
 ### Step 5 – Give each worker the CA and its own certificate
 
-`limactl copy` copies straight from one VM to another. Each worker's bundle is renamed to `left_server.p12`, the name the main guide uses.
+`limactl copy` copies straight from one VM to another. Each worker's bundle is renamed to `left_server.p12`, the name the setup docs uses.
 
 ```bash
 for vm in lab-worker1 lab-worker2; do
@@ -321,7 +321,7 @@ done
 
 ### Step 6 – Set up the NAS
 
-This runs the five steps of the [RHEL 10 NAS guide](test-nas-rhel-guide.md): packages, certificates, the libreswan connection, the firewall, the NFS server.
+This runs the five steps of the [RHEL 10 NAS guide](test-nas-rhel.md): packages, certificates, the libreswan connection, the firewall, the NFS server.
 
 ```bash
 limactl shell lab-nas sudo WORKER_SUBNET=192.168.104.0/24 bash /tmp/lab/rhel/setup-nas.sh
@@ -418,7 +418,7 @@ lab/lab.sh down
 lab/lab.sh up container
 ```
 
-`lab-nas` then only gets podman, and the NAS runs as one privileged, host-network container built from [`lab/container/`](../lab/container/). The workers and the checks are unchanged. Measured: 72 to 76 seconds, including building the image inside the fresh VM.
+`lab-nas` then only gets podman, and the NAS runs as one privileged, host-network container built from [`lab/container/`](../../lab/container/). The workers and the checks are unchanged. Measured: 72 to 76 seconds, including building the image inside the fresh VM.
 
 ### 7.2 The shared-certificate scenario (Option A)
 
@@ -446,7 +446,7 @@ PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPs
 
 Every row was measured on 2026-10-02 in this lab, on CentOS Stream 10 (libreswan 5.4), with the NAS both as a host and as a container unless a row says otherwise.
 
-| # | Finding | What it means for the main guide |
+| # | Finding | What it means for the setup docs |
 |---|---|---|
 | 1 | The NNCP's libreswan settings bring up an IKEv2, transport-mode tunnel against a certificate-authenticated NAS, and NFS over it is carried as native ESP. | The connection settings in the guide are workable as written. |
 | 2 | With the `meta ipsec exists` firewall rule, a cleartext NFS mount gets no answer. | This is the "cleartext NFS from workers: rejected" setting the guide asks the storage team for. |
@@ -456,7 +456,7 @@ Every row was measured on 2026-10-02 in this lab, on CentOS Stream 10 (libreswan
 | 6 | A third worker whose name was **not** in the shared certificate's SAN still got a tunnel and passed the write check. Measured by hand, NAS as a host; it is not part of `lab.sh`. | With `%fromcert` on both sides, libreswan did not check the SAN. The guide says a new worker has no working tunnel until the certificate is re-issued; that did not hold against this libreswan NAS. A different NAS product may check more. |
 | 7 | Host names in `left=` and `right=` did not resolve (`unbound error: initialization failure`) until `dnssec-enable=no` was set. | Affects a libreswan 5 client. OpenShift 4.19 nodes are RHEL 9 based, where the names resolved without it. |
 
-Findings 4 and 6 were also seen on CentOS Stream 9 (libreswan 4.15), with one difference in finding 4: there the second worker silently replaced the first, whose NFS then hung. The other Stream 9 differences are in the [RHEL guide](test-nas-rhel-guide.md#on-rhel-9-what-to-watch-out-for).
+Findings 4 and 6 were also seen on CentOS Stream 9 (libreswan 4.15), with one difference in finding 4: there the second worker silently replaced the first, whose NFS then hung. The other Stream 9 differences are in the [RHEL guide](test-nas-rhel.md#on-rhel-9-what-to-watch-out-for).
 
 ---
 
@@ -504,7 +504,7 @@ limactl list
 
 ## Diagram sources
 
-Figure 1 is rendered from `docs/diagrams/lima-lab/source.html` by `docs/diagrams/render.py` (see the main guide's [Diagram sources](ipsec-nas-guide.md#diagram-sources) for what the renderer needs). From the repository root:
+Figure 1 is rendered from `docs/diagrams/lima-lab/source.html` by `docs/diagrams/render.py` (see [Diagram sources](../00-prepare-the-cluster.md#diagram-sources) for what the renderer needs). From the repository root:
 
 ```bash
 python3 docs/diagrams/render.py docs/diagrams/lima-lab/source.html docs/diagrams/lima-lab lab-checks

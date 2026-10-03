@@ -7,7 +7,9 @@ kind: Application
 metadata:
   name: ipsec-nas
   namespace: openshift-gitops
-  # Deleting the Application then also deletes what it created, after the cleanup hook
+  # Deleting the Application also deletes what it created. Argo CD 3.4.7 ran no cleanup hook first
+  # (measured), which leaves the tunnels and keys on the nodes: remove it with the three steps of
+  # docs/30-option-b-automated-helm-argocd.md, Step I.7, not by deleting the Application.
   finalizers:
   - resources-finalizer.argocd.argoproj.io
 spec:
@@ -29,12 +31,14 @@ spec:
           # (key ca.pem), or delete this line and paste the PEM under "pem: |".
           existingConfigMap: ipsec-trust-ca
         uninstallCleanup:
-          hook: argocd     # run the cleanup as an Argo CD PreDelete hook when the Application is deleted
+          hook: argocd     # a PreDelete hook, for an Argo CD that runs one (3.4.7 did not)
+        kyverno:
+          legacyPolicies: false   # the CEL policies, Kyverno 1.19 or later; true for an older Kyverno
   destination:
     server: https://kubernetes.default.svc
     namespace: kcs-ipsec
   syncPolicy:
-    # The cert-sync pod runs privileged, so the namespace needs these labels (main guide, Step B.2)
+    # The cert-sync pod runs privileged, so the namespace needs these labels (docs/20-option-b-per-node-certificates.md, Step B.2)
     managedNamespaceMetadata:
       labels:
         pod-security.kubernetes.io/enforce: privileged

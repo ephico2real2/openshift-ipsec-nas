@@ -1,6 +1,6 @@
 #!/bin/bash
 # Lima lab for the OpenShift -> NAS IPsec guide: one test NAS and two stand-in workers, as VMs on
-# this Mac. docs/lab-lima-guide.md explains every step this script automates.
+# this Mac. docs/lab/lima-lab.md explains every step this script automates.
 #
 #   lab/lab.sh up [vm|container]   create the VMs, set up the NAS and both workers, verify
 #   lab/lab.sh verify              write through both tunnels again and show the NAS counters
