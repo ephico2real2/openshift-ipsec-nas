@@ -1,0 +1,100 @@
+# CRC 4.22.7. The dashboard (charts/ipsec-nas/files/ipsec-nas.json) in Grafana 13.2.3, run locally in podman as a
+# stand-in (CRC has no Grafana of ours; issue #36 plans the central one), reading CRC's Thanos Querier through
+# 'oc -n openshift-monitoring port-forward svc/thanos-querier 9091' with the oc session token.
+# Traffic: a bounded Job in ipsec-nas-demo writes and reads back 8 MiB with direct I/O on the NAS volume, every 2 s,
+# from 2026-10-03T19:41:25Z for 25 minutes (the Job is below). Recorded 2026-10-03T20:01:24Z.
+
+$ oc -n ipsec-nas-demo get pods -o wide
+NAME                       READY  STATUS   NODE
+nas-demo-649cbc69f8-vhtz7  2/2    Running  crc
+nas-load-rxkhj             1/1    Running  crc
+
+$ oc -n ipsec-nas-demo logs job/nas-load | tail -3
+2026-10-03T19:59:19Z round 500: 8 MiB written and read back
+2026-10-03T20:00:02Z round 520: 8 MiB written and read back
+2026-10-03T20:00:45Z round 540: 8 MiB written and read back
+
+# Through Thanos Querier:
+$ rate(ipsec_nas_tunnel_out_bytes_total[5m])   -> 1 series
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'instance': '10.217.1.24:9754', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 4125209.0370370373
+$ rate(ipsec_nas_tunnel_in_bytes_total[5m])   -> 1 series
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'instance': '10.217.1.24:9754', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 4092854.014814815
+$ sum by (instance) (rate(node_nfs_requests_total[5m]))   -> 1 series
+    {'instance': 'crc'} 39.48888888888889
+$ ipsec_nas_nfs_mounts   -> 1 series
+    {'__name__': 'ipsec_nas_nfs_mounts', 'exporter_node': 'crc', 'instance': '10.217.1.24:9754', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc', 'server': '192.168.64.8'} 2
+
+# Every panel query run through Grafana's /api/ds/query ($node = All): frames / rows per query
+ 1 Tunnels up                                 A:1f/1r
+ 2 Tunnels down                               A:1f/1r
+ 3 Workers reporting                          A:1f/1r
+ 4 Soonest certificate expiry                 A:1f/1r
+ 5 Tunnel state per node                      A:1f/1r
+ 6 Certificate days left per node             A:1f/1r
+ 7 Traffic through the tunnel                 A:1f/31r B:1f/31r
+ 8 Tunnel age per node                        A:1f/1r
+ 9 Metrics age per node                       A:1f/1r
+10 libreswan version per node                 A:1f/1r
+11 Nodes reported twice                       A:1f/1r
+12 Pods reporting the wrong node              A:1f/1r
+13 Kernel IPsec errors, last hour             A:1f/1r
+14 Per node                                   A:1f/1r B:1f/1r C:1f/1r D:1f/1r E:1f/1r F:1f/1r G:1f/1r H:1f/1r I:1f/1r J:1f/1r K:1f/1r
+15 Tunnel re-establishments in the last hour  A:1f/31r
+16 Kernel IPsec errors per node               A:1f/0r
+
+# The load Job
+# Bounded NFS load through the IPsec tunnel: writes and reads back 8 MiB with direct I/O (so every
+# byte crosses NFS, not the page cache), overwriting one file, for 25 minutes; deletes the file at the end.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nas-load
+  namespace: ipsec-nas-demo
+  labels:
+    app: nas-load
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: nas-load
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: load
+        image: registry.access.redhat.com/ubi9/python-312:latest
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -uo pipefail
+          f=/data/ipsec-nas-demo/load.bin
+          trap 'rm -f "${f}"; echo "$(date -u +%FT%TZ) removed ${f}"' EXIT
+          end=$(( $(date +%s) + 1500 ))
+          n=0
+          while [ "$(date +%s)" -lt "${end}" ]; do
+            n=$((n + 1))
+            dd if=/dev/urandom of="${f}" bs=1M count=8 oflag=direct status=none
+            dd if="${f}" of=/dev/null bs=1M iflag=direct status=none
+            [ $((n % 20)) -eq 0 ] && echo "$(date -u +%FT%TZ) round ${n}: 8 MiB written and read back"
+            sleep 2
+          done
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests: {cpu: 50m, memory: 32Mi}
+          limits: {memory: 64Mi}
+        volumeMounts:
+        - name: nas
+          mountPath: /data
+      volumes:
+      - name: nas
+        persistentVolumeClaim:
+          claimName: nas-data

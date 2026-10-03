@@ -90,6 +90,18 @@ The ConfigMap `ipsec-nas-grafana-dashboard` (Step B.12) now has, beside the firs
 
 *Capture 1. The dashboard on kind with a duplicate pod (`dup-on-worker`) and a pod naming the wrong node (`ghost-on-worker2`), the same two faults as in [`evidence/kind/01-per-node-metrics-faults.txt`](evidence/kind/01-per-node-metrics-faults.txt), applied again at 18:27Z after the tests of [evidence kind/02](evidence/kind/02-exporter-missing.txt) (hence other pod names). kind nodes have no libreswan, NSS database or NNCP, so the IPsec columns are DOWN or MISSING by design; what the capture shows is that each pod's data lands in its own row, and that unknown (the IKE SA) shows as –.*
 
+With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a stand-in and reading CRC's Thanos Querier (CRC has no Grafana of ours; issue #36 plans the central one), while a bounded Job in `ipsec-nas-demo` wrote and read back 8 MiB on the NAS volume every 2 seconds:
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/40-grafana-dashboard-crc-data.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/40-grafana-dashboard-crc-data.light.png">
+  <img alt="The IPsec to the NAS dashboard with CRC's real data: 1 tunnel up, 0 down, 364.3 days of certificate left, traffic through the tunnel rising from 0 to about 4 MB/s in each direction when the load starts, tunnel age 1.73 hours, libreswan 5.3, nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors 0, and the per-node table for crc: UP, IKE SA YES, certificate PRESENT, connection YES, libreswan YES, 2 NFS mounts, 39.7 NFS requests per second, 0 drops, certificate imported 1.73 hours ago, NAS identity O=KCS OpenShift lab, CN=crc-nas.lab.internal. The re-establishment panel shows the 18:11Z restart until it leaves the one-hour window; the drops panel reads No drops." src="images/crc/40-grafana-dashboard-crc-data.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 2. Every panel populated from CRC. Traffic: 4.13 MB/s out and 4.09 MB/s in (five-minute rates), 39.5 NFS requests/s; NFS mounts reads 2 because the load Job mounts the same export as the demo application. Text and the Job: [evidence 40](evidence/crc/40-grafana-dashboard-crc-data.txt).*
+
 ## What was tested, and where
 
 | Where | What it proves | Result |

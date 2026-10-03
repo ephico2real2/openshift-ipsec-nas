@@ -126,8 +126,10 @@ spec:
         summary: "Node {{ $labels.node }} has its certificate but no ipsec-nas connection"
         description: "The NNCP was not applied to this node. oc get nncp,nnce | grep ipsec-nas; check the Kyverno NNCP policy."
 
+    # Summed per node and connection: a collector pod restart starts a new series, and changes()
+    # counts within one series only.
     - alert: IpsecNasTunnelFlapping
-      expr: changes(ipsec_nas_tunnel_established_timestamp_seconds[1h]) > 3
+      expr: sum by (node, connection) (changes(ipsec_nas_tunnel_established_timestamp_seconds[1h])) > 3
       labels:
         severity: warning
       annotations:

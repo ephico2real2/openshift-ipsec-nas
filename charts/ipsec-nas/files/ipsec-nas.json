@@ -1311,7 +1311,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 100
+                "value": 90
               }
             ]
           },
@@ -1365,7 +1365,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 110
               }
             ]
           },
@@ -1389,7 +1389,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 180
+                "value": 170
               }
             ]
           },
@@ -1401,7 +1401,7 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 190
+                "value": 180
               }
             ]
           },
@@ -1425,7 +1425,19 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 120
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "NAS identity"
+            },
+            "properties": [
+              {
+                "id": "custom.inspect",
+                "value": true
               }
             ]
           }
@@ -1471,7 +1483,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "changes(ipsec_nas_tunnel_established_timestamp_seconds{node=~\"$node\"}[1h])",
+          "expr": "sum by (node) (changes(ipsec_nas_tunnel_established_timestamp_seconds{node=~\"$node\"}[1h]))",
           "legendFormat": "{{node}}"
         }
       ],
@@ -1554,7 +1566,8 @@
             "lineWidth": 1,
             "fillOpacity": 10,
             "showPoints": "never"
-          }
+          },
+          "noValue": "No drops"
         },
         "overrides": []
       },

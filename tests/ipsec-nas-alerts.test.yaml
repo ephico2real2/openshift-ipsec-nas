@@ -217,3 +217,20 @@ tests:
       exp_annotations:
         summary: "Node w3 sends NFS requests while its IPsec tunnel is down"
         description: "The NFS traffic is not encrypted, or is failing if the NAS rejects cleartext. Counts all NFS servers of the node."
+
+# The collector pod of w6 was replaced half-way through: its restarts are split across two series
+# (2 under pod a, 2 under pod b). Counted per series neither passes 3; per node it is 4 and fires.
+- interval: 1m
+  input_series:
+  - series: 'ipsec_nas_tunnel_established_timestamp_seconds{node="w6",connection="ipsec-nas",pod="a"}'
+    values: '0x9 600x9 1200x9 _x34'
+  - series: 'ipsec_nas_tunnel_established_timestamp_seconds{node="w6",connection="ipsec-nas",pod="b"}'
+    values: '_x30 1800x9 2400x9 3000x15'
+  alert_rule_test:
+  - eval_time: 55m
+    alertname: IpsecNasTunnelFlapping
+    exp_alerts:
+    - exp_labels: {severity: warning, node: w6, connection: ipsec-nas}
+      exp_annotations:
+        summary: "The tunnel of node w6 was re-established 4 times in an hour"
+        description: "A tunnel that keeps restarting looks up on every other panel. On the node: journalctl -u ipsec; on the NAS: duplicate peer IDs."
