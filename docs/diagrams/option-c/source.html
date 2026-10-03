@@ -1,0 +1,167 @@
+<title>Option C Wildcard Certificate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #6b7684; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · option c · 2026-10-03</div>
+    <h1>Option C: one wildcard certificate, the settings that worked</h1>
+    <p class="lede">One figure for <code>docs/50-option-c-wildcard-certificate.md</code>: how the wildcard certificate reaches every node through a MachineConfig, the two tunnel variants, and the NAS settings that held both nodes' tunnels. The combinations that failed are in the doc's table, not here.</p>
+  </header>
+
+  <section>
+    <h2>Certificate, tunnel and NAS</h2>
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1180 568" role="img" aria-label="Option C with the settings that worked: you make one key and CSR for the wildcard name, the enterprise CA signs it for two years, a script checks it and renders a MachineConfig, and every node of the pool reboots once and imports the certificate as left_server before libreswan starts. C1 uses one NNCP for the pool with the certificate's identity; C2 uses a Kyverno policy that makes one NNCP per node with the node's own name. The NAS takes the identity from the certificate (rightid=%fromcert) and allows several peers with one identity (uniqueids=no). Measured: two nodes, two tunnels, both NFS writes through IPsec, for C1 and for C2.">
+          <defs>
+            <marker id="ahc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker>
+            <marker id="ahcr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--remote)"/></marker>
+          </defs>
+          <g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+            <rect x="20" y="14" width="270" height="30" rx="6" fill="var(--host-wash)" stroke="var(--host)"/>
+            <text x="155" y="34" text-anchor="middle" fill="var(--host)">YOU · workstation + CA</text>
+            <rect x="310" y="14" width="270" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/>
+            <text x="445" y="34" text-anchor="middle" fill="var(--none)">CLUSTER</text>
+            <rect x="600" y="14" width="270" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="735" y="34" text-anchor="middle" fill="var(--remote)">EVERY NODE OF THE POOL</text>
+            <rect x="890" y="14" width="270" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/>
+            <text x="1025" y="34" text-anchor="middle" fill="var(--remote)">NAS · storage team</text>
+          </g>
+          <g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+            <rect x="30" y="60" width="250" height="96" rx="8" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5"/>
+            <text x="44" y="81" font-weight="600" fill="var(--host)">1. One key, one CSR</text>
+            <text x="44" y="99">SAN DNS:*.&lt;NODE_DOMAIN&gt;</text>
+            <text x="44" y="116">2. the enterprise CA signs it,</text>
+            <text x="44" y="133">valid 2 years</text>
+            <text x="44" y="149" font-size="11.5" fill="var(--muted)">option-c-certificate.sh csr</text>
+
+            <line x1="280" y1="108" x2="318" y2="108" stroke="currentColor" stroke-width="1.3" marker-end="url(#ahc)"/>
+            <text x="299" y="100" text-anchor="middle" font-size="11" fill="var(--muted)">3.</text>
+
+            <rect x="320" y="60" width="250" height="96" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="334" y="81" font-weight="600">MachineConfig</text>
+            <text x="334" y="99">99-&lt;pool&gt;-ipsec-wildcard-cert</text>
+            <text x="334" y="116">ca.pem + left_server.p12</text>
+            <text x="334" y="133">+ ipsec-nas-import.service</text>
+            <text x="334" y="149" font-size="11.5" fill="var(--muted)">script checks SAN, key, chain first</text>
+
+            <line x1="570" y1="108" x2="608" y2="108" stroke="var(--remote)" stroke-width="1.6" marker-end="url(#ahcr)"/>
+            <text x="589" y="100" text-anchor="middle" font-size="11" fill="var(--muted)">MCO</text>
+
+            <rect x="610" y="60" width="250" height="96" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="624" y="81" font-weight="600" fill="var(--remote)">4. Each node reboots once</text>
+            <text x="624" y="99">imports the certificate at boot,</text>
+            <text x="624" y="116">before libreswan: left_server</text>
+            <text x="624" y="133">one copy, replaced on renewal</text>
+            <text x="624" y="149" font-size="11.5" fill="var(--muted)">measured on CRC</text>
+
+            <rect x="30" y="190" width="250" height="110" rx="6" fill="none" stroke="var(--rule)" stroke-width="1.2"/>
+            <text x="44" y="211" font-weight="600">Every 2 years: renew</text>
+            <text x="44" y="229">steps 1 to 3 with a new key,</text>
+            <text x="44" y="246">oc apply the new MachineConfig</text>
+            <text x="44" y="263">each node reboots once</text>
+            <text x="44" y="280" fill="var(--muted)">the NNCP and the NAS unchanged</text>
+            <text x="44" y="294" font-size="11.5" fill="var(--muted)">(measured on CRC)</text>
+
+            <rect x="320" y="190" width="250" height="84" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="334" y="211" font-weight="600">C1 · one NNCP for the pool</text>
+            <text x="334" y="229">leftid %fromcert</text>
+            <text x="334" y="246">left %defaultroute</text>
+            <text x="334" y="263" fill="var(--muted)">no Kyverno, no DaemonSet</text>
+
+            <rect x="320" y="290" width="250" height="88" rx="6" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <text x="334" y="311" font-weight="600">C2 · one NNCP per node</text>
+            <text x="334" y="329">Kyverno GeneratingPolicy</text>
+            <text x="334" y="346">leftid @&lt;node&gt;.&lt;NODE_DOMAIN&gt;</text>
+            <text x="334" y="363" fill="var(--muted)">restart after a change</text>
+
+            <line x1="570" y1="232" x2="608" y2="252" stroke="currentColor" stroke-width="1.3" marker-end="url(#ahc)"/>
+            <line x1="570" y1="334" x2="608" y2="314" stroke="currentColor" stroke-width="1.3" marker-end="url(#ahc)"/>
+
+            <line x1="735" y1="156" x2="735" y2="188" stroke="var(--remote)" stroke-width="1.4" marker-end="url(#ahcr)"/>
+            <rect x="610" y="190" width="250" height="188" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="624" y="211" font-weight="600" fill="var(--remote)">Connection ipsec-nas</text>
+            <text x="624" y="229">IKEv2, certificate left_server</text>
+            <text x="624" y="246">identity sent:</text>
+            <text x="624" y="263">C1 the certificate's subject</text>
+            <text x="624" y="280">C2 the node's own name</text>
+            <text x="624" y="304" fill="var(--muted)">every node presents the same</text>
+            <text x="624" y="321" fill="var(--muted)">certificate:</text>
+            <text x="624" y="338" fill="var(--muted)">CN=ocp-ipsec-workers, O=KCS</text>
+            <text x="624" y="364" font-size="11.5" fill="var(--muted)">built by NMState from the NNCP</text>
+
+            <line x1="860" y1="276" x2="898" y2="276" stroke="var(--remote)" stroke-width="1.6" marker-start="url(#ahcr)" marker-end="url(#ahcr)"/>
+            <text x="879" y="268" text-anchor="middle" font-size="11" fill="var(--muted)">IKEv2</text>
+            <text x="879" y="294" text-anchor="middle" font-size="11" fill="var(--muted)">ESP</text>
+
+            <rect x="900" y="60" width="250" height="318" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="914" y="81" font-weight="600" fill="var(--remote)">NAS settings that worked</text>
+            <text x="914" y="99" fill="var(--muted)">for C1 and for C2</text>
+            <text x="914" y="125" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">rightid=%fromcert</text>
+            <text x="914" y="142">identity from the certificate</text>
+            <text x="914" y="168" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">uniqueids=no</text>
+            <text x="914" y="185">several peers, one identity</text>
+            <text x="914" y="211" font-family="IBM Plex Mono, monospace" font-size="12" font-weight="600">rightca=%same, right=%any</text>
+            <text x="914" y="228">the enterprise root CA; any peer</text>
+            <text x="914" y="245">address (not rightid=%any)</text>
+            <text x="914" y="271" font-weight="600">Firewall</text>
+            <text x="914" y="288">UDP 500, 4500, ESP: worker subnet</text>
+            <text x="914" y="305">NFS accepted only via IPsec</text>
+            <text x="914" y="331" fill="var(--muted)">libreswan names; a NAS product</text>
+            <text x="914" y="348" fill="var(--muted)">has its own for each setting</text>
+
+            <rect x="30" y="400" width="1120" height="70" rx="8" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+            <text x="44" y="422" font-weight="600" fill="var(--remote)">Measured with these settings</text>
+            <text x="44" y="441">Lima lab, two nodes sharing one certificate *.internal: 2 tunnels, both 5 MiB NFS writes through IPsec, for C1 (case 2) and for C2 (case 7).</text>
+            <text x="44" y="459">OpenShift Local: C1's tunnel 10 seconds after its NNCP; a renewal with a new key took one reboot, the tunnel came back by itself, the NAS unchanged.</text>
+
+            <text x="30" y="496" fill="var(--muted)">The NAS does not enforce the name a node claims: the CA it trusts, the worker-subnet firewall and NFS only through IPsec are the controls.</text>
+            <text x="30" y="516" fill="var(--muted)">Not shown: the combinations that failed (uniqueids=yes in every variant, rightid=%any). The table is in 50-option-c-wildcard-certificate.md.</text>
+            <text x="30" y="540" fill="var(--host)">Not measured: a new node joining the pool (by design it gets the MachineConfig and the NNCP by itself; CRC has one node), and a NAS product other than libreswan.</text>
+          </g>
+        </svg>
+      </div>
+      <figcaption>Option C with the settings that worked: one wildcard certificate in a MachineConfig, C1 or C2 for the tunnel, and a NAS that takes the identity from the certificate and allows several peers with one identity.</figcaption>
+    </figure>
+  </section>
+</div>

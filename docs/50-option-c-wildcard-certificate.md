@@ -22,25 +22,44 @@ It comes in two variants, both measured:
 
 ## C.0 How it works
 
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="diagrams/option-c/option-c-wildcard-cert.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="diagrams/option-c/option-c-wildcard-cert.light.png">
+  <img alt="Option C with the settings that worked: you make one key and CSR for the wildcard name, the enterprise CA signs it for two years, a script checks it and renders a MachineConfig, and every node of the pool reboots once and imports the certificate as left_server before libreswan starts. C1 uses one NNCP for the pool with the certificate's identity; C2 uses a Kyverno policy that makes one NNCP per node with the node's own name. The NAS takes the identity from the certificate (rightid=%fromcert) and allows several peers with one identity (uniqueids=no). Measured: two nodes, two tunnels, both NFS writes through IPsec, for C1 and for C2." src="diagrams/option-c/option-c-wildcard-cert.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Figure 4. Option C with the settings that worked: one wildcard certificate in a MachineConfig, C1 or C2 for the tunnel, and a NAS that takes the identity from the certificate (`rightid=%fromcert`) and allows several peers with one identity (`uniqueids=no`). The combinations that failed are in the [table for the NAS team](#for-the-nas-team-what-option-c-needs), not in the figure.*
+
+<details>
+<summary>The figure as text</summary>
+
 ```text
-YOU (workstation + enterprise CA)            CLUSTER                              EVERY NODE OF THE POOL
+YOU (workstation + CA)          CLUSTER                         EVERY NODE OF THE POOL            NAS (storage team)
 
-1. scripts/option-c-certificate.sh csr
-   one key + CSR for *.<NODE_DOMAIN>
-        |
-2. The enterprise CA signs it, 2 years
-        |
-3. scripts/option-c-certificate.sh      -->  4. MachineConfig                -->  5. Each node reboots once, in turn
-   machineconfig: checks the                    99-<pool>-ipsec-wildcard-cert       ipsec-nas-import.service imports
-   certificate, bundles it,                     ca.pem, left_server.p12,            the certificate before libreswan
-   renders the MachineConfig                    import script                       starts: nickname left_server
-                                                                                          |
-6. C1: one NNCP for the pool            -->  7. NMState applies it         -->  8. Tunnel to the NAS
-   C2: a Kyverno policy, one NNCP per node
+1. One key, one CSR        -->  MachineConfig             -->  4. Each node reboots once           NAS settings that worked,
+   SAN DNS:*.<NODE_DOMAIN>         99-<pool>-ipsec-wildcard-cert    imports the certificate at boot,     for C1 and for C2:
+2. the enterprise CA signs it,     ca.pem + left_server.p12         before libreswan: left_server        rightid=%fromcert   identity from the certificate
+   valid 2 years                   + ipsec-nas-import.service       one copy, replaced on renewal        uniqueids=no        several peers, one identity
+   (option-c-certificate.sh)       (script checks SAN, key, chain)          |                            rightca=%same       the enterprise root CA
+                                                                            v                            right=%any          any peer address (not rightid=%any)
+Every 2 years: renew            C1: one NNCP for the pool  -->  Connection ipsec-nas  <-- IKEv2/ESP -->  firewall: UDP 500/4500 + ESP from the worker subnet
+   steps 1-3 with a new key        leftid %fromcert              IKEv2, certificate left_server          NFS accepted only through IPsec
+   oc apply the MachineConfig      left %defaultroute            identity sent: C1 the subject,
+   each node reboots once          no Kyverno, no DaemonSet      C2 the node's own name
+   NNCP and NAS unchanged       C2: one NNCP per node      -->   every node presents the same certificate:
+                                   Kyverno GeneratingPolicy      CN=ocp-ipsec-workers, O=KCS
+                                   leftid @<node>.<NODE_DOMAIN>
+                                   restart after a change
 
-A new node: gets the MachineConfig and the NNCP by itself. No new certificate, no other node reboots.
-Every 2 years (renewal): steps 1 to 4 again; every node of the pool reboots once, in turn.
+Measured with these settings: Lima lab, two nodes sharing one certificate *.internal: 2 tunnels, both NFS writes through IPsec,
+for C1 (case 2) and C2 (case 7). OpenShift Local: C1's tunnel 10 s after its NNCP; a renewal took one reboot, tunnel back by itself.
+The NAS does not enforce the name a node claims: the CA, the worker-subnet firewall and NFS only through IPsec are the controls.
+Not measured: a new node joining the pool (by design it gets the MachineConfig and the NNCP), and a NAS product other than libreswan.
 ```
+
+</details>
 
 The import script runs at every boot. It removes an earlier `left_server` and CA first, so a renewed certificate replaces the old one instead of sitting next to it under the same nickname; Option A's documented script only adds.
 
@@ -285,7 +304,9 @@ The order matters: the tunnel definition first, then the tunnel, then the Machin
 # 2. Remove the tunnel from every node with an NNCP that says absent (as in Option A, Step A.12)
 # 3. Delete the MachineConfig: every node of the pool reboots
 oc delete mc 99-${MCP_ROLE}-ipsec-wildcard-cert
-# 4. The import does not run any more, but what it imported stays: remove it from every node
+# 4. The import does not run any more, but what it imported stays: remove it from every node.
+#    Only while no other option is installed: Options A and B use the same nicknames, so this would
+#    delete their certificate and key too.
 for n in $(oc get nodes -l node-role.kubernetes.io/${MCP_ROLE} -o jsonpath='{.items[*].metadata.name}'); do
   oc debug "node/${n}" -q -- chroot /host bash -c '
     certutil -F -n left_server -d /var/lib/ipsec/nss; certutil -D -n KCS-IPSEC-CA -d /var/lib/ipsec/nss
@@ -305,7 +326,7 @@ Everything below was run on OpenShift Local (CRC) 2.63.0 with OpenShift 4.22.7, 
 
 | Step | What was measured | Evidence |
 |---|---|---|
-| Option B removed | The three-step Argo CD procedure: the cleanup in 9 seconds; no tunnel, empty NSS database | [35](evidence/crc/35-option-c-crc-install.txt) |
+| Option B removed | The three-step Argo CD procedure: the cleanup in 8 seconds; no tunnel, empty NSS database | [35](evidence/crc/35-option-c-crc-install.txt) |
 | C.1 to C.3 | A wildcard key and CSR (`DNS:*.crc.testing`); signed by the cluster's `enterprise-ca` through a cert-manager `CertificateRequest`, `duration: 17520h`: valid from 2026-10-03 to **2028-10-02**; every check of `option-c-certificate.sh machineconfig` passed | 35 |
 | C.4 | MachineConfig applied 01:59:17; the node rebooted (new boot ID at 02:10:01); after CRC's stop and start the pool was `Updated`. `ipsec-nas-import` had imported the certificate: one `left_server` with the signed serial, and `KCS-IPSEC-CA` | 35 |
 | C.5, C1 | One NNCP for the pool: `Available` in 8 seconds, the tunnel in 10; the node's identity `CN=ocp-ipsec-workers, O=KCS`; the NAS authenticated it; the demo application wrote again | 35 |

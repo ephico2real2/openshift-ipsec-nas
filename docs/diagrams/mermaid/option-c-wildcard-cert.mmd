@@ -1,0 +1,25 @@
+%% Option C with the settings that worked (docs/50-option-c-wildcard-certificate.md, Figure 4).
+%% Text source only. The figure shown in the docs is docs/diagrams/option-c/option-c-wildcard-cert.*.png.
+flowchart LR
+    subgraph YOU["You: workstation + enterprise CA"]
+        K["1. One key, one CSR<br/>SAN DNS:*.&lt;NODE_DOMAIN&gt;<br/>2. the CA signs it, valid 2 years"]
+        R["Every 2 years: renew<br/>steps 1-3 with a new key<br/>each node reboots once; NNCP and NAS unchanged"]
+    end
+    subgraph CL["Cluster"]
+        MC["MachineConfig 99-&lt;pool&gt;-ipsec-wildcard-cert<br/>ca.pem + left_server.p12 + import unit"]
+        C1["C1: one NNCP for the pool<br/>leftid %fromcert, left %defaultroute"]
+        C2["C2: Kyverno GeneratingPolicy<br/>one NNCP per node, leftid @&lt;node&gt;<br/>restart after a change"]
+    end
+    subgraph NODE["Every node of the pool"]
+        IMP["4. Reboots once; imports left_server<br/>at boot, before libreswan"]
+        CON["Connection ipsec-nas<br/>every node presents CN=ocp-ipsec-workers, O=KCS"]
+    end
+    subgraph NAS["NAS: settings that worked, for C1 and C2"]
+        S["rightid=%fromcert: identity from the certificate<br/>uniqueids=no: several peers, one identity<br/>rightca: the enterprise root; firewall: worker subnet<br/>NFS accepted only through IPsec"]
+    end
+    K -- "3. checked, bundled" --> MC
+    MC -- MCO --> IMP
+    IMP --> CON
+    C1 -- NMState --> CON
+    C2 -- NMState --> CON
+    CON <-- "IKEv2 + ESP" --> S

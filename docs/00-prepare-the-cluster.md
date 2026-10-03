@@ -570,6 +570,7 @@ The three figures of these docs are rendered from one hand-authored page, `docs/
 ```bash
 python3 docs/diagrams/render.py docs/diagrams/ipsec-nas/source.html docs/diagrams/ipsec-nas \
   overview,option-a-shared-cert,option-b-per-node-certs
+python3 docs/diagrams/render.py docs/diagrams/option-c/source.html docs/diagrams/option-c option-c-wildcard-cert
 ```
 
 | Figure | Where it is shown | Rendered files (`docs/diagrams/ipsec-nas/`) | Mermaid text source (`docs/diagrams/mermaid/`) |
@@ -577,6 +578,7 @@ python3 docs/diagrams/render.py docs/diagrams/ipsec-nas/source.html docs/diagram
 | 1. How IPsec to the NAS works | Overview above, `docs/README.md` and `README.md` | `overview.light.png`, `overview.dark.png` | `overview.mmd` |
 | 2. Our standard (Option B): one certificate per node | `20-option-b-per-node-certificates.md`, 2.0 | `option-b-per-node-certs.light.png`, `.dark.png` | `option-b-per-node-certs.mmd` |
 | 3. Option A: one shared certificate | `10-option-a-shared-certificate.md`, A.0 | `option-a-shared-cert.light.png`, `.dark.png` | `option-a-shared-cert.mmd` |
+| 4. Option C: one wildcard certificate, the settings that worked | `50-option-c-wildcard-certificate.md`, C.0 | `diagrams/option-c/option-c-wildcard-cert.light.png`, `.dark.png` (source: `diagrams/option-c/source.html`) | `option-c-wildcard-cert.mmd` |
 
 The Mermaid files are plain-text versions of the same flows, kept for editing and diffs. They are not what the documents display.
 
