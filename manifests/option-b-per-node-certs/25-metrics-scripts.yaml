@@ -7,9 +7,10 @@ data:
   collect.sh: |
     #!/bin/bash
     # ipsec-nas metrics collector: runs on every worker, beside the cert-sync container.
-    # Every COLLECT_EVERY seconds it asks the HOST's libreswan about the ipsec-nas connection and
-    # the HOST's NSS database about the node certificate, and writes the answers as Prometheus
-    # metrics into a file. The unprivileged "metrics" container serves that file.
+    # Every COLLECT_EVERY seconds it asks the HOST's libreswan about the ipsec-nas connection, the
+    # HOST's NSS database about the node certificate, and the HOST's kernel about IPsec errors and
+    # NFS mounts, and writes the answers as Prometheus metrics into a file. The unprivileged
+    # "metrics" container serves that file. Every metric carries node=<this pod's node>.
     # It only reads: nothing on the host is changed.
     set -uo pipefail
 
@@ -20,14 +21,36 @@ data:
     STAMP=/host/etc/pki/certs/kcs-ipsec/.installed-sha256
     OUT_FILE=/metrics/ipsec_nas.prom
     COLLECT_EVERY=30
+    # The pod has its own network and mount namespaces; the node's are those of the host's PID 1
+    # (the host's /proc is mounted at /host/proc).
+    XFRM_STAT=/host/proc/1/net/xfrm_stat
+    HOST_MOUNTS=/host/proc/1/mounts
 
-    # The name libreswan knows our connection by. NetworkManager hands a connection to libreswan
-    # under its UUID, so on a node "ipsec trafficstatus" shows the UUID and not "ipsec-nas".
-    # Falls back to the plain name, which is what a hand-written libreswan connection uses.
-    libreswan_conn_name() {
-      local uuid
-      uuid=$(chroot /host nmcli -g connection.uuid connection show "${CONN_NAME}" 2>/dev/null | head -1)
-      echo "${uuid:-${CONN_NAME}}"
+    # The UUID of the NetworkManager connection the NNCP created; empty if NetworkManager has none.
+    # NetworkManager hands a connection to libreswan under its UUID, so on a node "ipsec
+    # trafficstatus" shows the UUID and not "ipsec-nas". collect() falls back to the plain name,
+    # which is what a hand-written libreswan connection uses.
+    nm_connection_uuid() {
+      chroot /host nmcli -g connection.uuid connection show "${CONN_NAME}" 2>/dev/null | head -1
+    }
+
+    # Reads "ipsec status" on stdin and prints 1 if the connection named $1 has an established IKE
+    # SA, else 0. libreswan 5 writes ESTABLISHED_IKE_SA, libreswan 4 STATE_V2_ESTABLISHED_IKE_SA.
+    ike_sa_established() {
+      if grep -F "\"$1\"" | grep -q 'ESTABLISHED_IKE_SA'; then echo 1; else echo 0; fi
+    }
+
+    # Reads /proc/net/xfrm_stat on stdin and prints "<counter> <value>" for each kernel IPsec error
+    # counter (XfrmInNoStates, XfrmOutPolBlock, ...).
+    xfrm_counters() {
+      awk 'NF == 2 && $1 ~ /^Xfrm[A-Za-z]+$/ && $2 ~ /^[0-9]+$/ { print $1, $2 }'
+    }
+
+    # Reads a mounts table (/proc/<pid>/mounts) on stdin and prints "<server> <count>" for the NFS
+    # mounts, per server. The source of an NFS mount is "<server>:/<path>"; an IPv6 server is in [].
+    nfs_mount_servers() {
+      awk '$3 == "nfs" || $3 == "nfs4" { src = $1; sub(/:\/.*$/, "", src); n[src]++ }
+           END { for (s in n) print s, n[s] }' | LC_ALL=C sort
     }
 
     # Reads "ipsec trafficstatus" on stdin and prints, for the newest tunnel of the connection
@@ -53,19 +76,28 @@ data:
 
     collect() {
       local now status rc fields up=0 add_time="" in_bytes="" out_bytes="" peer="" end not_after="" imported="" version node
+      local uuid conn configured cert_present ike="" xfrm="" mounts=""
       now=$(date +%s)
       node=$(label_escape "${NODE_NAME}")
+      uuid=$(nm_connection_uuid)
+      conn="${uuid:-${CONN_NAME}}"
+      configured=$([[ -n "${uuid}" ]] && echo 1 || echo 0)
 
       status=$(chroot /host ipsec trafficstatus 2>/dev/null)
       rc=$?
       if [[ ${rc} -eq 0 ]]; then
-        fields=$(tunnel_fields "$(libreswan_conn_name)" <<<"${status}")
+        ike=$(chroot /host ipsec status 2>/dev/null | ike_sa_established "${conn}")
+        fields=$(tunnel_fields "${conn}" <<<"${status}")
         if [[ -n "${fields}" ]]; then
           up=1
           read -r add_time in_bytes out_bytes peer <<<"${fields}"
         fi
       fi
 
+      cert_present=0
+      chroot /host certutil -L -n "${CERT_NICK}" -d "${NSS_DB}" >/dev/null 2>&1 && cert_present=1
+      [[ -r "${XFRM_STAT}" ]] && xfrm=$(xfrm_counters < "${XFRM_STAT}")
+      [[ -r "${HOST_MOUNTS}" ]] && mounts=$(nfs_mount_servers < "${HOST_MOUNTS}")
       end=$(chroot /host bash -c "certutil -L -n ${CERT_NICK} -d ${NSS_DB} -a 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null" | cut -d= -f2)
       [[ -n "${end}" ]] && not_after=$(date -u -d "${end}" +%s 2>/dev/null)
       [[ -e "${STAMP}" ]] && imported=$(stat -c %Y "${STAMP}" 2>/dev/null)
@@ -104,6 +136,31 @@ data:
           echo "# HELP ipsec_nas_certificate_import_timestamp_seconds When cert-sync last imported a certificate into the NSS database."
           echo "# TYPE ipsec_nas_certificate_import_timestamp_seconds gauge"
           echo "ipsec_nas_certificate_import_timestamp_seconds{node=\"${node}\"} ${imported}"
+        fi
+        echo "# HELP ipsec_nas_connection_configured 1 if NetworkManager on the node has the ipsec-nas connection (the NNCP was applied), 0 if not."
+        echo "# TYPE ipsec_nas_connection_configured gauge"
+        echo "ipsec_nas_connection_configured{node=\"${node}\",connection=\"${CONN_NAME}\"} ${configured}"
+        echo "# HELP ipsec_nas_certificate_present 1 if the node certificate is in the node's NSS database, 0 if not."
+        echo "# TYPE ipsec_nas_certificate_present gauge"
+        echo "ipsec_nas_certificate_present{node=\"${node}\",nickname=\"${CERT_NICK}\"} ${cert_present}"
+        if [[ -n "${ike}" ]]; then
+          echo "# HELP ipsec_nas_ike_sa_established 1 if the node has an established IKE SA with the NAS (the login), 0 if not. ipsec_nas_tunnel_up is the IPsec SA that carries the traffic."
+          echo "# TYPE ipsec_nas_ike_sa_established gauge"
+          echo "ipsec_nas_ike_sa_established{node=\"${node}\",connection=\"${CONN_NAME}\"} ${ike}"
+        fi
+        if [[ -n "${xfrm}" ]]; then
+          echo "# HELP ipsec_nas_xfrm_errors_total The node kernel's IPsec error counters (/proc/net/xfrm_stat of the host). Counted for all IPsec traffic of the node."
+          echo "# TYPE ipsec_nas_xfrm_errors_total counter"
+          while read -r counter value; do
+            echo "ipsec_nas_xfrm_errors_total{node=\"${node}\",counter=\"${counter}\"} ${value}"
+          done <<<"${xfrm}"
+        fi
+        if [[ -n "${mounts}" ]]; then
+          echo "# HELP ipsec_nas_nfs_mounts NFS mounts on the node, per NFS server."
+          echo "# TYPE ipsec_nas_nfs_mounts gauge"
+          while read -r server count; do
+            echo "ipsec_nas_nfs_mounts{node=\"${node}\",server=\"$(label_escape "${server}")\"} ${count}"
+          done <<<"${mounts}"
         fi
         if [[ -n "${version}" ]]; then
           echo "# HELP ipsec_nas_libreswan_info The libreswan version on the node."

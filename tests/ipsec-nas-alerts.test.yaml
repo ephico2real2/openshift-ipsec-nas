@@ -132,3 +132,88 @@ tests:
       exp_annotations:
         summary: "The IPsec certificate on node worker-1 has expired"
         description: "The NAS will refuse this node. Renew the Certificate ipsec-worker-1 in kcs-ipsec."
+
+# Six nodes, each with one fault (w0 has none). Every alert must fire for its node and only that
+# node: a multi-node cluster must not mix one node's data with another's.
+- interval: 1m
+  input_series:
+  # the collector's heartbeat, with the labels a real scrape adds (pod, exporter_node)
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="w0",exporter_node="w0",pod="p0"}'
+    values: '0+60x70'
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="w1",exporter_node="w9",pod="p1"}'
+    values: '0+60x70'
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="w2",exporter_node="w2",pod="p2a"}'
+    values: '0+60x70'
+  - series: 'ipsec_nas_collect_timestamp_seconds{node="w2",exporter_node="w2",pod="p2b"}'
+    values: '0+60x70'
+  - series: 'ipsec_nas_tunnel_up{node="w0",connection="ipsec-nas"}'
+    values: '1x70'
+  - series: 'ipsec_nas_tunnel_up{node="w3",connection="ipsec-nas"}'
+    values: '0x70'
+  - series: 'ipsec_nas_certificate_present{node="w0",nickname="left_server"}'
+    values: '1x70'
+  - series: 'ipsec_nas_certificate_present{node="w3",nickname="left_server"}'
+    values: '0x70'
+  - series: 'ipsec_nas_certificate_present{node="w4",nickname="left_server"}'
+    values: '1x70'
+  - series: 'ipsec_nas_connection_configured{node="w0",connection="ipsec-nas"}'
+    values: '1x70'
+  - series: 'ipsec_nas_connection_configured{node="w3",connection="ipsec-nas"}'
+    values: '0x70'
+  - series: 'ipsec_nas_connection_configured{node="w4",connection="ipsec-nas"}'
+    values: '0x70'
+  # w0's tunnel stays; w5's is re-established every 10 minutes
+  - series: 'ipsec_nas_tunnel_established_timestamp_seconds{node="w0",connection="ipsec-nas"}'
+    values: '100x70'
+  - series: 'ipsec_nas_tunnel_established_timestamp_seconds{node="w5",connection="ipsec-nas"}'
+    values: '0x9 600x9 1200x9 1800x9 2400x9 3000x29'
+  # the platform's node-exporter: NFS requests on w0 (tunnel up) and on w3 (tunnel down)
+  - series: 'node_nfs_requests_total{instance="w0",method="WRITE",proto="4"}'
+    values: '0+30x70'
+  - series: 'node_nfs_requests_total{instance="w3",method="WRITE",proto="4"}'
+    values: '0+30x70'
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: IpsecNasNodeLabelMismatch
+    exp_alerts:
+    - exp_labels: {severity: warning, node: w1, exporter_node: w9, pod: p1}
+      exp_annotations:
+        summary: "The pod p1 reports node w1 but runs on w9"
+        description: "Metrics are pinned to the wrong node. Check the DaemonSet's NODE_NAME (downward API spec.nodeName)."
+  - eval_time: 11m
+    alertname: IpsecNasDuplicateNode
+    exp_alerts:
+    - exp_labels: {severity: warning, node: w2}
+      exp_annotations:
+        summary: "2 pods report IPsec metrics for node w2"
+        description: "Only one ipsec-cert-sync pod should run per node. oc get pods -n kcs-ipsec -o wide."
+  - eval_time: 11m
+    alertname: IpsecNasCertificateMissing
+    exp_alerts:
+    - exp_labels: {severity: critical, node: w3, nickname: left_server}
+      exp_annotations:
+        summary: "Node w3 has no IPsec certificate in its NSS database"
+        description: "No tunnel can come up without it. Check the cert-sync pod's log on that node and the Certificate in kcs-ipsec."
+  # w4 has its certificate and no connection; w3 has neither and is not reported here
+  - eval_time: 16m
+    alertname: IpsecNasConnectionMissing
+    exp_alerts:
+    - exp_labels: {severity: warning, node: w4, connection: ipsec-nas}
+      exp_annotations:
+        summary: "Node w4 has its certificate but no ipsec-nas connection"
+        description: "The NNCP was not applied to this node. oc get nncp,nnce | grep ipsec-nas; check the Kyverno NNCP policy."
+  - eval_time: 65m
+    alertname: IpsecNasTunnelFlapping
+    exp_alerts:
+    - exp_labels: {severity: warning, node: w5, connection: ipsec-nas}
+      exp_annotations:
+        summary: "The tunnel of node w5 was re-established 5 times in an hour"
+        description: "A tunnel that keeps restarting looks up on every other panel. On the node: journalctl -u ipsec; on the NAS: duplicate peer IDs."
+  # NFS runs on w0 and w3; only w3's tunnel is down
+  - eval_time: 12m
+    alertname: IpsecNasNfsWithoutTunnel
+    exp_alerts:
+    - exp_labels: {severity: critical, node: w3}
+      exp_annotations:
+        summary: "Node w3 sends NFS requests while its IPsec tunnel is down"
+        description: "The NFS traffic is not encrypted, or is failing if the NAS rejects cleartext. Counts all NFS servers of the node."

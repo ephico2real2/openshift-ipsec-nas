@@ -37,4 +37,9 @@ spec:
     path: /metrics
     interval: 30s
     scrapeTimeout: 10s
+    relabelings:
+    # The node Kubernetes placed the pod on, set by Prometheus and not by the collector.
+    # Alert IpsecNasNodeLabelMismatch compares it with the collector's own node label.
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: exporter_node
 {{- end }}

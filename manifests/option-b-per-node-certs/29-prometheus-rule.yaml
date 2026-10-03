@@ -81,3 +81,68 @@ spec:
         description: >-
           No ipsec-cert-sync pod is being scraped on this worker, so nothing is watching its
           tunnel. oc get pods -n kcs-ipsec -o wide.
+
+    # --- each node reports its own data, once ---------------------------------------------
+    # exporter_node is set by Prometheus from where Kubernetes placed the pod (ServiceMonitor
+    # relabeling); node is what the collector wrote from the downward API. They must agree.
+    - alert: IpsecNasNodeLabelMismatch
+      expr: |-
+        ipsec_nas_collect_timestamp_seconds{exporter_node!=""}
+        unless on (node, pod)
+        label_replace(ipsec_nas_collect_timestamp_seconds, "node", "$1", "exporter_node", "(.+)")
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "The pod {{ $labels.pod }} reports node {{ $labels.node }} but runs on {{ $labels.exporter_node }}"
+        description: "Metrics are pinned to the wrong node. Check the DaemonSet's NODE_NAME (downward API spec.nodeName)."
+
+    # Two pods reporting for one node (a pod stuck terminating, a second DaemonSet) double every count.
+    - alert: IpsecNasDuplicateNode
+      expr: count by (node) (ipsec_nas_collect_timestamp_seconds) > 1
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "{{ $value }} pods report IPsec metrics for node {{ $labels.node }}"
+        description: "Only one ipsec-cert-sync pod should run per node. oc get pods -n kcs-ipsec -o wide."
+
+    # --- why a tunnel is down ---------------------------------------------------------------
+    - alert: IpsecNasCertificateMissing
+      expr: ipsec_nas_certificate_present == 0
+      for: 10m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.node }} has no IPsec certificate in its NSS database"
+        description: "No tunnel can come up without it. Check the cert-sync pod's log on that node and the Certificate in kcs-ipsec."
+
+    - alert: IpsecNasConnectionMissing
+      expr: ipsec_nas_connection_configured == 0 and on (node) ipsec_nas_certificate_present == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Node {{ $labels.node }} has its certificate but no ipsec-nas connection"
+        description: "The NNCP was not applied to this node. oc get nncp,nnce | grep ipsec-nas; check the Kyverno NNCP policy."
+
+    - alert: IpsecNasTunnelFlapping
+      expr: changes(ipsec_nas_tunnel_established_timestamp_seconds[1h]) > 3
+      labels:
+        severity: warning
+      annotations:
+        summary: "The tunnel of node {{ $labels.node }} was re-established {{ $value }} times in an hour"
+        description: "A tunnel that keeps restarting looks up on every other panel. On the node: journalctl -u ipsec; on the NAS: duplicate peer IDs."
+
+    # node_nfs_requests_total comes from the platform's node-exporter; its instance label is the
+    # node's name. NFS traffic on a node whose tunnel is down is unencrypted or failing.
+    - alert: IpsecNasNfsWithoutTunnel
+      expr: |-
+        sum by (node) (label_replace(rate(node_nfs_requests_total[5m]), "node", "$1", "instance", "(.*)")) > 0
+        and on (node) ipsec_nas_tunnel_up == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Node {{ $labels.node }} sends NFS requests while its IPsec tunnel is down"
+        description: "The NFS traffic is not encrypted, or is failing if the NAS rejects cleartext. Counts all NFS servers of the node."
