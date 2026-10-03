@@ -33,8 +33,11 @@ else
   NFS_CLIENTS="${WORKER_SUBNET}"
   MODE_LINES="    type=transport"
 fi
-# yes only for Option A, where every worker presents the same certificate identity
+# yes for Options A and C, where every worker presents the same certificate identity
 ALLOW_DUPLICATE_IDS="${ALLOW_DUPLICATE_IDS:-no}"
+# Which peer identity the NAS accepts. %fromcert takes it from the peer's certificate (its subject
+# DN); docs/50-option-c-wildcard-certificate.md compares it with @*.<domain> for a wildcard cert.
+NAS_RIGHTID="${NAS_RIGHTID:-%fromcert}"
 NSS_DB=/var/lib/ipsec/nss
 
 step() { echo; echo "== $*"; }
@@ -59,7 +62,7 @@ conn workers
     leftcert=nas
     leftrsasigkey=%cert
     right=%any
-    rightid=%fromcert
+    rightid=${NAS_RIGHTID}
     rightrsasigkey=%cert
     rightca=%same
     ikev2=insist

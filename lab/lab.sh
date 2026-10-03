@@ -5,6 +5,7 @@
 #   lab/lab.sh up [vm|container]   create the VMs, set up the NAS and both workers, verify
 #   lab/lab.sh verify              write through both tunnels again and show the NAS counters
 #   lab/lab.sh option-a            shared-certificate case: show the duplicate-ID problem and the fix
+#   lab/lab.sh option-c            wildcard-certificate cases: which NAS identity settings work
 #   lab/lab.sh status              list the VMs and the NAS tunnels
 #   lab/lab.sh down                delete the lab VMs
 #
@@ -28,14 +29,15 @@ exists() { limactl list -q 2>/dev/null | grep -qx "$1"; }
 
 nas_mode() { limactl shell "${NAS}" cat /tmp/lab-nas-mode 2>/dev/null || echo vm; }
 
-# (re)configure the NAS; $1 = yes to allow duplicate peer IDs (Option A)
+# (re)configure the NAS; $1 = yes to allow duplicate peer IDs (Options A and C),
+# $2 = the peer identity it accepts (rightid), default %fromcert
 nas_setup() {
-  local allow_dup="$1" mode
+  local allow_dup="$1" rightid="${2:-%fromcert}" mode
   mode="$(nas_mode)"
   if [[ "${mode}" == "container" ]]; then
-    vm "${NAS}" WORKER_SUBNET="${SUBNET}" ALLOW_DUPLICATE_IDS="${allow_dup}" bash /tmp/lab/container/run-nas.sh
+    vm "${NAS}" WORKER_SUBNET="${SUBNET}" ALLOW_DUPLICATE_IDS="${allow_dup}" NAS_RIGHTID="${rightid}" bash /tmp/lab/container/run-nas.sh
   else
-    vm "${NAS}" WORKER_SUBNET="${SUBNET}" ALLOW_DUPLICATE_IDS="${allow_dup}" bash /tmp/lab/rhel/setup-nas.sh
+    vm "${NAS}" WORKER_SUBNET="${SUBNET}" ALLOW_DUPLICATE_IDS="${allow_dup}" NAS_RIGHTID="${rightid}" bash /tmp/lab/rhel/setup-nas.sh
   fi
 }
 
@@ -95,7 +97,8 @@ cmd_up() {
     limactl copy "${NAS}:/tmp/pki/ca.pem" "${v}:/tmp/ca.pem"
     limactl copy "${NAS}:/tmp/pki/$(fqdn "${v}").p12" "${v}:/tmp/left_server.p12"
     limactl copy "${NAS}:/tmp/pki/shared-workers.p12" "${v}:/tmp/shared-workers.p12"
-    vm "${v}" install -D -m 0644 -t /root/ipsec-pki /tmp/ca.pem /tmp/left_server.p12 /tmp/shared-workers.p12
+    limactl copy "${NAS}:/tmp/pki/wildcard-workers.p12" "${v}:/tmp/wildcard-workers.p12"
+    vm "${v}" install -D -m 0644 -t /root/ipsec-pki /tmp/ca.pem /tmp/left_server.p12 /tmp/shared-workers.p12 /tmp/wildcard-workers.p12
   done
 
   say "NAS setup (${mode})"
@@ -147,9 +150,82 @@ cmd_option_a() {
   say "the fix on the NAS: allow duplicate peer IDs (uniqueids=no)"
   nas_setup yes
   for w in ${first} ${second}; do
+    # shellcheck disable=SC2016  # expanded by the shell in the VM
     vm "${w}" bash -c 'systemctl restart ipsec; for i in $(seq 1 30); do ipsec trafficstatus | grep -q ipsec-nas && break; sleep 1; done'
   done
   echo "NAS tunnels now: $(nas_tunnel_count) (expected 2)"
+  verify_workers
+}
+
+# set a worker's IKE identity (leftid) and reconnect. The restart matters: pluto keeps the loaded
+# connection, so "ipsec down/up" alone would still send the old identity.
+worker_id() {  # $1 = worker, $2 = leftid
+  vm "$1" sed -i "s/^\(\s*leftid=\).*/\1$2/" /etc/ipsec.d/ipsec-nas.conf
+  # shellcheck disable=SC2016  # expanded by the shell in the VM
+  vm "$1" bash -c 'systemctl restart ipsec; for i in $(seq 1 20); do ipsec trafficstatus | grep -q ipsec-nas && break; sleep 1; done; ipsec status | grep -o "our id=[^;]*" | head -1'
+}
+
+# the NAS's tunnel count once a second for 15 s
+sample_tunnels() {
+  local samples="" _
+  for _ in $(seq 1 15); do samples+=" $(nas_tunnel_count)"; sleep 1; done
+  echo "NAS tunnels, once a second for 15 s:${samples}"
+  nas_ipsec trafficstatus | cut -c1-150
+}
+
+# One wildcard certificate on both workers (Option C, docs/50-option-c-wildcard-certificate.md).
+# Each case sets the identity the workers send and the NAS's rightid and uniqueids, then counts
+# the NAS's tunnels. NFS is checked only where both tunnels hold: with fewer, a write to the hard
+# NFS mount would hang.
+option_c_case() {  # $1 = label, $2 = workers' leftid ("fqdn" = each its own name), $3 = NAS rightid, $4 = NAS allows duplicate IDs
+  local w
+  say "case $1: workers leftid=$2, NAS rightid=$3, uniqueids=$([[ "$4" == yes ]] && echo no || echo yes)"
+  nas_setup "$4" "$3" >/dev/null
+  for w in ${WORKERS}; do
+    if [[ "$2" == "fqdn" ]]; then worker_id "${w}" "@$(fqdn "${w}")"; else worker_id "${w}" "$2"; fi
+  done
+  sample_tunnels
+  if [[ "$(nas_tunnel_count)" -ge 2 ]]; then verify_workers; else echo "fewer than 2 tunnels: no NFS check"; fi
+}
+
+cmd_option_c() {
+  local w domain
+  domain="$(fqdn "${NAS}")"; domain="${domain#*.}"
+  say "copy the lab scripts again, and issue the wildcard certificate *.${domain} if it is missing"
+  for w in ${NAS} ${WORKERS}; do
+    limactl shell "${w}" rm -rf /tmp/lab
+    limactl copy -r "${HERE}" "${w}:/tmp/lab"
+  done
+  limactl shell "${NAS}" test -s /tmp/pki/wildcard-workers.p12 || vm "${NAS}" /tmp/lab/pki/issue-wildcard.sh /tmp/pki "${domain}"
+  for w in ${WORKERS}; do
+    limactl copy "${NAS}:/tmp/pki/wildcard-workers.p12" "${w}:/tmp/wildcard-workers.p12"
+    vm "${w}" install -D -m 0644 -t /root/ipsec-pki /tmp/wildcard-workers.p12
+    vm "${w}" bash /tmp/lab/rhel/switch-worker-cert.sh /root/ipsec-pki/wildcard-workers.p12 | grep -E 'Subject:|DNS name'
+  done
+  nas_ipsec --version
+
+  option_c_case 1 %fromcert %fromcert no
+  option_c_case 2 %fromcert %fromcert yes
+  option_c_case 3 fqdn %fromcert no
+  option_c_case 4 fqdn %any no
+  option_c_case 5 fqdn "@*.${domain}" no
+  option_c_case 6 fqdn "@*.${domain}" yes
+
+  w="${WORKERS%% *}"
+  say "negative: ${w} claims an identity outside *.${domain}, NAS as in case 6"
+  worker_id "${w}" "@$(fqdn "${w}" | cut -d. -f1).example.org"
+  sleep 5
+  vm "${w}" bash -c 'ipsec trafficstatus | grep -c "\"ipsec-nas\"" | sed "s/^/tunnels on this worker: /"'
+  nas_ipsec trafficstatus | cut -c1-150
+
+  say "restore: the NAS defaults, each worker its own certificate and leftid=%fromcert"
+  nas_setup no >/dev/null
+  for w in ${WORKERS}; do
+    vm "${w}" sed -i 's/^\(\s*leftid=\).*/\1%fromcert/' /etc/ipsec.d/ipsec-nas.conf
+    vm "${w}" bash /tmp/lab/rhel/switch-worker-cert.sh /root/ipsec-pki/left_server.p12 >/dev/null
+    # shellcheck disable=SC2016  # expanded by the shell in the VM
+    vm "${w}" bash -c 'for i in $(seq 1 30); do ipsec trafficstatus | grep -q ipsec-nas && break; sleep 1; done'
+  done
   verify_workers
 }
 
@@ -173,7 +249,8 @@ case "${1:-}" in
   up)       shift; cmd_up "$@" ;;
   verify)   verify_workers ;;
   option-a) cmd_option_a ;;
+  option-c) cmd_option_c ;;
   status)   cmd_status ;;
   down)     cmd_down ;;
-  *)        sed -n '2,13p' "$0"; exit 2 ;;
+  *)        sed -n '2,14p' "$0"; exit 2 ;;
 esac

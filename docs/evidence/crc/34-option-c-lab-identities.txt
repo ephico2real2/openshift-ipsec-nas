@@ -1,0 +1,100 @@
+$ lab/lab.sh option-c      # Lima lab: NAS and two stand-in workers, one wildcard certificate *.internal (lab/pki/issue-wildcard.sh)
+
+### copy the lab scripts again, and issue the wildcard certificate *.internal if it is missing
+        Subject: "O=IPsec NAS test,CN=ocp-ipsec-workers-wildcard"
+            DNS name: "*.internal"
+        Subject: "O=IPsec NAS test,CN=ocp-ipsec-workers-wildcard"
+            DNS name: "*.internal"
+Libreswan 5.4
+
+### case 1: workers leftid=%fromcert, NAS rightid=%fromcert, uniqueids=yes
+our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
+our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
+NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#820: "workers"[410] 192.168.104.6, type=ESP, add_time=1790991886, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+fewer than 2 tunnels: no NFS check
+
+### case 2: workers leftid=%fromcert, NAS rightid=%fromcert, uniqueids=no
+our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
+our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
+NAS tunnels, once a second for 15 s: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790991888, inBytes=22316, outBytes=7384, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPse
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790991889, inBytes=456, outBytes=304, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+
+### verify lab-worker1
+tunnel outBytes: before=22608 after=5419676 grew=5397068 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 08f9b0f764f33141...)
+
+### verify lab-worker2
+tunnel outBytes: before=748 after=5369164 grew=5368416 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 39f9e8a912be71bc...)
+
+### NAS: tunnels and firewall counters
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790991888, inBytes=5419708, outBytes=5400308, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790991889, inBytes=5369196, outBytes=27524, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
+
+### case 3: workers leftid=fqdn, NAS rightid=%fromcert, uniqueids=yes
+our id=@lima-lab-worker1.internal
+our id=@lima-lab-worker2.internal
+NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#841: "workers"[421] 192.168.104.3, type=ESP, add_time=1790991930, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+fewer than 2 tunnels: no NFS check
+
+### case 4: workers leftid=fqdn, NAS rightid=%any, uniqueids=yes
+our id=@lima-lab-worker1.internal
+our id=@lima-lab-worker2.internal
+NAS tunnels, once a second for 15 s: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+fewer than 2 tunnels: no NFS check
+
+### case 5: workers leftid=fqdn, NAS rightid=@*.internal, uniqueids=yes
+our id=@lima-lab-worker1.internal
+our id=@lima-lab-worker2.internal
+NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+#834: "workers"[417] 192.168.104.3, type=ESP, add_time=1790992012, inBytes=0, outBytes=0, maxBytes=2^63B, id='@*.internal'
+fewer than 2 tunnels: no NFS check
+
+### case 6: workers leftid=fqdn, NAS rightid=@*.internal, uniqueids=no
+our id=@lima-lab-worker1.internal
+our id=@lima-lab-worker2.internal
+NAS tunnels, once a second for 15 s: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790992013, inBytes=22468, outBytes=6968, maxBytes=2^63B, id='@*.internal'
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=384, outBytes=232, maxBytes=2^63B, id='@*.internal'
+
+### verify lab-worker1
+tunnel outBytes: before=22952 after=5391368 grew=5368416 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 0f9657d69cf78d5c...)
+
+### verify lab-worker2
+tunnel outBytes: before=676 after=5369092 grew=5368416 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 aaaf959505554f7b...)
+
+### NAS: tunnels and firewall counters
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790992013, inBytes=5391400, outBytes=20748, maxBytes=2^63B, id='@*.internal'
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=5369124, outBytes=13916, maxBytes=2^63B, id='@*.internal'
+
+### negative: lab-worker1 claims an identity outside *.internal, NAS as in case 6
+our id=@lima-lab-worker1.example.org
+tunnels on this worker: 1
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=5369124, outBytes=13916, maxBytes=2^63B, id='@*.internal'
+#8: "workers"[4] 192.168.104.3, type=ESP, add_time=1790992034, inBytes=20, outBytes=188, maxBytes=2^63B, id='@*.internal'
+
+### restore: the NAS defaults, each worker its own certificate and leftid=%fromcert
+
+### verify lab-worker1
+tunnel outBytes: before=22500 after=5391172 grew=5368672 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 1a88c7c78e99e71b...)
+
+### verify lab-worker2
+tunnel outBytes: before=0 after=5391916 grew=5391916 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 da005e40b2468da0...)
+
+### NAS: tunnels and firewall counters
+#5: "workers"[3] 192.168.104.3, type=ESP, add_time=1790992041, inBytes=5391236, outBytes=17996, maxBytes=2^63B, id='CN=lima-lab-worker1.internal, O=IPsec NAS test'
+#7: "workers"[4] 192.168.104.6, type=ESP, add_time=1790992047, inBytes=5391948, outBytes=5377496, maxBytes=2^63B, id='CN=lima-lab-worker2.internal, O=IPsec NAS test'
+2026-10-03T01:47:32Z
+$ # why case 4 refuses an FQDN identity: the NAS with debugging on (rightid=%any, lab-worker1 sends @lima-lab-worker1.internal)
+our id=@lima-lab-worker1.internal
+tunnels on lab-worker1: 0
+| rfc:   skipping because initiator_id does not match and that.id.kind is not a cert
+| initiator ID is FQDN: '@lima-lab-worker1.internal'
+| rfc:   returning FALSE because nothing is sufficiently refined

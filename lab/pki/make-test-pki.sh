@@ -9,6 +9,7 @@
 #   nas.p12                  NAS certificate + key, friendly name "nas"
 #   <worker-fqdn>.p12        one per worker, friendly name "left_server"   (Option B: one cert per node)
 #   shared-workers.p12       ONE cert whose SAN lists every worker         (Option A: shared cert)
+#   wildcard-workers.p12     ONE cert with SAN *.<the workers' domain>      (Option C: wildcard cert)
 # Every .p12 has an empty password, as in the guide (it is imported unattended).
 set -euo pipefail
 
@@ -16,6 +17,7 @@ set -euo pipefail
 OUT="$1"; NAS_FQDN="$2"; shift 2
 WORKERS=("$@")
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "${OUT}"
 cd "${OUT}"
 
@@ -42,6 +44,7 @@ for w in "${WORKERS[@]}"; do
 done
 
 issue shared-workers ocp-ipsec-workers "${san_all}" left_server
+"${HERE}/issue-wildcard.sh" . "${WORKERS[0]#*.}"
 
 chmod 0644 ./*.p12 ca.pem
 echo "test PKI written to ${OUT}"

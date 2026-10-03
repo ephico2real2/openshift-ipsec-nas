@@ -7,7 +7,8 @@
 #   WORKER_SUBNET   required, the subnet the workers connect from
 #   PKI_DIR         /pki, must hold ca.pem and nas.p12 (empty password, friendly name "nas")
 #   EXPORT_DIR      /export, mount a real filesystem here (a volume or a host directory)
-#   ALLOW_DUPLICATE_IDS  yes only for Option A (every worker presents the same certificate identity)
+#   ALLOW_DUPLICATE_IDS  yes for Options A and C (every worker presents the same certificate identity)
+#   NAS_RIGHTID     the peer identity the NAS accepts, default %fromcert (the certificate's subject DN)
 #   NAS_LEFT        the address the workers connect to, on a host with several network interfaces
 set -euo pipefail
 
@@ -15,6 +16,7 @@ WORKER_SUBNET="${WORKER_SUBNET:?set WORKER_SUBNET, e.g. 192.168.104.0/24}"
 PKI_DIR="${PKI_DIR:-/pki}"
 EXPORT_DIR="${EXPORT_DIR:-/export}"
 ALLOW_DUPLICATE_IDS="${ALLOW_DUPLICATE_IDS:-no}"
+NAS_RIGHTID="${NAS_RIGHTID:-%fromcert}"
 NAS_LEFT="${NAS_LEFT:-%defaultroute}"
 NSS_DB=/var/lib/ipsec/nss
 NFS_ROOT=/srv/nfs4
@@ -51,7 +53,7 @@ conn workers
     leftcert=nas
     leftrsasigkey=%cert
     right=%any
-    rightid=%fromcert
+    rightid=${NAS_RIGHTID}
     rightrsasigkey=%cert
     rightca=%same
     ikev2=insist
