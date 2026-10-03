@@ -1,0 +1,225 @@
+$ # Before: legacy policies (commit bea942b). snapshot: the Application, the policies, the node's Certificate, Secret and NNCP, the cert-sync pod, the tunnel, the demo app's line count
+2026-10-02T23:45:54Z
+app: Synced Healthy rev=bea942b73b0367158dfdead2f5592cb61ad3b912
+clusterpolicy: ipsec-node-certificate
+clusterpolicy: ipsec-cert-sync-mount
+clusterpolicy: ipsec-nncp-per-node
+cleanup: cleanuppolicy.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=a320bc15-0220-4536-8591-9fcdf4f27a1a ready=True notAfter=2027-10-02T23:10:38Z policy=ipsec-node-certificate
+secret: uid=c58f310e-eb2e-43bd-9a29-c1ec435165db created=2026-10-02T23:10:38Z
+nncp: uid=7518cd33-2257-4114-a374-e885fed71ba3 created=2026-10-02T22:51:55Z True
+pod: ipsec-cert-sync-2mkl4 Running mounts=ipsec-cert-crc
+tunnel: #7: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790982881, inBytes=846928, outBytes=2205156, m
+demo: 562 2026-10-02T23:45:51Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=421
+$ git push   # e7323b2: CEL policies by default. Argo CD (automated: {}, no prune) syncs it; then the same snapshot
+2026-10-02T23:46:53Z
+app: OutOfSync Healthy rev=e7323b2c4196a03874b227908285c2c2eabac294
+clusterpolicy: ipsec-node-certificate
+clusterpolicy: ipsec-cert-sync-mount
+clusterpolicy: ipsec-nncp-per-node
+cel: generatingpolicy.policies.kyverno.io/ipsec-nncp-per-node 17s
+cel: generatingpolicy.policies.kyverno.io/ipsec-node-certificate 22s
+cel: mutatingpolicy.policies.kyverno.io/ipsec-cert-sync-mount true
+cleanup: cleanuppolicy.kyverno.io/ipsec-orphaned-node-secrets
+cleanup: namespaceddeletingpolicy.policies.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=a320bc15-0220-4536-8591-9fcdf4f27a1a ready=True notAfter=2027-10-02T23:10:38Z policy=ipsec-node-certificate
+secret: uid=c58f310e-eb2e-43bd-9a29-c1ec435165db created=2026-10-02T23:10:38Z
+nncp: uid=7518cd33-2257-4114-a374-e885fed71ba3 created=2026-10-02T22:51:55Z True
+pod: ipsec-cert-sync-2mkl4 Running mounts=ipsec-cert-crc
+tunnel: #7: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790982881, inBytes=874460, outBytes=2275492, m
+demo: 568 2026-10-02T23:46:51Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=427
+$ oc patch application -n openshift-gitops ipsec-nas --type merge -p '{"operation":{"sync":{"revision":"main","prune":true}}}'
+2026-10-02T23:47:08Z
+application.argoproj.io/ipsec-nas patched
+op: Succeeded started=2026-10-02T23:47:08Z finished=2026-10-02T23:47:21Z
+pruned: ClusterPolicy/ipsec-nncp-per-node
+pruned: ClusterPolicy/ipsec-node-certificate
+pruned: CleanupPolicy/ipsec-orphaned-node-secrets
+pruned: ClusterPolicy/ipsec-cert-sync-mount
+2026-10-02T23:47:38Z
+app: Synced Healthy rev=e7323b2c4196a03874b227908285c2c2eabac294
+cel: generatingpolicy.policies.kyverno.io/ipsec-nncp-per-node 63s
+cel: generatingpolicy.policies.kyverno.io/ipsec-node-certificate 68s
+cel: mutatingpolicy.policies.kyverno.io/ipsec-cert-sync-mount true
+cleanup: namespaceddeletingpolicy.policies.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=a320bc15-0220-4536-8591-9fcdf4f27a1a ready=True notAfter=2027-10-02T23:10:38Z policy=ipsec-node-certificate
+secret: uid=c58f310e-eb2e-43bd-9a29-c1ec435165db created=2026-10-02T23:10:38Z
+nncp: uid=7518cd33-2257-4114-a374-e885fed71ba3 created=2026-10-02T22:51:55Z True
+pod: ipsec-cert-sync-2mkl4 Running mounts=ipsec-cert-crc
+tunnel: #7: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790982881, inBytes=893876, outBytes=2325108, m
+demo: 572 2026-10-02T23:47:31Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=431
+$ # CEL mode: a new cert-sync pod, and stand-in Nodes
+2026-10-02T23:48:05Z
+== labels Kyverno put on the objects it generated
+"generate.kyverno.io/policy-name":"ipsec-node-certificate"
+"generate.kyverno.io/policy-name":"ipsec-nncp-per-node"
+== 1. a new cert-sync pod: only the CEL MutatingPolicy can give it its secret now
+pod "ipsec-cert-sync-2mkl4" deleted from kcs-ipsec namespace
+pod: ipsec-cert-sync-2mkl4 Running mounts=ipsec-cert-crc
+== 2. two stand-in Nodes: a worker, and a worker that is also an ingress node
+node/ipsec-test-worker created
+node/ipsec-test-ingress created
+$ oc label node ipsec-test-ingress node-role.kubernetes.io/ingress=   # a second request: the node was created as a plain worker first
+2026-10-02T23:48:29Z
+certificate: ipsec-crc True
+certificate: ipsec-ipsec-test-ingress True
+certificate: ipsec-ipsec-test-worker True
+  made by: ipsec-node-certificate
+pod: ipsec-cert-sync-2mkl4 Running node=crc mounts=ipsec-cert-crc
+pod: ipsec-cert-sync-rppwf Pending node=ipsec-test-worker mounts=ipsec-cert-ipsec-test-worker
+secret: ipsec-cert-crc
+secret: ipsec-cert-ipsec-test-ingress
+secret: ipsec-cert-ipsec-test-worker
+== 30 s later
+certificate: ipsec-crc True
+certificate: ipsec-ipsec-test-ingress True
+certificate: ipsec-ipsec-test-worker True
+pod: ipsec-cert-sync-rppwf Pending created=2026-10-02T23:48:14Z node=ipsec-test-worker mounts=ipsec-cert-ipsec-test-worker
+pod: ipsec-cert-sync-zstqt Running created=2026-10-02T23:48:36Z node=crc mounts=ipsec-cert-crc
+ingress node labels: {"kubernetes.io/hostname":"ipsec-test-ingress","node-role.kubernetes.io/ingress":"","node-role.kubernetes.io/worker":""}
+$ # 1b4aa92: the node selection as matchConditions (with an objectSelector the ingress stand-in above kept its Certificate). After the sync:
+app: Synced Healthy rev=1b4aa9286f17c88522f0e5ba09c2543849a0e767
+cel: generatingpolicy.policies.kyverno.io/ipsec-nncp-per-node 9m54s
+cel: generatingpolicy.policies.kyverno.io/ipsec-node-certificate 9m59s
+cel: mutatingpolicy.policies.kyverno.io/ipsec-cert-sync-mount true
+cleanup: namespaceddeletingpolicy.policies.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=a320bc15-0220-4536-8591-9fcdf4f27a1a ready=True notAfter=2027-10-02T23:10:38Z policy=ipsec-node-certificate
+secret: uid=c58f310e-eb2e-43bd-9a29-c1ec435165db created=2026-10-02T23:10:38Z
+nncp: uid=7518cd33-2257-4114-a374-e885fed71ba3 created=2026-10-02T22:51:55Z True
+pod: ipsec-cert-sync-zstqt Running mounts=ipsec-cert-crc
+tunnel: #7: "c193653d-5464-47d4-93bd-4f1b02d54938", type=ESP, add_time=1790982881, inBytes=1133236, outBytes=2949696,
+demo: 625 2026-10-02T23:56:22Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=484
+policy conditions: selected-nodes not-excluded
+== (a) a Node that is an ingress node from the start
+node/ipsec-test-ingress created
+== (b) a worker
+node/ipsec-test-worker created
+2026-10-02T23:56:46Z
+certificate: ipsec-crc True
+certificate: ipsec-ipsec-test-ingress True
+certificate: ipsec-ipsec-test-worker True
+pod: ipsec-cert-sync-grdwl Pending node=ipsec-test-worker
+pod: ipsec-cert-sync-zstqt Running node=crc
+== (b) the worker gets the excluded label
+node/ipsec-test-worker labeled
+t+5s certificate ipsec-ipsec-test-worker: gone
+pod: ipsec-cert-sync-grdwl Pending node=ipsec-test-worker
+pod: ipsec-cert-sync-zstqt Running node=crc
+$ # the Certificate left by the objectSelector test: deleted by hand, Kyverno's watcher had put it back once at 23:56:14
+certificate.cert-manager.io "ipsec-ipsec-test-ingress" deleted from kcs-ipsec namespace
+t+10s ipsec-ipsec-test-ingress: none
+t+90s ipsec-ipsec-test-ingress: none
+current ingress node uid=419c93fd-9e58-401b-9f72-a9d495de4451
+$ oc delete node ipsec-test-worker ipsec-test-ingress   # then the NamespacedDeletingPolicy's next run
+node "ipsec-test-worker" deleted
+node "ipsec-test-ingress" deleted
+secret before the sweep: ipsec-cert-crc
+secret before the sweep: ipsec-cert-ipsec-test-ingress
+secret before the sweep: ipsec-cert-ipsec-test-worker
+== waiting 72s for the next */5 run
+last run: 2026-10-03T00:00:00Z
+secret after the sweep: ipsec-cert-crc
+certificate: ipsec-crc True
+pod: ipsec-cert-sync-grdwl Pending
+pod: ipsec-cert-sync-zstqt Running
+$ # Removal with Argo CD, the three steps, in CEL mode
+2026-10-03T00:00:44Z
+$ # 1. Detach: delete the Application and keep its objects
+application.argoproj.io/ipsec-nas patched
+application.argoproj.io "ipsec-nas" deleted from openshift-gitops namespace
+2026-10-03T00:00:44Z
+$ charts/ipsec-nas/examples/run-cleanup.sh kcs-ipsec   # 2. the cleanup, while the cert-sync pods are still there
+serviceaccount/ipsec-nas-uninstall created
+configmap/ipsec-nas-uninstall created
+clusterrole.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+clusterrolebinding.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+role.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+rolebinding.rbac.authorization.k8s.io/ipsec-nas-uninstall created
+job.batch/ipsec-nas-uninstall created
+job.batch/ipsec-nas-uninstall condition met
+2026-10-03T00:00:45Z 1. Stop Kyverno from creating NNCPs again
+generatingpolicy.policies.kyverno.io "ipsec-nncp-per-node" deleted
+No resources found
+2026-10-03T00:00:45Z 2. Remove the tunnel from every node, with an NNCP that says: absent
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc condition met
+2026-10-03T00:00:52Z    tunnel removed from crc
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-remove-crc" deleted
+2026-10-03T00:00:52Z 3. Remove the cert-ready label from the nodes
+node/crc unlabeled
+2026-10-03T00:00:52Z 4. Remove each node's certificate and private key from its NSS database
+2026-10-03T00:00:53Z    cleaned the node of pod ipsec-cert-sync-zstqt
+2026-10-03T00:00:53Z 5. Delete the Certificates first (while one exists, cert-manager puts its Secret back), then the Secrets
+generatingpolicy.policies.kyverno.io "ipsec-node-certificate" deleted
+No resources found
+secret "ipsec-cert-crc" deleted from kcs-ipsec namespace
+2026-10-03T00:00:53Z Done. Ask the CA team to revoke the node certificates.
+serviceaccount "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+configmap "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+clusterrole.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted
+clusterrolebinding.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted
+role.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+job.batch "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+2026-10-03T00:00:55Z
+$ # 3. delete the chart's objects
+serviceaccount "ipsec-cert-sync" deleted from kcs-ipsec namespace
+configmap "ipsec-cert-sync-script" deleted from kcs-ipsec namespace
+configmap "ipsec-metrics-scripts" deleted from kcs-ipsec namespace
+clusterrole.rbac.authorization.k8s.io "ipsec-cert-sync-label-node" deleted
+clusterrole.rbac.authorization.k8s.io "kyverno:ipsec-nas-generate" deleted
+clusterrole.rbac.authorization.k8s.io "kyverno:ipsec-nas-read-nodes" deleted
+clusterrolebinding.rbac.authorization.k8s.io "ipsec-cert-sync-label-node" deleted
+role.rbac.authorization.k8s.io "ipsec-cert-sync-recreate-pod" deleted from kcs-ipsec namespace
+role.rbac.authorization.k8s.io "kyverno-cleanup-ipsec-secrets" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "ipsec-cert-sync-recreate-pod" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "system:openshift:scc:privileged" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "kyverno-cleanup-ipsec-secrets" deleted from kcs-ipsec namespace
+service "ipsec-nas-metrics" deleted from kcs-ipsec namespace
+daemonset.apps "ipsec-cert-sync" deleted from kcs-ipsec namespace
+mutatingpolicy.policies.kyverno.io "ipsec-cert-sync-mount" deleted
+namespaceddeletingpolicy.policies.kyverno.io "ipsec-orphaned-node-secrets" deleted from kcs-ipsec namespace
+prometheusrule.monitoring.coreos.com "ipsec-nas" deleted from kcs-ipsec namespace
+servicemonitor.monitoring.coreos.com "ipsec-nas" deleted from kcs-ipsec namespace
+2026-10-03T00:00:59Z
+$ # what is left
+No resources found
+NAME                        READY   STATUS        RESTARTS   AGE
+pod/ipsec-cert-sync-zstqt   3/3     Terminating   0          12m
+No resources found in kcs-ipsec namespace.
+No resources found
+cert-ready label:
+no ipsec ClusterRoles
+trafficstatus: []
+ipsec-nas connections: 0
+NSS: no left_server, no KCS-IPSEC-CA
+certificates on the cluster: 18
+$ oc apply -f application.json   # the same Application again, from Git
+application.argoproj.io/ipsec-nas created
+t+1s app=/ cert=none pod=none nncp=none
+t+3s app=OutOfSync/Missing cert=none pod=none nncp=none
+t+5s app=OutOfSync/Healthy cert=none pod=none nncp=none
+t+7s app=OutOfSync/Healthy cert=True pod=none nncp=none
+t+10s app=OutOfSync/Progressing cert=True pod=ipsec-cert-sync-qnc2p:Pending:ipsec-cert-crc nncp=none
+t+12s app=Synced/Healthy cert=True pod=ipsec-cert-sync-qnc2p:Running:ipsec-cert-crc nncp=Unknown
+t+19s app=Synced/Healthy cert=True pod=ipsec-cert-sync-qnc2p:Running:ipsec-cert-crc nncp=True
+t+19s tunnel: #9: "829c6a3b-d0cb-4414-b7e9-60b26cb79b2a", type=ESP, add_time=1790985703, inBytes=0, outBytes=0, ma
+$ # 30 s later: the snapshot, the NAS, the cluster's Certificates, the demo app's newest lines
+2026-10-03T00:02:15Z
+app: Synced Healthy rev=1b4aa9286f17c88522f0e5ba09c2543849a0e767
+cel: generatingpolicy.policies.kyverno.io/ipsec-nncp-per-node 37s
+cel: generatingpolicy.policies.kyverno.io/ipsec-node-certificate 42s
+cel: mutatingpolicy.policies.kyverno.io/ipsec-cert-sync-mount true
+cleanup: namespaceddeletingpolicy.policies.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=345cd825-c9da-4ba3-baf7-2754370c11b7 ready=True notAfter=2027-10-03T00:01:34Z policy=ipsec-node-certificate
+secret: uid=4547538c-4593-40a3-aadb-4ec1900c6c87 created=2026-10-03T00:01:34Z
+nncp: uid=8e00c4a0-e25e-4e20-89d8-7782ce109d7c created=2026-10-03T00:01:39Z True
+pod: ipsec-cert-sync-qnc2p Running mounts=ipsec-cert-crc
+tunnel: #9: "829c6a3b-d0cb-4414-b7e9-60b26cb79b2a", type=ESP, add_time=1790985703, inBytes=23348, outBytes=40672, maxB
+demo: 653 2026-10-03T00:02:07Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=512
+pluto[7038]: "workers"[10] 192.168.64.1 #28: responder established IKE SA; authenticated peer certificate 'CN=crc.crc.testing' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Ente
+certificates on the cluster: 19
+2026-10-03T00:00:32Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=509
+2026-10-03T00:00:42Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=510
+2026-10-03T00:00:52Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=511
+2026-10-03T00:02:07Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=512
