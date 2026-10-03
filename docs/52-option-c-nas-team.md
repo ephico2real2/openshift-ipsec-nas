@@ -73,4 +73,4 @@ The lab's test NAS is this configuration: [`lab/rhel/setup-nas.sh`](../lab/rhel/
 ## Not measured
 
 - A NAS product other than libreswan (issue #34).
-- More than two nodes, and a node joining a real pool. A single node does not need row 1; any real pool does.
+- More than two nodes. A single node does not need row 1; any real pool does.
