@@ -1,0 +1,60 @@
+# Option C2: one NNCP per node, made by Kyverno, with the node's own name as its IKE identity
+# (leftid) and its own left. Needs Kyverno 1.19 or later and manifests/common/03-kyverno-rbac.yaml.
+# Measured against a libreswan NAS, the NAS did not enforce the name and still saw one identity for
+# every node, so it must allow duplicate peer IDs as for C1
+# (docs/evidence/crc/34-option-c-lab-identities.txt, cases 3 to 7).
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: ipsec-nncp-wildcard-per-node
+spec:
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["nodes"]
+  # No cert-ready label to wait for: the MachineConfig puts the certificate on the node before it
+  # first joins. The selection is in matchConditions so that a node leaving it loses its NNCP.
+  matchConditions:
+  - name: selected-nodes
+    expression: >-
+      object.metadata.?labels[?"node-role.kubernetes.io/${MCP_ROLE}"] == optional.of("")
+  # exclude-nodes:begin
+  # Nodes with ANY of these labels are left out, even if they also match the labels above.
+  - name: not-excluded
+    expression: >-
+      !["node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master", "node-role.kubernetes.io/ingress"].exists(k, k in object.metadata.?labels.orValue({}))
+  # exclude-nodes:end
+  generate:
+  - template:
+      interpolate: cel
+      value: |
+        apiVersion: nmstate.io/v1
+        kind: NodeNetworkConfigurationPolicy
+        metadata:
+          name: ipsec-nas-(( object.metadata.name ))
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: "(( object.metadata.labels['kubernetes.io/hostname'] ))"
+          desiredState:
+            interfaces:
+            - name: ipsec-nas
+              type: ipsec
+              libreswan:
+                left: "${NODE_LEFT}"
+                leftid: "@(( object.metadata.name )).${NODE_DOMAIN}"
+                leftrsasigkey: '%cert'
+                leftcert: left_server
+                leftmodecfgclient: false
+                right: ${NAS_RIGHT}
+                rightid: '%fromcert'
+                rightrsasigkey: '%cert'
+                rightsubnet: ${NAS_IP}/32
+                ikev2: insist
+                type: ${IPSEC_TYPE}

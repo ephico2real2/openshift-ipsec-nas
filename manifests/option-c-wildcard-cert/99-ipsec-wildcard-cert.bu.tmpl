@@ -1,0 +1,63 @@
+# Option C: one wildcard certificate for every node of the pool, delivered by a MachineConfig.
+# scripts/option-c-certificate.sh renders this with butane, next to ca.pem and left_server.p12.
+# Applying it, and every later change to it (a renewed certificate), reboots the pool's nodes one at a time.
+variant: openshift
+version: ${OCP_VERSION}
+metadata:
+  name: 99-${MCP_ROLE}-ipsec-wildcard-cert
+  labels:
+    machineconfiguration.openshift.io/role: ${MCP_ROLE}
+systemd:
+  units:
+  - name: ipsec-nas-import.service
+    enabled: true
+    contents: |
+      [Unit]
+      Description=Import the IPsec certificate for the NAS into libreswan's NSS database
+      Before=ipsec.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/ipsec-nas-import.sh
+      RemainAfterExit=true
+      StandardOutput=journal
+
+      [Install]
+      WantedBy=multi-user.target
+storage:
+  files:
+  - path: /etc/pki/ipsec-nas/ca.pem
+    mode: 0400
+    overwrite: true
+    contents:
+      local: ca.pem
+  - path: /etc/pki/ipsec-nas/left_server.p12
+    mode: 0400
+    overwrite: true
+    contents:
+      local: left_server.p12
+  - path: /usr/local/bin/ipsec-nas-import.sh
+    mode: 0700
+    overwrite: true
+    contents:
+      inline: |
+        #!/bin/bash
+        # Runs at every boot, before ipsec.service. Earlier copies are removed first, so that a
+        # renewed certificate replaces the old one instead of sitting next to it under the same
+        # nickname.
+        set -euo pipefail
+        DB=/var/lib/ipsec/nss
+        DIR=/etc/pki/ipsec-nas
+        ipsec checknss                     # creates the NSS database if it does not exist yet
+        for _ in 1 2 3 4 5; do
+          certutil -L -n left_server -d "${DB}" >/dev/null 2>&1 || break
+          certutil -F -n left_server -d "${DB}"      # the certificate AND its private key
+        done
+        for _ in 1 2 3 4 5; do
+          certutil -L -n KCS-IPSEC-CA -d "${DB}" >/dev/null 2>&1 || break
+          certutil -D -n KCS-IPSEC-CA -d "${DB}"
+        done
+        certutil -A -n KCS-IPSEC-CA -t CT,C,C -d "${DB}" -i "${DIR}/ca.pem"
+        pk12util -W "" -i "${DIR}/left_server.p12" -d "${DB}"
+        certutil -M -n left_server -t u,u,u -d "${DB}"
+        certutil -L -n left_server -d "${DB}" | grep -E 'Subject:|Not After|DNS name'

@@ -1,0 +1,46 @@
+$ # Step C.7, 3: delete the MachineConfig; the node reboots (this time crc stop worked)
+2026-10-03T02:55:16Z boot id before: 862988de-0427-469b-8b02-b60fec92c282
+machineconfig.machineconfiguration.openshift.io "99-master-ipsec-wildcard-cert" deleted
+2026-10-03T02:55:16Z MachineConfig delete done; waiting for the node to reboot
+2026-10-03T03:05:54Z node is back from its reboot: boot id 14ae1c91-9ad5-4a52-80f3-a23ec7ac4973; uptime:  03:05:55 up 0 min,  0 users,  load average: 0.24, 0.05, 0.02
+2026-10-03T03:05:54Z kubelet: inactive disabled
+2026-10-03T03:05:54Z crc stop
+Stopped the instance
+2026-10-03T03:05:56Z crc start
+Started the OpenShift cluster.
+2026-10-03T03:09:26Z mcp master: master   rendered-master-a8e0982444c8d7812f7bef6a181da1b1   True   False   False   1     1     1     0     65d
+2026-10-03T03:09:27Z node: crc   Ready   control-plane,master,worker   65d   v1.35.6
+$ # what the removal left, and the cleanup
+2026-10-03T03:09:51Z
+$ # after the MachineConfig is gone: its files, the unit, and what it had imported
+Failed to get unit file state for ipsec-nas-import.service: No such file or directory
+KCS-IPSEC-CA                                                 CT,C,C
+left_server                                                  u,u,u
+$ # Step C.7, 4: remove what the import left in the NSS database
+NSS: no left_server, no KCS-IPSEC-CA
+$ # the signing requests, and the ClusterRoles applied for C2 (the chart creates its own)
+certificaterequest.cert-manager.io "ipsec-wildcard-1" deleted from kcs-ipsec namespace
+certificaterequest.cert-manager.io "ipsec-wildcard-2" deleted from kcs-ipsec namespace
+clusterrole.rbac.authorization.k8s.io "kyverno:ipsec-nas-generate" deleted
+clusterrole.rbac.authorization.k8s.io "kyverno:ipsec-nas-read-nodes" deleted
+Option C MachineConfigs left: 0
+== the CRC NAS before Option B comes back
+2026-10-03T03:09:53Z
+$ ls -la /etc/pki/ipsec-nas      # on the node: the files are gone, the empty directory stays
+total 4
+drwxr-xr-x.  2 root root    6 Oct  3 02:55 .
+drwxr-xr-x. 15 root root 4096 Oct  3 01:59 ..
+$ # Option B back: the same Argo CD Application, from Git
+2026-10-03T03:10:11Z
+$ oc apply -f application.json   # Option B again, from Git
+application.argoproj.io/ipsec-nas created
+t+0s app=/ cert=none pod=none nncp=none
+t+2s app=OutOfSync/Missing cert=none pod=none nncp=none
+t+5s app=OutOfSync/Healthy cert=none pod=none nncp=none
+t+9s app=OutOfSync/Progressing cert=True pod=Pending:ipsec-cert-crc nncp=none
+t+14s app=Synced/Healthy cert=True pod=Running:ipsec-cert-crc nncp=Unknown
+t+23s app=Synced/Healthy cert=True pod=Running:ipsec-cert-crc nncp=True
+t+23s tunnel: #2: "55d87b5d-969e-4363-a2ac-1c60e80ab6b9", type=ESP, add_time=1790997029, inBytes=0, outBytes=0, ma
+"workers"[2] 192.168.64.1 #3: responder established IKE SA; authenticated peer certificate 'CN=crc.crc.testing' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise POC, CN=
+demo: 1379 2026-10-03T03:10:59Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=2
+app: Synced Healthy rev=4f7cd254fdd574c85c1dbac5f104d597740ab61d

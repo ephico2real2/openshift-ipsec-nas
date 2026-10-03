@@ -20,6 +20,7 @@ There are two ways to get a certificate onto every node. **Option B, one certifi
 |---|---|---|---|---|---|---|
 | **B – per-node certificates** | cert-manager issues one per node from the enterprise CA; a DaemonSet imports it | Automatic, no reboot | Automatic (cert-manager); the tunnel restarts by itself | Yes | **Our standard** | [20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md) |
 | **B, automated** | The same objects as one Helm release, installed with Helm or from Git by Argo CD | Automatic, no reboot | Automatic | Yes | **How we deploy it** | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md) |
+| C – wildcard certificate | One `.p12` for `*.<domain>`, in a MachineConfig, valid 2 years | Automatic: it gets the MachineConfig and the NNCP (by design) | By hand every 2 years; every node reboots once | No: one key everywhere | Evaluated, measured; the NAS must allow shared identities | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) |
 | A – shared certificate | One `.p12` for every node, in a MachineConfig | New certificate by hand; every node reboots | By hand, on a deadline; every node reboots | No: one key everywhere | Documented, not used | [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md) |
 
 Measured on CRC: Option B went from the first policy to an established tunnel in 47 seconds with no reboot, and from Git through Argo CD in 12 seconds to `Synced` and `Healthy`. Option A needed six hand steps on a workstation and a reboot to install, and another reboot to remove. [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md#f8--what-option-a-costs-and-why-it-is-not-our-standard) lists its costs for many nodes and many clusters.
@@ -38,7 +39,7 @@ Side by side:
 | Extra components | Kyverno, cert-manager, one privileged DaemonSet | None |
 
 > [!CAUTION]
-> Never run both options on the same cluster: both import a certificate into each node's NSS database under the nickname `left_server`.
+> Never run two options on the same cluster: all of them import a certificate into each node's NSS database under the nickname `left_server`.
 
 ## The docs, in reading order
 
@@ -48,6 +49,7 @@ Side by side:
 | [20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md) | **Option B, step by step:** which nodes get a tunnel, the three Kyverno policies, the cert-sync DaemonSet, metrics and alerts, node removal, teardown; then the run on CRC with captures |
 | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md) | **Option B from Git:** the Helm chart's prerequisites, install with Helm and with Argo CD in sync waves, removal both ways, Kyverno's CEL policies or the legacy ones |
 | [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md) | Option A: the documented procedure, its risks, its run on CRC, and what it costs |
+| [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) | Option C: one wildcard certificate in a MachineConfig, two variants (C1 with Red Hat components only, C2 with per-node identities), what the NAS team must configure, the renewal tool, and its measured run on CRC |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
 
 Which to read:
@@ -57,7 +59,8 @@ Which to read:
 | New to this setup | 00, then 20 (to learn each object), then 30 |
 | Deploying it on a cluster | 00 (Parts 0, 1 and 3), then 30 |
 | On the storage team | 00, Part 3.1: the NAS certificate and IPsec settings |
-| Weighing the shared certificate | 10, especially its cost table |
+| Weighing the shared certificate | 10, especially its cost table; 50 for the wildcard variant |
+| On the storage team, for Option C | 50, "For the NAS team" |
 | Trying it on a laptop | 40, with the supporting guides below |
 
 Supporting guides, in [`lab/`](lab/):

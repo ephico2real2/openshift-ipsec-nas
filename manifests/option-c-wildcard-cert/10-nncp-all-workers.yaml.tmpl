@@ -1,0 +1,28 @@
+# Option C1: ONE NNCP for every node of the pool that has the wildcard certificate. No Kyverno.
+# Every node presents the same identity (the certificate's subject), so the NAS must allow
+# duplicate peer IDs (measured: docs/evidence/crc/34-option-c-lab-identities.txt, cases 1 and 2).
+# left: %defaultroute uses the address of the node's default-route interface: the NAS must be
+# reached through that interface. Otherwise use C2, which sets left per node.
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: ipsec-nas-wildcard
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/${MCP_ROLE}: ""        # the pool the MachineConfig was applied to
+  desiredState:
+    interfaces:
+    - name: ipsec-nas
+      type: ipsec
+      libreswan:
+        left: '%defaultroute'
+        leftid: '%fromcert'
+        leftrsasigkey: '%cert'
+        leftcert: left_server
+        leftmodecfgclient: false
+        right: ${NAS_RIGHT}
+        rightid: '%fromcert'
+        rightrsasigkey: '%cert'
+        rightsubnet: ${NAS_IP}/32
+        ikev2: insist
+        type: ${IPSEC_TYPE}

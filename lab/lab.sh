@@ -209,6 +209,7 @@ cmd_option_c() {
   option_c_case 3 fqdn %fromcert no
   option_c_case 4 fqdn %any no
   option_c_case 5 fqdn "@*.${domain}" no
+  option_c_case 7 fqdn %fromcert yes
   option_c_case 6 fqdn "@*.${domain}" yes
 
   w="${WORKERS%% *}"

@@ -77,7 +77,7 @@ What each piece does:
 >
 > **Correction to a common assumption:** re-issuing does **not** require taking the whole cluster down. The MCO reboots nodes **one at a time**. It is still a full-pool reboot every time you add a node or renew, which is why **per-node certificates ([Option B](20-option-b-per-node-certificates.md)) are our standard**.
 >
-> **Partial mitigation:** a **wildcard SAN** (e.g. `DNS:*.ocp.example.com`) avoids re-issuing on scale-up, **if** our CA policy allows wildcards. It does not fix risks 2–6 and widens what the certificate is trusted for.
+> **Partial mitigation:** a **wildcard SAN** (e.g. `DNS:*.ocp.example.com`) avoids re-issuing on scale-up, **if** our CA policy allows wildcards. It does not fix risks 2–6 and widens what the certificate is trusted for. [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) measures this as **Option C**: the NAS settings it needs, a renewal tool, and its run on CRC.
 
 ## Step A.1 – Install Butane
 

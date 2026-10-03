@@ -11,33 +11,33 @@ Libreswan 5.4
 our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
 our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
 NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#820: "workers"[410] 192.168.104.6, type=ESP, add_time=1790991886, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+#888: "workers"[444] 192.168.104.3, type=ESP, add_time=1790997423, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
 fewer than 2 tunnels: no NFS check
 
 ### case 2: workers leftid=%fromcert, NAS rightid=%fromcert, uniqueids=no
 our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
 our id=CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test
 NAS tunnels, once a second for 15 s: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
-#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790991888, inBytes=22316, outBytes=7384, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPse
-#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790991889, inBytes=456, outBytes=304, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790997425, inBytes=12794, outBytes=4248, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPse
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790997426, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS t
 
 ### verify lab-worker1
-tunnel outBytes: before=22608 after=5419676 grew=5397068 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 08f9b0f764f33141...)
+tunnel outBytes: before=13086 after=5381502 grew=5368416 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 fb7e300badf50227...)
 
 ### verify lab-worker2
-tunnel outBytes: before=748 after=5369164 grew=5368416 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 39f9e8a912be71bc...)
+tunnel outBytes: before=292 after=5379792 grew=5379500 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 6ba8a6a11bbfbc9a...)
 
 ### NAS: tunnels and firewall counters
-#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790991888, inBytes=5419708, outBytes=5400308, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
-#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790991889, inBytes=5369196, outBytes=27524, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790997425, inBytes=5381534, outBytes=17396, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790997426, inBytes=5379824, outBytes=5377084, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
 
 ### case 3: workers leftid=fqdn, NAS rightid=%fromcert, uniqueids=yes
 our id=@lima-lab-worker1.internal
 our id=@lima-lab-worker2.internal
 NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#841: "workers"[421] 192.168.104.3, type=ESP, add_time=1790991930, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+#807: "workers"[404] 192.168.104.6, type=ESP, add_time=1790997466, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
 fewer than 2 tunnels: no NFS check
 
 ### case 4: workers leftid=fqdn, NAS rightid=%any, uniqueids=yes
@@ -50,49 +50,68 @@ fewer than 2 tunnels: no NFS check
 our id=@lima-lab-worker1.internal
 our id=@lima-lab-worker2.internal
 NAS tunnels, once a second for 15 s: 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
-#834: "workers"[417] 192.168.104.3, type=ESP, add_time=1790992012, inBytes=0, outBytes=0, maxBytes=2^63B, id='@*.internal'
+#840: "workers"[420] 192.168.104.6, type=ESP, add_time=1790997552, inBytes=0, outBytes=0, maxBytes=2^63B, id='@*.internal'
 fewer than 2 tunnels: no NFS check
+
+### case 7: workers leftid=fqdn, NAS rightid=%fromcert, uniqueids=no
+our id=@lima-lab-worker1.internal
+our id=@lima-lab-worker2.internal
+NAS tunnels, once a second for 15 s: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790997561, inBytes=22240, outBytes=6200, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPse
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790997562, inBytes=192, outBytes=116, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec N
+
+### verify lab-worker1
+tunnel outBytes: before=22532 after=5390948 grew=5368416 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 78b1cc5dad79aa4d...)
+
+### verify lab-worker2
+tunnel outBytes: before=484 after=5368932 grew=5368448 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 3bdabb770af59d83...)
+
+### NAS: tunnels and firewall counters
+#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790997561, inBytes=5390980, outBytes=18868, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
+#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790997562, inBytes=5368964, outBytes=12328, maxBytes=2^63B, id='CN=ocp-ipsec-workers-wildcard, O=IPsec NAS test'
 
 ### case 6: workers leftid=fqdn, NAS rightid=@*.internal, uniqueids=no
 our id=@lima-lab-worker1.internal
 our id=@lima-lab-worker2.internal
 NAS tunnels, once a second for 15 s: 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2
-#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790992013, inBytes=22468, outBytes=6968, maxBytes=2^63B, id='@*.internal'
-#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=384, outBytes=232, maxBytes=2^63B, id='@*.internal'
+#6: "workers"[3] 192.168.104.3, type=ESP, add_time=1790997582, inBytes=23056, outBytes=6748, maxBytes=2^63B, id='@*.internal'
+#8: "workers"[4] 192.168.104.6, type=ESP, add_time=1790997583, inBytes=0, outBytes=0, maxBytes=2^63B, id='@*.internal'
 
 ### verify lab-worker1
-tunnel outBytes: before=22952 after=5391368 grew=5368416 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 0f9657d69cf78d5c...)
+tunnel outBytes: before=23056 after=5391728 grew=5368672 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 041cefe3d9e41bca...)
 
 ### verify lab-worker2
-tunnel outBytes: before=676 after=5369092 grew=5368416 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 aaaf959505554f7b...)
+tunnel outBytes: before=0 after=5379404 grew=5379404 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 c56b9370e464504c...)
 
 ### NAS: tunnels and firewall counters
-#4: "workers"[2] 192.168.104.3, type=ESP, add_time=1790992013, inBytes=5391400, outBytes=20748, maxBytes=2^63B, id='@*.internal'
-#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=5369124, outBytes=13916, maxBytes=2^63B, id='@*.internal'
+#6: "workers"[3] 192.168.104.3, type=ESP, add_time=1790997582, inBytes=5391760, outBytes=20140, maxBytes=2^63B, id='@*.internal'
+#8: "workers"[4] 192.168.104.6, type=ESP, add_time=1790997583, inBytes=5379436, outBytes=5376088, maxBytes=2^63B, id='@*.internal'
 
 ### negative: lab-worker1 claims an identity outside *.internal, NAS as in case 6
 our id=@lima-lab-worker1.example.org
 tunnels on this worker: 1
-#6: "workers"[3] 192.168.104.6, type=ESP, add_time=1790992015, inBytes=5369124, outBytes=13916, maxBytes=2^63B, id='@*.internal'
-#8: "workers"[4] 192.168.104.3, type=ESP, add_time=1790992034, inBytes=20, outBytes=188, maxBytes=2^63B, id='@*.internal'
+#8: "workers"[4] 192.168.104.6, type=ESP, add_time=1790997583, inBytes=5379436, outBytes=5376088, maxBytes=2^63B, id='@*.internal'
+#10: "workers"[5] 192.168.104.3, type=ESP, add_time=1790997602, inBytes=11276, outBytes=2940, maxBytes=2^63B, id='@*.internal'
 
 ### restore: the NAS defaults, each worker its own certificate and leftid=%fromcert
 
 ### verify lab-worker1
-tunnel outBytes: before=22500 after=5391172 grew=5368672 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 1a88c7c78e99e71b...)
+tunnel outBytes: before=12372 after=5390336 grew=5377964 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker1.bin went through the IPsec tunnel (sha256 ad3be70936dd44a3...)
 
 ### verify lab-worker2
-tunnel outBytes: before=0 after=5391916 grew=5391916 (wrote 5242880)
-PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 da005e40b2468da0...)
+tunnel outBytes: before=292 after=5380496 grew=5380204 (wrote 5242880)
+PASS: 5 MiB written to /mnt/nas/verify-lima-lab-worker2.bin went through the IPsec tunnel (sha256 2cac036410f0c5cb...)
 
 ### NAS: tunnels and firewall counters
-#5: "workers"[3] 192.168.104.3, type=ESP, add_time=1790992041, inBytes=5391236, outBytes=17996, maxBytes=2^63B, id='CN=lima-lab-worker1.internal, O=IPsec NAS test'
-#7: "workers"[4] 192.168.104.6, type=ESP, add_time=1790992047, inBytes=5391948, outBytes=5377496, maxBytes=2^63B, id='CN=lima-lab-worker2.internal, O=IPsec NAS test'
-2026-10-03T01:47:32Z
-$ # why case 4 refuses an FQDN identity: the NAS with debugging on (rightid=%any, lab-worker1 sends @lima-lab-worker1.internal)
+#8: "workers"[4] 192.168.104.3, type=ESP, add_time=1790997610, inBytes=5390368, outBytes=5380700, maxBytes=2^63B, id='CN=lima-lab-worker1.internal, O=IPsec NAS test'
+#10: "workers"[5] 192.168.104.6, type=ESP, add_time=1790997616, inBytes=5380528, outBytes=5375420, maxBytes=2^63B, id='CN=lima-lab-worker2.internal, O=IPsec NAS test'
+2026-10-03T03:20:21Z
+$ # why case 4 refuses an FQDN identity: the NAS with debugging on (rightid=%any, lab-worker1 sends @lima-lab-worker1.internal), excerpt
 our id=@lima-lab-worker1.internal
 tunnels on lab-worker1: 0
 | rfc:   skipping because initiator_id does not match and that.id.kind is not a cert

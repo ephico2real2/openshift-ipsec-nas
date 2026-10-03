@@ -12,6 +12,7 @@ automated per node with **Kyverno**.
 | [`docs/20-option-b-per-node-certificates.md`](docs/20-option-b-per-node-certificates.md) | **Option B, our standard:** one certificate per node, step by step, and its run on CRC |
 | [`docs/30-option-b-automated-helm-argocd.md`](docs/30-option-b-automated-helm-argocd.md) | Option B as a Helm chart, installed with Helm or from Git with Argo CD; Kyverno's CEL or legacy policies |
 | [`docs/10-option-a-shared-certificate.md`](docs/10-option-a-shared-certificate.md) | Option A, the shared certificate Red Hat documents: documented, measured and costed, not used |
+| [`docs/50-option-c-wildcard-certificate.md`](docs/50-option-c-wildcard-certificate.md) | Option C, a wildcard certificate in a MachineConfig: evaluated and measured, with what the NAS team must configure |
 | [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
 | [`docs/lab/`](docs/lab/) | A test NAS on RHEL 10, the Lima lab, and an application that uses the NAS |
 | [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart: every value, the prerequisites it checks, cleanup on node deletion and uninstall |
@@ -47,6 +48,7 @@ Our standard for a production cluster, and the enterprise north star, is **one c
 docs/README.md                       start page: the options, reading order, prerequisites, examples
 docs/00-prepare-the-cluster.md       cluster preparation, Kyverno, the NAS side, verification, troubleshooting
 docs/10-option-a-shared-certificate.md  Option A (documented, not used), measured on CRC
+docs/50-option-c-wildcard-certificate.md  Option C (wildcard certificate in a MachineConfig), measured on CRC and in the lab
 docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
 docs/30-option-b-automated-helm-argocd.md  Option B with Helm and Argo CD; CEL or legacy Kyverno policies
 docs/40-lab-crc-and-nas.md           the CRC lab, testing with an application, gotchas
@@ -56,6 +58,8 @@ docs/evidence/crc/                   saved command output behind the captures
 docs/images/crc/                     those captures as images (render-terminal.py makes them)
 manifests/common/                    NMState Operator, NMState instance, Kyverno RBAC
 manifests/option-a-shared-cert/      Option A: Butane MachineConfig + NNCP generate policy
+manifests/option-c-wildcard-cert/    Option C: Butane MachineConfig, one NNCP for the pool (C1), per-node policy (C2)
+scripts/option-c-certificate.sh      Option C: key and CSR, then the checked bundle and MachineConfig (install and renewal)
 manifests/option-b-per-node-certs/   Option B: namespace, Kyverno CEL policies, cert-sync DaemonSet, metrics,
                                      ServiceMonitor, alert rules, Grafana dashboard, orphaned-Secret cleanup
 manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as legacy ClusterPolicy/CleanupPolicy

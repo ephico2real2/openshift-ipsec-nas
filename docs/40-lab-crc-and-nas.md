@@ -727,6 +727,9 @@ Things that went wrong while these docs were built, in the order they were met. 
 | 14 | A legacy generate rule refuses a changed node selection | Kyverno behaviour | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md#gotcha-14--a-legacy-generate-rule-refuses-a-changed-node-selection) |
 | 15 | An objectSelector hides a Node from Kyverno once it stops matching | Mistake in the first CEL policies, fixed | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md#gotcha-15--an-objectselector-hides-a-node-from-kyverno-once-it-stops-matching) |
 | 16 | In a namespaced policy, `resource.List` takes two arguments | Wrong conclusion, retracted and fixed | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md#gotcha-16--in-a-namespaced-policy-resourcelist-takes-two-arguments) |
+| 17 | After a MachineConfig reboot, `crc stop` timed out and `crc start` started nothing | CRC behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-17--after-a-machineconfig-reboot-crc-stop-timed-out-and-crc-start-started-nothing) |
+| 18 | NMState changed a running connection and libreswan dropped it | NMState and libreswan behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-18--nmstate-changed-a-running-connection-and-libreswan-dropped-it) |
+| 19 | The NAS refused a node's new identity while it held the old one | libreswan NAS behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-19--the-nas-refused-a-nodes-new-identity-while-it-held-the-old-one) |
 
 ### Gotcha 1 – `ipsecConfig.mode: External` cannot install libreswan on CRC
 

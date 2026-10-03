@@ -1,0 +1,128 @@
+$ # Before: Option B running (snapshot), and the CRC NAS's identity settings
+2026-10-03T01:58:13Z
+app: Synced Healthy rev=4f7cd254fdd574c85c1dbac5f104d597740ab61d
+cel: generatingpolicy.policies.kyverno.io/ipsec-nncp-per-node 116m
+cel: generatingpolicy.policies.kyverno.io/ipsec-node-certificate 116m
+cel: mutatingpolicy.policies.kyverno.io/ipsec-cert-sync-mount true
+cleanup: namespaceddeletingpolicy.policies.kyverno.io/ipsec-orphaned-node-secrets
+certificate: uid=345cd825-c9da-4ba3-baf7-2754370c11b7 ready=True notAfter=2027-10-03T00:01:34Z policy=ipsec-node-certificate
+secret: uid=4547538c-4593-40a3-aadb-4ec1900c6c87 created=2026-10-03T00:01:34Z
+nncp: uid=8e00c4a0-e25e-4e20-89d8-7782ce109d7c created=2026-10-03T00:01:39Z True
+pod: ipsec-cert-sync-qnc2p Running mounts=ipsec-cert-crc
+tunnel: #9: "829c6a3b-d0cb-4414-b7e9-60b26cb79b2a", type=ESP, add_time=1790985703, inBytes=3157632, outBytes=8232780,
+demo: 1348 2026-10-03T01:58:08Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=1207
+== the CRC NAS (crc-nas)
+    right=%any
+    rightid=%fromcert
+    type=tunnel
+	uniqueids=yes
+Libreswan 5.4
+$ # Option B removed, the measured three-step Argo CD procedure
+2026-10-03T01:58:15Z
+$ # remove Option B: detach the Application, run the cleanup, delete the chart's objects
+application.argoproj.io/ipsec-nas patched
+application.argoproj.io "ipsec-nas" deleted from openshift-gitops namespace
+2026-10-03T01:58:16Z 1. Stop Kyverno from creating NNCPs again
+2026-10-03T01:58:16Z 2. Remove the tunnel from every node, with an NNCP that says: absent
+2026-10-03T01:58:23Z    tunnel removed from crc
+2026-10-03T01:58:23Z 3. Remove the cert-ready label from the nodes
+2026-10-03T01:58:23Z 4. Remove each node's certificate and private key from its NSS database
+2026-10-03T01:58:24Z    cleaned the node of pod ipsec-cert-sync-qnc2p
+2026-10-03T01:58:24Z 5. Delete the Certificates first (while one exists, cert-manager puts its Secret back), then the Secrets
+secret "ipsec-cert-crc" deleted from kcs-ipsec namespace
+2026-10-03T01:58:24Z Done. Ask the CA team to revoke the node certificates.
+serviceaccount "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+configmap "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+role.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+rolebinding.rbac.authorization.k8s.io "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+job.batch "ipsec-nas-uninstall" deleted from kcs-ipsec namespace
+objects deleted: 18
+2026-10-03T01:58:31Z
+trafficstatus: []
+NSS: empty
+$ # Step C.1 to C.3: a wildcard key and CSR, signed by enterprise-ca for 2 years, checked, MachineConfig built
+2026-10-03T01:58:43Z
+kcs-ipsec   Active   5h23m
+$ scripts/option-c-certificate.sh csr cert-1
+subject=CN=ocp-ipsec-workers, O=KCS
+SAN: DNS:*.crc.testing
+CSR: cert-1/wildcard.csr   (the key stays in cert-1/wildcard.key)
+$ # the enterprise CA signs it, through the cluster's existing ClusterIssuer, for 2 years
+certificaterequest.cert-manager.io/ipsec-wildcard-1 created
+certificaterequest.cert-manager.io/ipsec-wildcard-1 condition met
+$ scripts/option-c-certificate.sh machineconfig cert-1 signed.pem enterprise-root.pem
+ok    SAN DNS:*.crc.testing
+ok    the certificate belongs to cert-1/wildcard.key
+ok    extended key usage includes client auth
+ok    chains to O=Enterprise POC, CN=Enterprise Root CA
+ok    valid from Oct  3 01:58:44 2026 GMT until Oct  2 01:58:44 2028 GMT
+ok    cert-1/left_server.p12
+ok    cert-1/99-master-ipsec-wildcard-cert.yaml (Butane 4.22.0, pool master)
+
+Apply it with: oc apply -f cert-1/99-master-ipsec-wildcard-cert.yaml
+Every node of the master pool then reboots, one at a time (watch oc get mcp master).
+subject=CN=ocp-ipsec-workers, O=KCS
+serial=7C3C058283D143AE9E77F23A7AECE350163B592E
+$ # Step C.4: oc apply the MachineConfig; the node reboots; CRC then needs crc stop; crc start
+2026-10-03T01:59:17Z boot id before: 5b0561fa-3528-4a4c-bbbf-843c1f2496c1
+machineconfig.machineconfiguration.openshift.io/99-master-ipsec-wildcard-cert created
+2026-10-03T01:59:17Z MachineConfig apply done; waiting for the node to reboot
+2026-10-03T02:10:01Z node is back from its reboot: boot id 81a1807d-3a44-4bc1-92ca-ac1db1305b9d; uptime:  02:10:01 up 0 min,  0 users,  load average: 0.15, 0.03, 0.01
+2026-10-03T02:10:01Z kubelet: inactive disabled
+2026-10-03T02:10:01Z crc stop
+level=error msg="Cannot stop machine: VM Failed to gracefully shutdown, try the kill command"
+2026-10-03T02:12:01Z crc start
+Started the OpenShift cluster.
+$ # crc stop timed out: the guest had reached System Power Off, its VM process (vfkit) had not exited, and crc start started nothing (the API reset connections). Forced:
+2026-10-03T02:26:19Z crc stop --force   (the guest had reached System Power Off; vfkit pid 97230 had not exited)
+level=info msg="Stopping the instance, this may take a few minutes..."
+Forcibly stopped the instance
+2026-10-03T02:28:23Z vfkit still running: none
+2026-10-03T02:28:23Z crc start
+level=info msg="Starting CRC VM for openshift 4.22.7..."
+Started the OpenShift cluster.
+2026-10-03T02:31:58Z done
+kubeadmin
+crc   Ready   control-plane,master,worker   65d   v1.35.6
+master   rendered-master-cf1d547d56b1e69dcbf893111693aa1a   True   False   False   1     1     1     0     65d
+$ # after the boot: the MachineConfig's files, the import unit's log, the node's NSS database
+2026-10-03T02:32:12Z
+99-master-ipsec-wildcard-cert         3.5.0   32m
+pool: updated=1/1 config=rendered-master-cf1d547d56b1e69dcbf893111693aa1a
+booted: 2026-10-03 02:28:25
+total 8
+-r--------. 1 root root 1874 Oct  3 01:59 ca.pem
+-r--------. 1 root root 3682 Oct  3 01:59 left_server.p12
+active active
+Starting Import the IPsec certificate for the NAS into libreswan's NSS database...
+pk12util: PKCS12 IMPORT SUCCESSFUL
+            Not After : Mon Oct 02 01:58:44 2028
+        Subject: "O=KCS,CN=ocp-ipsec-workers"
+            DNS name: "*.crc.testing"
+Finished Import the IPsec certificate for the NAS into libreswan's NSS database.
+
+Certificate Nickname                                         Trust Attributes
+                                                             SSL,S/MIME,JAR/XPI
+
+KCS-IPSEC-CA                                                 CT,C,C
+left_server                                                  u,u,u
+certificates named left_server: 1
+serial=7C3C058283D143AE9E77F23A7AECE350163B592E
+notAfter=Oct  2 01:58:44 2028 GMT
+X509v3 Subject Alternative Name:
+    DNS:*.crc.testing
+$ # Step C.5, C1: one NNCP for the pool
+2026-10-03T02:32:27Z
+$ oc apply -f rendered/option-c-wildcard-cert/10-nncp-all-workers.yaml   # C1: one NNCP for the pool
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-wildcard created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-wildcard condition met
+NNCP Available after 8s
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-wildcard   Available   SuccessfullyConfigured
+nodenetworkconfigurationenactment.nmstate.io/crc.ipsec-nas-wildcard   Available   1s    SuccessfullyConfigured
+#2: "306c8d11-9664-4a00-84f0-51ee840c33fa", type=ESP, add_time=1790994752, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, C
+our id=CN=ocp-ipsec-workers, O=KCS
+tunnel up after 10s
+#20: "workers"[10] 192.168.64.1, type=ESP, add_time=1790980352, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=crc.crc.testing'
+#31: "workers"[11] 192.168.64.1, type=ESP, add_time=1790994752, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers, O=KCS'
+"workers"[11] 192.168.64.1 #30: responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterpri
+demo: 2026-10-03T02:32:48Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=1 2026-10-03T02:32:58Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=2

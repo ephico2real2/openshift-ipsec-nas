@@ -1,0 +1,120 @@
+$ # Step C.6, renewal: a new key in a new directory, signed by enterprise-ca for 2 years, a new MachineConfig
+2026-10-03T02:33:21Z
+$ scripts/option-c-certificate.sh csr cert-2      # renewal: a new key, in a new directory
+subject=CN=ocp-ipsec-workers, O=KCS
+SAN: DNS:*.crc.testing
+CSR: cert-2/wildcard.csr   (the key stays in cert-2/wildcard.key)
+certificaterequest.cert-manager.io/ipsec-wildcard-2 created
+certificaterequest.cert-manager.io/ipsec-wildcard-2 condition met
+$ scripts/option-c-certificate.sh machineconfig cert-2 signed.pem enterprise-root.pem
+ok    SAN DNS:*.crc.testing
+ok    the certificate belongs to cert-2/wildcard.key
+ok    extended key usage includes client auth
+ok    chains to O=Enterprise POC, CN=Enterprise Root CA
+ok    valid from Oct  3 02:33:21 2026 GMT until Oct  2 02:33:21 2028 GMT
+ok    cert-2/left_server.p12
+ok    cert-2/99-master-ipsec-wildcard-cert.yaml (Butane 4.22.0, pool master)
+serial=22C9B92CEEC6FD817347C18DE0F48B50EF19D9D2
+notAfter=Oct  2 02:33:21 2028 GMT
+$ # the renewed MachineConfig applied: the node reboots once (CRC: crc stop timed out, forced; crc start)
+2026-10-03T02:33:30Z demo before the renewal: 1354 2026-10-03T02:33:28Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=5
+2026-10-03T02:33:31Z boot id before: 941f73dc-d2f9-48bd-8d46-8f7eab125aa6
+machineconfig.machineconfiguration.openshift.io/99-master-ipsec-wildcard-cert configured
+2026-10-03T02:33:31Z MachineConfig apply done; waiting for the node to reboot
+2026-10-03T02:36:37Z node is back from its reboot: boot id c1d91a33-b5ca-498f-852c-23cd0abaa2ce; uptime:  02:36:37 up 0 min,  0 users,  load average: 0.20, 0.05, 0.02
+2026-10-03T02:36:37Z kubelet: inactive disabled
+2026-10-03T02:36:37Z crc stop
+level=error msg="Cannot stop machine: VM Failed to gracefully shutdown, try the kill command"
+2026-10-03T02:39:07Z crc stop --force (the VM did not stop)
+Forcibly stopped the instance
+2026-10-03T02:41:11Z crc start
+Started the OpenShift cluster.
+2026-10-03T02:44:41Z mcp master: master   rendered-master-91901152c0a9ad09df895a33aa507f51   True   False   False   1     1     1     0     65d
+2026-10-03T02:44:41Z node: crc   Ready   control-plane,master,worker   65d   v1.35.6
+$ # after the renewal: one left_server, the new serial; the tunnel back by itself; the NNCP unchanged; the NAS unchanged
+2026-10-03T02:45:00Z
+booted: 2026-10-03 02:41:14
+pk12util: PKCS12 IMPORT SUCCESSFUL
+            Not After : Mon Oct 02 02:33:21 2028
+            DNS name: "*.crc.testing"
+KCS-IPSEC-CA                                                 CT,C,C
+left_server                                                  u,u,u
+certificates named left_server: 1
+serial=22C9B92CEEC6FD817347C18DE0F48B50EF19D9D2
+notAfter=Oct  2 02:33:21 2028 GMT
+#2: "306c8d11-9664-4a00-84f0-51ee840c33fa", type=ESP, add_time=1790995332, inBytes=357848, outBytes=175580, maxBytes=2^6
+NNCP: 1 generation, created 2026-10-03T02:32:27Z, True
+== the NAS: no change since before the renewal
+    rightid=%fromcert
+	uniqueids=yes
+2026-10-02T20:36:17 /etc/ipsec.conf
+2026-10-02T20:36:17 /etc/ipsec.d/nas-workers.conf
+"workers"[12] 192.168.64.1 #32: responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterpri
+demo after the renewal: 1370 2026-10-03T02:45:17Z pod=nas-demo-649cbc69f8-vhtz7 node=crc line=15
+$ # switch from C1 to C2 (no reboot)
+2026-10-03T02:45:41Z
+$ oc delete nncp ipsec-nas-wildcard      # C1 off (the tunnel stays on the node)
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-wildcard" deleted
+$ oc apply -f manifests/common/03-kyverno-rbac.yaml -f rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml   # C2
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-generate created
+clusterrole.rbac.authorization.k8s.io/kyverno:ipsec-nas-read-nodes created
+generatingpolicy.policies.kyverno.io/ipsec-nncp-wildcard-per-node created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-crc condition met
+NNCP from Kyverno Available after 7s
+made by: ipsec-nncp-wildcard-per-node  leftid: @crc.crc.testing
+$ # 7 minutes later: NetworkManager says activated, libreswan has no IKE SA (NMState replaced the connection mid-negotiation); a restart is refused
+2026-10-03T02:53:10Z
+$ # on the node, after NMState changed the connection: NetworkManager says activated, libreswan has no IKE SA
+activated
+IKE SAs: total(0), half-open(0), open(0), authenticated(0), anonymous(0)
+$ # restart the connection (what Option B's cert-sync pod does by itself)
+Connection 'ipsec-nas' successfully deactivated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/10)
+Error: Connection activation failed: Unknown reason
+Hint: use 'journalctl -xe NM_CONNECTION=306c8d11-9664-4a00-84f0-51ee840c33fa + NM_DEVICE=br-ex' to get more details.
+2026-10-03T02:53:16Z
+$ # with NAS debugging on, the NAS refuses @crc.crc.testing while it still holds an instance from Option B for the same address (excerpt of the debug log):
+| initiator ID is FQDN: '@crc.crc.testing'
+| rfc:   match_id a=@crc.crc.testing
+| rfc:            b=CN=crc.crc.testing
+| rfc:     result fail wildcards=15
+| rfc:       skipping because trusted_ca() failed
+| rfc:   returning FALSE because nothing is sufficiently refined
+"workers"[10] 192.168.64.1 #37: responding to IKE_AUTH message (ID 1) from 192.168.64.1:55328 with encrypted notification AUTHENTICATION_FAILED
+$ # restart libreswan on the NAS (clears that instance), then the node's connection
+2026-10-03T02:53:54Z
+$ # the NAS still holds instances from before (Option B's CN=crc.crc.testing; C1's CN=ocp-ipsec-workers):
+#20: "workers"[10] 192.168.64.1, type=ESP, add_time=1790980352, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=crc.crc.te
+"workers"[10]:   CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'O=Enterprise POC, CN=Enterprise Root CA'
+"workers"[10]:   ESP algorithms: AES_GCM_16_256, CHACHA20_POLY1305, AES_CBC_256-HMAC_SHA2_512_256+HMAC_SHA1_96+HMAC_SHA2
+"workers"[10]:   IKE algorithms: AES_GCM_16_256-HMAC_SHA2_512+HMAC_SHA2_256-DH19+MODP2048+DH31+DH21+DH20+MODP3072+MODP40
+"workers"[10]:   cisco-split: no
+"workers"[10]:   conn serial: $11, instantiated from: $1
+$ # hypothesis: the stale instance makes the NAS refuse the new identity. Restart libreswan on the NAS, then the node's connection
+Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/13)
+our id=@crc.crc.testing
+#11: "306c8d11-9664-4a00-84f0-51ee840c33fa", type=ESP, add_time=1790996039, inBytes=0, outBytes=0, maxBytes=2^63B, id='O
+#2: "workers"[1] 192.168.64.1, type=ESP, add_time=1790996039, inBytes=0, outBytes=0, maxBytes=2^63B, id='CN=ocp-ipsec-workers, O=KCS'
+|    Notify Message Type: v2N_AUTHENTICATION_FAILED (24, 0x0018)
+"workers"[1] 192.168.64.1 #1: responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS' and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'O=Enterprise
+2026-10-03T02:54:04Z
+$ # the demo application's writes: the gaps over 30 s
+2026-10-03T02:54:40Z
+demo: 1374 lines
+2026-10-03T02:32:48Z
+2026-10-03T02:54:32Z
+== write times around the renewal reboot and the C2 switch (gaps over 30 s)
+gap 01:58:18 -> 02:32:48 = 2070 s
+gap 02:33:38 -> 02:42:57 = 559 s
+gap 02:45:47 -> 02:54:32 = 525 s
+$ # Step C.7, removal: the policy, then the tunnel with an absent NNCP
+2026-10-03T02:54:55Z
+$ oc delete generatingpolicy ipsec-nncp-wildcard-per-node
+generatingpolicy.policies.kyverno.io "ipsec-nncp-wildcard-per-node" deleted
+No resources found
+$ # the tunnel stays until an NNCP says absent
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc created
+nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-remove-crc condition met
+nodenetworkconfigurationpolicy.nmstate.io "ipsec-nas-remove-crc" deleted
+trafficstatus: []
+ipsec-nas connections: 0
+2026-10-03T02:55:09Z

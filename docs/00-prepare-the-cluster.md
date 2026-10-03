@@ -482,7 +482,7 @@ The work goes in four steps.
 | Trusted CA | Enterprise root CA (same as `ipsec-trust-ca`) |
 | Peers | **Worker node subnet** (not individual hosts), so scale-up needs no NAS change |
 | Proposals | Must match the NNCP. Default libreswan proposals, or the `esp`/`ike` lines you uncommented |
-| Duplicate peer IDs | Not needed with per-node certificates. **Option A only:** must be allowed (`uniqueids=no` equivalent) |
+| Duplicate peer IDs | Not needed with per-node certificates (Option B). **Options A and C:** must be allowed (`uniqueids=no` equivalent; [measured for C](50-option-c-wildcard-certificate.md#for-the-nas-team-what-option-c-needs)) |
 | Cleartext NFS from workers | **Rejected**, so IPsec is required and never silently bypassed |
 
 #### 3. What they send back
