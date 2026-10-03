@@ -1,0 +1,70 @@
+# kind v0.33.0 on podman, 1 control plane + 2 workers; kube-prometheus-stack 91.9.0 (Prometheus Operator v0.94.1).
+# Only the chart's metrics part: DaemonSet (collector + metrics containers; sync removed), Service,
+# ServiceMonitor, PrometheusRule, dashboard. Collector image ubi9/ubi (kind is arm64; openshift/cli is amd64 only).
+# kind nodes have no libreswan, NSS database or NNCP: the IPsec values are 0 by design. This proves the
+# per-node plumbing, not IPsec.
+# Faults injected at 2026-10-03T17:50:32Z, as a second installation in namespace kcs-ipsec-second-install:
+#   dup-on-worker     on ipsec-metrics-worker,  NODE_NAME from the downward API (a second pod for one node)
+#   ghost-on-worker2  on ipsec-metrics-worker2, NODE_NAME=ghost-node (a pod that names the wrong node)
+# Recorded 2026-10-03T18:00:18Z
+
+$ kubectl get nodes -L node-role.kubernetes.io/worker
+NAME                          STATUS   ROLES           AGE   VERSION   WORKER
+ipsec-metrics-control-plane   Ready    control-plane   19m   v1.37.0   
+ipsec-metrics-worker          Ready    worker          19m   v1.37.0   
+ipsec-metrics-worker2         Ready    worker          19m   v1.37.0   
+
+$ kubectl get pods -A -l app=ipsec-cert-sync -o wide
+NAMESPACE                 NAME                   READY  STATUS   NODE
+kcs-ipsec-second-install  dup-on-worker          2/2    Running  ipsec-metrics-worker
+kcs-ipsec-second-install  ghost-on-worker2       2/2    Running  ipsec-metrics-worker2
+kcs-ipsec                 ipsec-cert-sync-2qcvg  2/2    Running  ipsec-metrics-worker
+kcs-ipsec                 ipsec-cert-sync-wxcxc  2/2    Running  ipsec-metrics-worker2
+
+# Each target: node (written by the collector) and exporter_node (set by Prometheus from the pod's placement)
+$ ipsec_nas_collect_timestamp_seconds   -> 4 series
+    {'__name__': 'ipsec_nas_collect_timestamp_seconds', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.5:9754', 'node': 'ipsec-metrics-worker2', 'pod': 'ipsec-cert-sync-wxcxc'} 1791050389
+    {'__name__': 'ipsec_nas_collect_timestamp_seconds', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.5:9754', 'node': 'ipsec-metrics-worker', 'pod': 'ipsec-cert-sync-2qcvg'} 1791050389
+    {'__name__': 'ipsec_nas_collect_timestamp_seconds', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'node': 'ghost-node', 'pod': 'ghost-on-worker2'} 1791050371
+    {'__name__': 'ipsec_nas_collect_timestamp_seconds', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.6:9754', 'node': 'ipsec-metrics-worker', 'pod': 'dup-on-worker'} 1791050401
+
+$ count by (node) (ipsec_nas_collect_timestamp_seconds)   -> 3 series
+    {'node': 'ipsec-metrics-worker2'} 1
+    {'node': 'ipsec-metrics-worker'} 2
+    {'node': 'ghost-node'} 1
+
+# Every IpsecNas alert, with its state
+$ ALERTS{alertname=~"IpsecNas.*"}   -> 14 series
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasTunnelDown', 'alertstate': 'firing', 'connection': 'ipsec-nas', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.5:9754', 'node': 'ipsec-metrics-worker', 'pod': 'ipsec-cert-sync-2qcvg', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasTunnelDown', 'alertstate': 'firing', 'connection': 'ipsec-nas', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.5:9754', 'node': 'ipsec-metrics-worker2', 'pod': 'ipsec-cert-sync-wxcxc', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasLibreswanNotAnswering', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.5:9754', 'node': 'ipsec-metrics-worker2', 'pod': 'ipsec-cert-sync-wxcxc', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasLibreswanNotAnswering', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.5:9754', 'node': 'ipsec-metrics-worker', 'pod': 'ipsec-cert-sync-2qcvg', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasCertificateMissing', 'alertstate': 'pending', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'nickname': 'left_server', 'node': 'ghost-node', 'pod': 'ghost-on-worker2', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasDuplicateNode', 'alertstate': 'pending', 'node': 'ipsec-metrics-worker', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasCertificateMissing', 'alertstate': 'pending', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.6:9754', 'nickname': 'left_server', 'node': 'ipsec-metrics-worker', 'pod': 'dup-on-worker', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasTunnelDown', 'alertstate': 'firing', 'connection': 'ipsec-nas', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'node': 'ghost-node', 'pod': 'ghost-on-worker2', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasLibreswanNotAnswering', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'node': 'ghost-node', 'pod': 'ghost-on-worker2', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasNodeLabelMismatch', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'node': 'ghost-node', 'pod': 'ghost-on-worker2', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasCertificateMissing', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.5:9754', 'nickname': 'left_server', 'node': 'ipsec-metrics-worker2', 'pod': 'ipsec-cert-sync-wxcxc', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasCertificateMissing', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.5:9754', 'nickname': 'left_server', 'node': 'ipsec-metrics-worker', 'pod': 'ipsec-cert-sync-2qcvg', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasTunnelDown', 'alertstate': 'firing', 'connection': 'ipsec-nas', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.6:9754', 'node': 'ipsec-metrics-worker', 'pod': 'dup-on-worker', 'severity': 'critical'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasLibreswanNotAnswering', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.6:9754', 'node': 'ipsec-metrics-worker', 'pod': 'dup-on-worker', 'severity': 'warning'} 1
+
+# Before the faults (17:47Z), only TunnelDown, LibreswanNotAnswering and CertificateMissing were pending,
+# once per worker. A pod with the DaemonSet's labels in its own namespace is deleted by the DaemonSet:
+$ kubectl -n kcs-ipsec get events | grep SuccessfulDelete
+13m         Normal    SuccessfulDelete   daemonset/ipsec-cert-sync   Deleted pod: dup-on-worker
+13m         Normal    SuccessfulDelete   daemonset/ipsec-cert-sync   Deleted pod: ghost-on-worker2
+
+# The listing above was taken 18:00:18Z, before IpsecNasDuplicateNode's 10 minutes (pending since 17:52:15Z).
+# At 2026-10-03T18:02:27Z, both per-node integrity alerts, each for one node only:
+$ ALERTS{alertname=~"IpsecNasDuplicateNode|IpsecNasNodeLabelMismatch"}   -> 2 series
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasNodeLabelMismatch', 'alertstate': 'firing', 'exporter_node': 'ipsec-metrics-worker2', 'instance': '10.244.2.6:9754', 'node': 'ghost-node', 'pod': 'ghost-on-worker2', 'severity': 'warning'} 1
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasDuplicateNode', 'alertstate': 'firing', 'node': 'ipsec-metrics-worker', 'severity': 'warning'} 1
+
+# History (query_range, 15 s step, from 17:45Z): the duplicate count has no gap, the alert went pending once
+$ count by (node) (ipsec_nas_collect_timestamp_seconds{node="ipsec-metrics-worker"})
+    {'node': 'ipsec-metrics-worker'} from 17:46:45Z values ['1', '2'] changes at ['17:51:45Z']
+$ ALERTS{alertname="IpsecNasDuplicateNode"}
+    {'alertstate': 'firing', 'node': 'ipsec-metrics-worker'} from 18:02:15Z values ['1'] changes at []
+    {'alertstate': 'pending', 'node': 'ipsec-metrics-worker'} from 17:52:15Z values ['1'] changes at []

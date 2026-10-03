@@ -1,0 +1,39 @@
+# kind, as in 01. Break: worker2 tainted NoExecute at 2026-10-03T18:03:53Z, so its ipsec-cert-sync pod is
+# evicted while the node keeps the worker role. Expected: IpsecNasExporterMissing for worker2 only (for: 15m).
+# (The taint also evicted kube-state-metrics, which was rescheduled to worker: pod qf2jc.)
+
+# Recorded 2026-10-03T18:20:22Z
+$ kubectl get nodes -o 'custom-columns=NAME:.metadata.name,TAINTS:.spec.taints[*].key'
+NAME                          TAINTS
+ipsec-metrics-control-plane   node-role.kubernetes.io/control-plane
+ipsec-metrics-worker          <none>
+ipsec-metrics-worker2         example.com/no-ipsec-metrics
+$ kubectl -n kcs-ipsec get pods -o wide
+NAME                   READY  STATUS   AGE  NODE
+ipsec-cert-sync-l75cc  2/2    Running  16m  ipsec-metrics-worker
+
+$ ipsec_nas_collect_timestamp_seconds   -> 1 series
+    {'__name__': 'ipsec_nas_collect_timestamp_seconds', 'exporter_node': 'ipsec-metrics-worker', 'instance': '10.244.1.11:9754', 'node': 'ipsec-metrics-worker', 'pod': 'ipsec-cert-sync-l75cc'} 1791051590
+
+$ kube_node_role   -> 3 series
+    {'__name__': 'kube_node_role', 'instance': '10.244.1.12:8080', 'node': 'ipsec-metrics-worker', 'pod': 'kps-kube-state-metrics-747b7b996-qf2jc', 'role': 'worker'} 1
+    {'__name__': 'kube_node_role', 'instance': '10.244.1.12:8080', 'node': 'ipsec-metrics-worker2', 'pod': 'kps-kube-state-metrics-747b7b996-qf2jc', 'role': 'worker'} 1
+    {'__name__': 'kube_node_role', 'instance': '10.244.1.12:8080', 'node': 'ipsec-metrics-control-plane', 'pod': 'kps-kube-state-metrics-747b7b996-qf2jc', 'role': 'control-plane'} 1
+
+$ ALERTS{alertname=~"IpsecNasExporterMissing|IpsecNasDuplicateNode|IpsecNasNodeLabelMismatch"}   -> 1 series
+    {'__name__': 'ALERTS', 'alertname': 'IpsecNasExporterMissing', 'alertstate': 'firing', 'instance': '10.244.1.12:8080', 'node': 'ipsec-metrics-worker2', 'pod': 'kps-kube-state-metrics-747b7b996-qf2jc', 'role': 'worker', 'severity': 'warning'} 1
+
+# ---- worker2 untainted; by 2026-10-03T18:21:16Z its new pod (cbw26) reported and the alert had resolved:
+$ ALERTS{alertname="IpsecNasExporterMissing"}   -> 0 series
+
+# ---- One pod deleted, alone: ipsec-cert-sync-l75cc (worker) at 2026-10-03T18:22:38Z. Expected: worker's
+# series moves to the new pod; worker2's series (pod cbw26) continues without a gap.
+$ kubectl -n kcs-ipsec get pods -o wide
+NAME                   NODE
+ipsec-cert-sync-cbw26  ipsec-metrics-worker2
+ipsec-cert-sync-df2w4  ipsec-metrics-worker
+# query_range, 15 s step, from 18:21:15Z:
+$ up{namespace="kcs-ipsec"}
+    exporter_node=ipsec-metrics-worker pod=ipsec-cert-sync-l75cc: from 18:21:15Z to 18:23:00Z, values ['1'], gaps []
+    exporter_node=ipsec-metrics-worker2 pod=ipsec-cert-sync-cbw26: from 18:21:15Z to 18:25:15Z, values ['1'], gaps []
+    exporter_node=ipsec-metrics-worker pod=ipsec-cert-sync-df2w4: from 18:23:15Z to 18:25:15Z, values ['1'], gaps []

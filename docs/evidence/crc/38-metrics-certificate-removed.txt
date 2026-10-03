@@ -1,0 +1,49 @@
+# CRC 4.22.7, pod ipsec-cert-sync-5mvdc. Break: delete the node certificate from the host's NSS database.
+# Recorded from 2026-10-03T18:10:31Z
+$ oc -n kcs-ipsec exec ipsec-cert-sync-5mvdc -c sync -- chroot /host certutil -D -n left_server -d /var/lib/ipsec/nss
+(deleted at 18:10:31Z)
+
+# every 15 s: certificate_present, tunnel_up, IKE SA, and the IpsecNasCertificateMissing alert
+18:10:32Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:10:48Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:11:04Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:11:19Z  certificate_present=0 tunnel_up=1 ike_sa=1 alert=pending
+18:11:35Z  certificate_present=0 tunnel_up=1 ike_sa=1 alert=pending
+18:11:51Z  certificate_present=0 tunnel_up=1 ike_sa=1 alert=pending
+18:12:07Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=pending
+18:12:23Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:12:39Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:12:55Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:13:11Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:13:27Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:13:44Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:14:00Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:14:16Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:14:32Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:14:48Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:15:04Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:15:20Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:15:36Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:15:52Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:16:08Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:16:24Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:16:40Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:16:56Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+18:17:12Z  certificate_present=1 tunnel_up=1 ike_sa=1 alert=inactive
+
+$ oc -n kcs-ipsec logs ipsec-cert-sync-5mvdc -c sync --since=10m
+2026-10-03T18:11:43Z [crc] New or renewed certificate detected - importing into NSS
+pk12util: PKCS12 IMPORT SUCCESSFUL
+2026-10-03T18:11:44Z [crc] Import OK
+2026-10-03T18:11:44Z [crc] Restarting ipsec-nas to load the new certificate
+
+# Through Thanos Querier (query_range, 15 s step, from 18:09:00Z). tunnel_up never left 1 although the
+# tunnel was restarted at 18:11:44Z; only the established time and the import time moved.
+$ ipsec_nas_tunnel_up
+    from 18:09:00Z: values ['1'], changed at []
+$ ipsec_nas_tunnel_established_timestamp_seconds{exporter_node!=""}
+    from 18:09:00Z: values ['12:39:20Z', '18:11:44Z'], changed at ['18:12:15Z']
+$ ipsec_nas_certificate_import_timestamp_seconds{exporter_node!=""}
+    from 18:09:00Z: values ['04:55:25Z', '18:11:43Z'], changed at ['18:12:15Z']
+$ changes(ipsec_nas_tunnel_established_timestamp_seconds{exporter_node!=""}[1h])
+    from 18:09:00Z: values ['0', '1'], changed at ['18:12:15Z']

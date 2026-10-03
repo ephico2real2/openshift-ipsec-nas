@@ -15,6 +15,7 @@ automated per node with **Kyverno**.
 | [`docs/50-option-c-wildcard-certificate.md`](docs/50-option-c-wildcard-certificate.md) | Option C, a wildcard certificate in a MachineConfig: evaluated and measured, with what the NAS team must configure |
 | [`docs/51-option-c-summary.md`](docs/51-option-c-summary.md) | Option C summary: what works, and the NAS settings for the three setups that work (`uniqueids=no`) |
 | [`docs/52-option-c-nas-team.md`](docs/52-option-c-nas-team.md) | Option C: the NAS team's handout, what they must do in one table |
+| [`docs/60-monitoring-per-node.md`](docs/60-monitoring-per-node.md) | Monitoring: each node reports its own IPsec state, the metrics and alerts, and what was measured on kind (3 nodes) and CRC |
 | [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
 | [`docs/lab/`](docs/lab/) | A test NAS on RHEL 10, the Lima lab, and an application that uses the NAS |
 | [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart: every value, the prerequisites it checks, cleanup on node deletion and uninstall |
@@ -49,13 +50,16 @@ docs/10-option-a-shared-certificate.md  Option A (documented, not used), measure
 docs/50-option-c-wildcard-certificate.md  Option C (wildcard certificate in a MachineConfig), measured on CRC and in the lab
 docs/51-option-c-summary.md          Option C summary: what works
 docs/52-option-c-nas-team.md         Option C: the NAS team's handout
+docs/60-monitoring-per-node.md       monitoring: per-node metrics, alerts, dashboard; measured on kind and CRC
 docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
 docs/30-option-b-automated-helm-argocd.md  Option B with Helm and Argo CD; CEL or legacy Kyverno policies
 docs/40-lab-crc-and-nas.md           the CRC lab, testing with an application, gotchas
 docs/lab/                            a test NAS on RHEL 10, the Lima lab, an application that uses the NAS
 docs/diagrams/                       the figures (source.html + rendered PNGs) and their Mermaid text versions
 docs/evidence/crc/                   saved command output behind the captures
+docs/evidence/kind/                  saved output of the three-node kind run (doc 60)
 docs/images/crc/                     those captures as images (render-terminal.py makes them)
+docs/images/kind/                    the dashboard on the three-node kind cluster (doc 60)
 manifests/common/                    NMState Operator, NMState instance, Kyverno RBAC
 manifests/option-a-shared-cert/      Option A: Butane MachineConfig + NNCP generate policy
 manifests/option-c-wildcard-cert/    Option C: Butane MachineConfig, one NNCP for the pool (C1), per-node policy (C2)

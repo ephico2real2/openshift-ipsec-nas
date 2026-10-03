@@ -1,0 +1,97 @@
+# CRC 4.22.7, chart at de53ef9 synced by Argo CD. Every query of charts/ipsec-nas/files/ipsec-nas.json,
+# with $node = .*, run against Thanos Querier (OpenShift's single query plane for platform and user metrics).
+# Recorded 2026-10-03T18:18:11Z
+
+## panel 1: Tunnels up
+$ sum(ipsec_nas_tunnel_up{node=~".*"})
+    {} 1
+
+## panel 2: Tunnels down
+$ count(ipsec_nas_tunnel_up{node=~".*"} == 0) or vector(0)
+    {} 0
+
+## panel 3: Workers reporting
+$ count(ipsec_nas_collect_timestamp_seconds{node=~".*"})
+    {} 1
+
+## panel 4: Soonest certificate expiry
+$ min(ipsec_nas_certificate_not_after_timestamp_seconds{node=~".*"} - time()) / 86400
+    {} 364.36952709490777
+
+## panel 5: Tunnel state per node
+$ ipsec_nas_tunnel_up{node=~".*"}
+    {'__name__': 'ipsec_nas_tunnel_up', 'connection': 'ipsec-nas', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 1
+
+## panel 6: Certificate days left per node
+$ (ipsec_nas_certificate_not_after_timestamp_seconds{node=~".*"} - time()) / 86400
+    {'exporter_node': 'crc', 'nickname': 'left_server', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 364.3695269560179
+
+## panel 7: Traffic through the tunnel
+$ rate(ipsec_nas_tunnel_out_bytes_total{node=~".*"}[5m])
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 1198.5037037037036
+$ rate(ipsec_nas_tunnel_in_bytes_total{node=~".*"}[5m])
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 455.0518518518519
+
+## panel 8: Tunnel age per node
+$ time() - ipsec_nas_tunnel_established_timestamp_seconds{node=~".*"}
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 387.88499999046326
+
+## panel 9: Metrics age per node
+$ time() - ipsec_nas_collect_timestamp_seconds{node=~".*"}
+    {'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 25.890000104904175
+
+## panel 10: libreswan version per node
+$ ipsec_nas_libreswan_info{node=~".*"}
+    {'__name__': 'ipsec_nas_libreswan_info', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc', 'version': '5.3'} 1
+
+## panel 11: Nodes reported twice
+$ count(count by (node) (ipsec_nas_collect_timestamp_seconds{node=~".*"}) > 1) or vector(0)
+    {} 0
+
+## panel 12: Pods reporting the wrong node
+$ count(ipsec_nas_collect_timestamp_seconds{node=~".*",exporter_node!=""} unless on (node, pod) label_replace(ipsec_nas_collect_timestamp_seconds, "node", "$1", "exporter_node", "(.+)")) or vector(0)
+    {} 0
+
+## panel 13: Kernel IPsec errors, last hour
+$ sum(increase(ipsec_nas_xfrm_errors_total{node=~".*"}[1h])) or vector(0)
+    {} 0
+
+## panel 14: Per node
+$ time() - max by (node, pod) (ipsec_nas_collect_timestamp_seconds{node=~".*"})
+    {'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 25.914000034332275
+$ max by (node) (ipsec_nas_tunnel_up{node=~".*"})
+    {'node': 'crc'} 1
+$ max by (node) (ipsec_nas_ike_sa_established{node=~".*"})
+    {'node': 'crc'} 1
+$ max by (node) (ipsec_nas_certificate_present{node=~".*"})
+    {'node': 'crc'} 1
+$ max by (node) (ipsec_nas_connection_configured{node=~".*"})
+    {'node': 'crc'} 1
+$ max by (node) (ipsec_nas_collect_success{node=~".*"})
+    {'node': 'crc'} 1
+$ sum by (node) (ipsec_nas_nfs_mounts{node=~".*"}) or 0 * max by (node) (ipsec_nas_collect_timestamp_seconds{node=~".*"})
+    {'node': 'crc'} 1
+$ sum by (node) (label_replace(rate(node_nfs_requests_total{instance=~".*"}[5m]), "node", "$1", "instance", "(.*)")) and on (node) max by (node) (ipsec_nas_collect_timestamp_seconds{node=~".*"})
+    {'node': 'crc'} 2.0148148148148146
+$ sum by (node) (increase(ipsec_nas_xfrm_errors_total{node=~".*"}[1h]))
+    {'node': 'crc'} 0
+$ time() - max by (node) (ipsec_nas_certificate_import_timestamp_seconds{node=~".*"})
+    {'node': 'crc'} 388.9539999961853
+$ max by (node, peer_id) (ipsec_nas_tunnel_info{node=~".*"})
+    {'node': 'crc', 'peer_id': 'O=KCS OpenShift lab, CN=crc-nas.lab.internal'} 1
+
+## panel 15: Tunnel re-establishments in the last hour
+$ changes(ipsec_nas_tunnel_established_timestamp_seconds{node=~".*"}[1h])
+    {'connection': 'ipsec-nas', 'exporter_node': 'crc', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 1
+    {'connection': 'ipsec-nas', 'node': 'crc', 'pod': 'ipsec-cert-sync-dmppz'} 0
+    {'connection': 'ipsec-nas', 'node': 'crc', 'pod': 'ipsec-cert-sync-5mvdc'} 0
+
+## panel 16: Kernel IPsec errors per node
+$ sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total{node=~".*"}[5m])) > 0
+    (no series)
+
+## The ServiceMonitor change (exporter_node added) as it reached Prometheus: query_range, 15 s step, from 18:05:00Z
+$ count(ipsec_nas_collect_timestamp_seconds)
+    {} from 18:05:00Z to 18:15:00Z: values ['1', '2', '1'], changed at ['18:08:15Z', '18:08:30Z']
+$ ALERTS{alertname="IpsecNasDuplicateNode"}
+    {'alertstate': 'pending', 'node': 'crc'} from 18:08:30Z to 18:09:00Z: values ['1'], changed at []
