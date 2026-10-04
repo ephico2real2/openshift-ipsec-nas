@@ -544,7 +544,7 @@ data:
           "gridPos": {
             "x": 0,
             "y": 19,
-            "w": 8,
+            "w": 6,
             "h": 5
           },
           "targets": [
@@ -603,9 +603,9 @@ data:
             "uid": "${DS_PROMETHEUS}"
           },
           "gridPos": {
-            "x": 8,
+            "x": 6,
             "y": 19,
-            "w": 8,
+            "w": 6,
             "h": 5
           },
           "targets": [
@@ -672,9 +672,9 @@ data:
             "uid": "${DS_PROMETHEUS}"
           },
           "gridPos": {
-            "x": 16,
+            "x": 12,
             "y": 19,
-            "w": 8,
+            "w": 6,
             "h": 5
           },
           "targets": [
@@ -686,6 +686,67 @@ data:
               },
               "expr": "ipsec_nas_libreswan_info{node=~\"$node\"}",
               "legendFormat": "{{node}}: {{version}}",
+              "instant": true
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "unit": "none",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "mappings": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "colorMode": "none",
+            "graphMode": "none",
+            "textMode": "name",
+            "justifyMode": "auto",
+            "orientation": "auto"
+          }
+        },
+        {
+          "id": 22,
+          "type": "stat",
+          "title": "Certificate source per node",
+          "description": "Which option put the certificate on each node: B (cert-sync), C (wildcard MachineConfig) or A (shared MachineConfig). A node with none of their markers shows nothing.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "x": 18,
+            "y": 19,
+            "w": 6,
+            "h": 5
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "ipsec_nas_certificate_source_info{node=~\"$node\"}",
+              "legendFormat": "{{node}}: {{mode}}",
               "instant": true
             }
           ],

@@ -135,7 +135,7 @@ spec:
                   "$ref": "#/spec/panels/1_3"
                 },
                 "height": 5,
-                "width": 8,
+                "width": 6,
                 "x": 0,
                 "y": 19
               },
@@ -144,8 +144,8 @@ spec:
                   "$ref": "#/spec/panels/1_4"
                 },
                 "height": 5,
-                "width": 8,
-                "x": 8,
+                "width": 6,
+                "x": 6,
                 "y": 19
               },
               {
@@ -153,8 +153,17 @@ spec:
                   "$ref": "#/spec/panels/1_5"
                 },
                 "height": 5,
-                "width": 8,
-                "x": 16,
+                "width": 6,
+                "x": 12,
+                "y": 19
+              },
+              {
+                "content": {
+                  "$ref": "#/spec/panels/1_6"
+                },
+                "height": 5,
+                "width": 6,
+                "x": 18,
                 "y": 19
               }
             ]
@@ -762,6 +771,52 @@ spec:
                         "name": "ipsec-nas-thanos"
                       },
                       "query": "ipsec_nas_libreswan_info{node=~\"$node\"}",
+                      "seriesNameFormat": "{{node}}"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "1_6": {
+          "kind": "Panel",
+          "spec": {
+            "display": {
+              "description": "Which option put the certificate on each node: B (cert-sync), C (wildcard MachineConfig) or A (shared MachineConfig). A node with none of their markers shows nothing.",
+              "name": "Certificate source per node"
+            },
+            "plugin": {
+              "kind": "StatChart",
+              "spec": {
+                "calculation": "last-number",
+                "colorMode": "none",
+                "format": {
+                  "unit": "decimal"
+                },
+                "metricLabel": "mode",
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "#73bf69",
+                      "value": 0
+                    }
+                  ]
+                }
+              }
+            },
+            "queries": [
+              {
+                "kind": "TimeSeriesQuery",
+                "spec": {
+                  "plugin": {
+                    "kind": "PrometheusTimeSeriesQuery",
+                    "spec": {
+                      "datasource": {
+                        "kind": "PrometheusDatasource",
+                        "name": "ipsec-nas-thanos"
+                      },
+                      "query": "ipsec_nas_certificate_source_info{node=~\"$node\"}",
                       "seriesNameFormat": "{{node}}"
                     }
                   }

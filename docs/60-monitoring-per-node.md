@@ -177,7 +177,7 @@ The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-moni
 It has five sections, each answering one question ([doc 61, *At a glance*](61-perses-dashboard-review.md#at-a-glance)):
 
 - **Summary**: is anything wrong? Tunnels up and down, workers reporting, the soonest certificate expiry.
-- **Tunnels per node**: tunnel state, certificate time left, traffic, tunnel age, metrics age, libreswan version.
+- **Tunnels per node**: tunnel state, certificate time left, traffic, tunnel age, metrics age, libreswan version, and which option put the certificate on the node (`B`, `C` or `A`; the captures below were taken before this panel).
 - **Checks (all should be 0)**: **Nodes reported twice**, **Pods reporting the wrong node**, **Kernel IPsec errors, last hour**.
 - **Per-node detail**: one row per node with tunnel, IKE SA, certificate, connection, libreswan answering, NFS mounts and requests, IPsec drops and last certificate import; under it in Perses, the NAS identity and the reporting pod of each node whose tunnel is up (Grafana's table shows the reporting pod of every node, and the NAS identity of each node whose tunnel is up). A node in two rows there is reported by two pods. In Grafana **"–" means unknown** (no series), never healthy (Capture 1); the Perses table maps only 0 and 1, and how it shows a missing value was not measured.
 - **History**: tunnel re-establishments in the last hour, with the alert's threshold; kernel IPsec errors per node and counter over time.

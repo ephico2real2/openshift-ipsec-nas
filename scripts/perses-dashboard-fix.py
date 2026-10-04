@@ -52,8 +52,8 @@ placeholders = [k for k, p in panels.items() if p["spec"]["plugin"]["kind"] == "
 if placeholders:
     fail(f"panels {placeholders} are 'Migration from Grafana not supported' placeholders: "
          "give percli --plugin.path the UNPACKED plugins")
-if len(panels) != 16:
-    fail(f"expected the 16 panels of ipsec-nas.json, got {len(panels)}: update this script with the Grafana dashboard")
+if len(panels) != 17:
+    fail(f"expected the 17 panels of ipsec-nas.json, got {len(panels)}: update this script with the Grafana dashboard")
 
 # Every query names our datasource. A namespace may hold several datasources, and the default one
 # need not be ours.
@@ -80,6 +80,13 @@ if not query_spec(queries(libreswan)[0])["query"].startswith("ipsec_nas_libreswa
     fail("the libreswan version panel no longer queries ipsec_nas_libreswan_info")
 libreswan["spec"]["plugin"]["spec"]["metricLabel"] = "version"
 query_spec(queries(libreswan)[0])["seriesNameFormat"] = "{{node}}"
+
+# The same for the option that put the certificate on the node (an info metric, its label "mode").
+source = panel("Certificate source per node")
+if not query_spec(queries(source)[0])["query"].startswith("ipsec_nas_certificate_source_info"):
+    fail("the certificate source panel no longer queries ipsec_nas_certificate_source_info")
+source["spec"]["plugin"]["spec"]["metricLabel"] = "mode"
+query_spec(queries(source)[0])["seriesNameFormat"] = "{{node}}"
 
 # The per-node table split a node into three rows: its merge joins series by their labels, and two of
 # its 11 queries carry more than "node" (the first, node+pod; the last, node+peer_id). They move to a

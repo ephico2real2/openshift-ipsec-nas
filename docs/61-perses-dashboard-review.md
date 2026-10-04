@@ -17,7 +17,7 @@ The dashboard has five sections, top to bottom. Each answers one question:
 | Section | Panels | The question it answers |
 |---|---|---|
 | **Summary** | Tunnels up, tunnels down, workers reporting, soonest certificate expiry | Is anything wrong? |
-| **Tunnels per node** | Tunnel state, certificate time left, traffic to and from the NAS, tunnel age, metrics age, libreswan version | Which node, and how is it doing? A young tunnel age means a recent restart; an old metrics age, a stopped collector |
+| **Tunnels per node** | Tunnel state, certificate time left, traffic to and from the NAS, tunnel age, metrics age, libreswan version, certificate source (B, C or A) | Which node, and how is it doing? A young tunnel age means a recent restart; an old metrics age, a stopped collector |
 | **Checks (all should be 0)** | Nodes reported twice, pods reporting the wrong node, kernel IPsec errors in the last hour | Can these numbers be trusted? (doc 60, *How each node's data stays its own*) |
 | **Per-node detail** | **Per node** table: one row per node; NAS identity per node | **Why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import; for each node whose tunnel is up, which pod reports it and the identity the NAS presented (both come from `ipsec_nas_tunnel_info`, which the collector writes only while the tunnel is up) |
 | **History** | Tunnel re-establishments in the last hour, kernel IPsec errors per node | Is a tunnel flapping (alert above 3 an hour), and are errors growing? "No data" there means no errors: it shows only counters above 0 |
@@ -196,7 +196,7 @@ percli migrate -f charts/ipsec-nas/files/ipsec-nas.json --format cr --project kc
 ```
 
 - **The tool.** `percli` 0.54.0, the Perses version in COO 1.5.2's and `release-1.5`'s `go.mod` (1.5.0 and 1.5.1: 0.53.1). Its plugins must be **unpacked**; pointed at the packed archives it silently turns every panel into a placeholder.
-- **The result.** 16 panels: 11 stat charts, 1 table, 3 time series and 1 bar chart. The `node` filter became a Perses variable over the `node` label of `ipsec_nas_tunnel_up`.
+- **The result.** 16 panels: 11 stat charts, 1 table, 3 time series and 1 bar chart (since 2026-10-04, 17: a 12th stat chart, *Certificate source per node*). The `node` filter became a Perses variable over the `node` label of `ipsec_nas_tunnel_up`.
 - **COO's own converter** (`POST /api/migrate` on its Perses) produces the same, except the table: it names the value columns `Value #A…` and drops value mappings and units.
 - **The resource version.** `percli` writes `perses.dev/v1alpha1`, which the API server reports as deprecated. `v1alpha2` puts the dashboard under `spec.config`.
 
