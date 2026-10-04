@@ -18,8 +18,8 @@
         IKE SAs: total(1) authenticated(1); IPsec SAs: total(1) authenticated(1)
   NAS:  responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS'
         (rightid=%fromcert: the NAS takes the identity from the certificate, not the name C2 presents; doc 50 rows 3 and 7)
-  The earlier C2 attempt (evidence 36) failed with uniqueids=yes and an old instance on the NAS; with the restart and
-  uniqueids=no it came up at once.
+  C2 itself was already shown on CRC on 2026-10-03 (evidence 36: accepted after the NAS restart cleared an old instance,
+  with uniqueids=yes; on one node uniqueids does not matter). What is new here is the collector on a C2 node.
 
 ## 4. The collector on C2, 19:28:55Z
   43 samples. Against the C1 snapshot of evidence 45, the only new families are the two #40 added

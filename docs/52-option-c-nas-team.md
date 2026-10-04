@@ -4,7 +4,7 @@
 
 Every node presents the **same** certificate, so the NAS sees many peers with one identity. The NAS must accept that. Everything else is the setup it already has for IPsec with certificates ([00-prepare-the-cluster.md, 3.1](00-prepare-the-cluster.md#31-nas-configuration-storage-team-not-us)).
 
-Every row below was measured with a libreswan 5.4 NAS: in the Lima lab with two nodes sharing one certificate ([`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt)), and on OpenShift Local ([`evidence/crc/35`](evidence/crc/35-option-c-crc-install.txt) to [`37`](evidence/crc/37-option-c-crc-removal-and-b-restored.txt)). A NAS product other than libreswan has its own name for each setting; the meaning is what must match.
+Every row below was measured with a libreswan 5.4 NAS: in the Lima lab with two stand-in workers (Lima VMs, not OpenShift nodes) sharing one certificate ([`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt)), and on OpenShift Local ([`evidence/crc/35`](evidence/crc/35-option-c-crc-install.txt) to [`37`](evidence/crc/37-option-c-crc-removal-and-b-restored.txt)). A NAS product other than libreswan has its own name for each setting; the meaning is what must match.
 
 ## What we send the NAS team
 

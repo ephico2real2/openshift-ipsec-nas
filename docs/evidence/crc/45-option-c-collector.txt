@@ -185,6 +185,10 @@ pod: ipsec-cert-sync-5mvdc Running crc
     ipsec_nas_libreswan_info{node="crc",version="5.3"} 1
 
 ## 6. Not measured here
-  C2 (per-node FQDN identity): on this CRC NAS (rightid=%fromcert, uniqueids=yes) C2 never established a tunnel in the
-  2026-10-03 run (evidence 36: AUTHENTICATION_FAILED, also after a NAS libreswan restart). The working C2 setups of doc 51
-  (cases 6, 7) need uniqueids=no on the NAS. Not attempted in this run.
+  C2 (per-node FQDN identity): not attempted in this run.
+  CORRECTED 2026-10-04 (second pass): this section first said C2 "never established a tunnel" on 2026-10-03, "also after
+  a NAS libreswan restart", and that it needed uniqueids=no. Evidence 36 refutes that: after the NAS restart (02:53:54Z)
+  the node activated with our id=@crc.crc.testing, the NAS "established IKE SA; authenticated peer certificate
+  'CN=ocp-ipsec-workers'", and the demo application's writes resumed at 02:54:32Z, with uniqueids=yes. On one node
+  uniqueids does not matter; it matters when two or more nodes share an identity (doc 50, rows 1 and 2). The collector
+  on C2 was measured later: evidence 49.

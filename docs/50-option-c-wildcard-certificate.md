@@ -49,7 +49,7 @@ Every 2 years: renew            C1: one NNCP for the pool  -->  Connection ipsec
                                    leftid @<node>.<NODE_DOMAIN>
                                    restart after a change
 
-Measured with these settings: Lima lab, two nodes sharing one certificate *.internal: 2 tunnels, both NFS writes through IPsec,
+Measured with these settings: Lima lab, two stand-in workers sharing one certificate *.internal: 2 tunnels, both NFS writes through IPsec,
 for C1 (case 2) and C2 (case 7). OpenShift Local: C1's tunnel 10 s after its NNCP; a renewal took one reboot, tunnel back by itself.
 The NAS does not enforce the name a node claims: the CA, the worker-subnet firewall and NFS only through IPsec are the controls.
 Not measured: a new node joining the pool (by design it gets the MachineConfig and the NNCP), and a NAS product other than libreswan.
@@ -68,7 +68,7 @@ Every node presents the same certificate. Whether the NAS can hold all their tun
 | 1 | the certificate's subject (`%fromcert`) | `%fromcert` | `yes` (default) | **1**: the nodes keep replacing each other | – |
 | 2 | the certificate's subject | `%fromcert` | `no` | **2** | both pass |
 | 3 | each its own FQDN | `%fromcert` | `yes` | **1**: the NAS takes the certificate's subject, the same for both | – |
-| 4 | each its own FQDN | `%any` | `yes` | **0**: `AUTHENTICATION_FAILED` | – |
+| 4 | each its own FQDN | `%any` | `yes` | **0**: refused (pluto: "nothing is sufficiently refined"; on CRC the same refusal answered `AUTHENTICATION_FAILED`, evidence 36) | – |
 | 5 | each its own FQDN | `@*.internal` | `yes` | **1**: both recorded as `@*.internal` | – |
 | 6 | each its own FQDN | `@*.internal` | `no` | **2** | both pass |
 | 7 | each its own FQDN | `%fromcert` | `no` | **2** | both pass |
@@ -97,7 +97,7 @@ Every combination below was run with one wildcard certificate (`*.internal`) on 
 | 1 | certificate DN | `%fromcert` | yes | One tunnel at a time; the nodes keep replacing each other |
 | 2 | certificate DN | `%fromcert` | no | **2 tunnels, both NFS writes pass (C1)** |
 | 3 | own FQDN | `%fromcert` | yes | One tunnel; the NAS uses the certificate DN instead |
-| 4 | own FQDN | `%any` | yes | Refused: `AUTHENTICATION_FAILED` |
+| 4 | own FQDN | `%any` | yes | Refused: no tunnel (pluto: "nothing is sufficiently refined") |
 | 5 | own FQDN | `@*.internal` | yes | One tunnel; both recorded as `@*.internal` |
 | 6 | own FQDN | `@*.internal` | no | 2 tunnels, both NFS writes pass |
 | 7 | own FQDN | `%fromcert` | no | **2 tunnels, both NFS writes pass (C2)** |

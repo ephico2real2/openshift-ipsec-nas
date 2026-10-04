@@ -55,8 +55,9 @@
     kube_node_role{role="worker"}                                   -> 1 series, namespace=openshift-monitoring job=kube-state-metrics node=crc
     count(node_nfs_requests_total{namespace="kcs-ipsec"})           -> no series
     count by (namespace, job) (node_nfs_requests_total)             -> namespace=openshift-monitoring job=node-exporter: 99
-  So both expressions could never return a series. They fired on kind (evidence kind/02), where kube-prometheus-stack
-  enforces no namespace.
+  So both expressions could never return a series. IpsecNasExporterMissing fired on kind (evidence kind/02), where
+  kube-prometheus-stack enforces no namespace; IpsecNasNfsWithoutTunnel finds nothing on kind (its instance is IP:9100)
+  and is covered by tests/test-alert-rules.sh only. (Corrected 2026-10-04: this line first said both fired on kind.)
 
   5a. Red Hat's setting (operator decision 2026-10-04: kcs-ipsec is a platform namespace, "Excemption permitted").
     cluster-monitoring-operator, release-4.18, Documentation/api.md (absent on release-4.17):
