@@ -1,0 +1,136 @@
+{{- if .Values.tunnel.enabled }}
+{{- /*
+Option C's tunnel, one object per pool (doc 50, Step C.5): the same objects as render.sh makes from
+manifests/option-c-wildcard-cert/10-nncp-all-workers.yaml.tmpl (c1) and 11-kyverno-nncp-per-node-fqdn.yaml.tmpl (c2);
+tests/test-option-c-chart.sh compares them. The nodes need the pool's MachineConfig first: the chart does not make it.
+*/ -}}
+{{- $right := .Values.ipsec.right | default .Values.nas.fqdn }}
+{{- $left := .Values.ipsec.left | default (printf "(( object.metadata.name )).%s" .Values.nodeDomain) }}
+{{- range $pool := .Values.tunnel.pools }}
+{{- if eq $.Values.tunnel.variant "c1" }}
+---
+# C1: one NNCP for every node of the pool; every node presents the certificate's subject, so the NAS must allow
+# duplicate peer IDs. left: %defaultroute is the address of the node's default-route interface.
+apiVersion: nmstate.io/v1
+kind: NodeNetworkConfigurationPolicy
+metadata:
+  name: ipsec-nas-wildcard-{{ $pool }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+  nodeSelector:
+    node-role.kubernetes.io/{{ $pool }}: ""
+  desiredState:
+    interfaces:
+    - name: ipsec-nas
+      type: ipsec
+      libreswan:
+        left: '%defaultroute'
+        leftid: '%fromcert'
+        leftrsasigkey: '%cert'
+        leftcert: left_server
+        leftmodecfgclient: false
+        right: {{ $right }}
+        rightid: '%fromcert'
+        rightrsasigkey: '%cert'
+        rightsubnet: {{ $.Values.nas.ip }}/32
+        ikev2: insist
+        type: {{ $.Values.ipsec.type }}
+{{- else }}
+---
+# C2: Kyverno makes one NNCP per node of the pool, with the node's own name as its identity. The worker pool's
+# policy leaves out control-plane and master nodes, so it never takes a master that also has the worker label.
+apiVersion: policies.kyverno.io/v1
+kind: GeneratingPolicy
+metadata:
+  name: ipsec-nncp-wildcard-{{ $pool }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+  evaluation:
+    generateExisting:
+      enabled: true
+    synchronize:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE", "UPDATE"]
+      resources: ["nodes"]
+  matchConditions:
+  - name: selected-nodes
+    expression: >-
+      object.metadata.?labels[?"node-role.kubernetes.io/{{ $pool }}"] == optional.of("")
+  {{- if eq $pool "worker" }}
+  - name: not-excluded
+    expression: >-
+      !["node-role.kubernetes.io/control-plane", "node-role.kubernetes.io/master", "node-role.kubernetes.io/ingress"].exists(k, k in object.metadata.?labels.orValue({}))
+  {{- end }}
+  generate:
+  - template:
+      interpolate: cel
+      value: |
+        apiVersion: nmstate.io/v1
+        kind: NodeNetworkConfigurationPolicy
+        metadata:
+          name: ipsec-nas-(( object.metadata.name ))
+        spec:
+          nodeSelector:
+            kubernetes.io/hostname: "(( object.metadata.labels['kubernetes.io/hostname'] ))"
+          desiredState:
+            interfaces:
+            - name: ipsec-nas
+              type: ipsec
+              libreswan:
+                left: "{{ $left }}"
+                leftid: "@(( object.metadata.name )).{{ $.Values.nodeDomain }}"
+                leftrsasigkey: '%cert'
+                leftcert: left_server
+                leftmodecfgclient: false
+                right: {{ $right }}
+                rightid: '%fromcert'
+                rightrsasigkey: '%cert'
+                rightsubnet: {{ $.Values.nas.ip }}/32
+                ikev2: insist
+                type: {{ $.Values.ipsec.type }}
+{{- end }}
+{{- end }}
+{{- if and (eq .Values.tunnel.variant "c2") .Values.kyvernoRBAC.create }}
+---
+# Kyverno's background controller creates the NNCPs and lists Nodes (manifests/common/03-kyverno-rbac.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:ipsec-nas-generate
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app: ipsec-nas-metrics
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+    rbac.kyverno.io/aggregate-to-admission-controller: "true"
+rules:
+- apiGroups: ["nmstate.io"]
+  resources: ["nodenetworkconfigurationpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno:ipsec-nas-read-nodes
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  labels:
+    app: ipsec-nas-metrics
+    rbac.kyverno.io/aggregate-to-background-controller: "true"
+    rbac.kyverno.io/aggregate-to-reports-controller: "true"
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+{{- end }}
+{{- end }}

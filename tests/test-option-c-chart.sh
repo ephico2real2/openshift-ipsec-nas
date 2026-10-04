@@ -65,6 +65,59 @@ ok = d["display"]["name"] == "IPsec to the NAS (Option C)" and qs and all(
 sys.exit(0 if ok else 1)
 PY
 
+# Option C's tunnel and certificate (off by default). The tunnel objects must equal what render.sh makes from
+# manifests/option-c-wildcard-cert/ (C1 and C2, each pool); labels and comments may differ.
+render | grep -qE 'kind: (NodeNetworkConfigurationPolicy|GeneratingPolicy|Certificate)$' \
+  && bad "defaults render no tunnel and no certificate" || ok "defaults render no tunnel and no certificate"
+opt=(--set nodeDomain=ocp.example.com --set nas.fqdn=nas01.example.com --set nas.ip=10.0.0.50 --set prerequisites.skipCheck=true)
+same_objects() {  # $1 = chart rendering, $2 = render.sh file: every object of the file, by kind and name, equal in spec/rules
+  ruby -ryaml -e '
+    key = ->(d) { "#{d["kind"]}/#{d["metadata"]["name"]}" }
+    body = ->(d) { d.reject { |k, _| %w[metadata].include?(k) } }
+    chart = YAML.load_stream(ARGV[0]).compact.to_h { |d| [key.(d), body.(d)] }
+    want  = YAML.load_stream(File.read(ARGV[1])).compact
+    bad = want.reject { |d| chart[key.(d)] == body.(d) }.map { |d| key.(d) }
+    puts bad.join(" ") unless bad.empty?
+    exit(bad.empty? && !want.empty? ? 0 : 1)' -- "$1" "$2"
+}
+for pool in worker master; do
+  ( export NODE_DOMAIN=ocp.example.com NAS_FQDN=nas01.example.com NAS_IP=10.0.0.50 CLUSTER_ISSUER=x OCP_VERSION=4.19.0 MCP_ROLE=${pool}
+    ./render.sh >/dev/null )
+  same_objects "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c1 --set "tunnel.pools={${pool}}")" \
+    rendered/option-c-wildcard-cert/10-nncp-all-workers.yaml && ok "C1, ${pool} pool: the NNCP equals render.sh's" || bad "C1 ${pool}"
+  same_objects "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2 --set "tunnel.pools={${pool}}")" \
+    rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml && ok "C2, ${pool} pool: the policy equals render.sh's" || bad "C2 ${pool}"
+done
+# Kyverno's roles: the manifest's NNCP rule and node reading; not its cert-manager rule, which only Option B needs.
+ruby -ryaml -e '
+  roles = ->(t) { YAML.load_stream(t).compact.select { |d| d["kind"] == "ClusterRole" }.to_h { |d| [d["metadata"]["name"], d["rules"]] } }
+  chart, want = roles.(ARGV[0]), roles.(File.read(ARGV[1]))
+  nncp = want["kyverno:ipsec-nas-generate"].select { |r| r["apiGroups"] == ["nmstate.io"] }
+  exit(chart["kyverno:ipsec-nas-generate"] == nncp && chart["kyverno:ipsec-nas-read-nodes"] == want["kyverno:ipsec-nas-read-nodes"] ? 0 : 1)' \
+  -- "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2)" manifests/common/03-kyverno-rbac.yaml \
+  && ok "C2: Kyverno's roles as manifests/common/03-kyverno-rbac.yaml, without its cert-manager rule (Option B only)" || bad "C2 Kyverno RBAC"
+both="$(render "${opt[@]}" --set tunnel.enabled=true --set 'tunnel.pools={worker,master}' | grep '^  name: ipsec-nas-wildcard-' | tr -d ' ' | tr '\n' ' ')"
+[[ "$both" == "name:ipsec-nas-wildcard-worker name:ipsec-nas-wildcard-master " ]] && ok "both pools: one NNCP each (${both})" || bad "both pools: ${both}"
+cert="$(render "${opt[@]}" --set certificate.enabled=true --set clusterIssuer=enterprise-ca)"
+ruby -ryaml -e '
+  c = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "Certificate" } or exit 1
+  s = c["spec"]
+  ok = s["dnsNames"] == ["*.ocp.example.com"] && s["commonName"] == "ocp-ipsec-workers" && s["subject"]["organizations"] == ["KCS"] &&
+       s["privateKey"]["size"] == 3072 && s["usages"].include?("client auth") && s["issuerRef"]["name"] == "enterprise-ca" && s["duration"] == "17520h"
+  exit(ok ? 0 : 1)' -- "$cert" && ok "the Certificate: *.ocp.example.com, CN=ocp-ipsec-workers, O=KCS, RSA 3072, client auth, 2 years" || bad "the Certificate"
+grep -q 'kind: MachineConfig' <<<"$cert$(render "${opt[@]}" --set tunnel.enabled=true)" && bad "the chart never renders a MachineConfig" || ok "the chart never renders a MachineConfig"
+# helm exits non-zero on these by design: capture first (with pipefail, a pipe would fail even on the right message).
+refused="$(render --set tunnel.enabled=true --set nas.ip=10.0.0.50 --set nas.fqdn=n --set prerequisites.skipCheck=true)"
+grep -q 'nodeDomain is required' <<<"$refused" && ok "tunnel without nodeDomain is refused" || bad "nodeDomain check: ${refused}"
+refused="$(render "${opt[@]}" --set certificate.enabled=true)"
+grep -q 'clusterIssuer is required by certificate' <<<"$refused" && ok "certificate without clusterIssuer is refused" || bad "clusterIssuer check: ${refused}"
+refused="$(render --api-versions nmstate.io/v1 --set nodeDomain=d --set nas.fqdn=n --set nas.ip=1.2.3.4 --set tunnel.enabled=true --set tunnel.variant=c2)"
+grep -q 'prerequisite missing: Kyverno 1.19' <<<"$refused" && ok "c2 on a cluster without Kyverno's API is refused" || bad "Kyverno API check: ${refused}"
+refused="$(render --set nodeDomain=d --set nas.fqdn=n --set nas.ip=1.2.3.4 --set tunnel.enabled=true)"
+grep -q 'prerequisite missing: the NMState Operator' <<<"$refused" && ok "the tunnel on a cluster without NMState's API is refused" || bad "NMState API check: ${refused}"
+render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c3 >/dev/null 2>&1 && bad "the schema refuses an unknown variant" || ok "the schema refuses an unknown variant"
+render "${opt[@]}" --set tunnel.enabled=true --set 'tunnel.pools={infra}' >/dev/null 2>&1 && bad "the schema refuses a pool other than worker and master" || ok "the schema refuses a pool other than worker and master"
+
 # The collector script inside the rendered ConfigMap parses.
 tmp="$(mktemp)"; trap 'rm -f "${tmp}"' EXIT
 sed -n '/^  collect\.sh: |$/,/^  serve\.py: |$/p' <<<"$out" | sed '1d;$d' | sed 's/^    //' > "${tmp}"

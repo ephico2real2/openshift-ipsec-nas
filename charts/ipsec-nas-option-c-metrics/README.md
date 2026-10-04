@@ -82,6 +82,20 @@ data:
 
 The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard). Why it is needed, what it changes and the alternatives: [doc 60](../../docs/60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
 
+## Option C itself: the certificate and the tunnel (optional)
+
+Off by default; with them the chart sets up Option C with **cert-manager and Kyverno**, using the names and checks of Option B's chart. The whole procedure is [docs/53-option-c-cert-manager-kyverno.md](../../docs/53-option-c-cert-manager-kyverno.md).
+
+| Value | Default | Meaning |
+|---|---|---|
+| `certificate.enabled` | `false` | A cert-manager `Certificate` for `*.<nodeDomain>` from `clusterIssuer`: `CN=ocp-ipsec-workers, O=KCS`, RSA `keySize`, server and client auth, `duration` 2 years, into Secret `certificate.secretName` |
+| `tunnel.enabled` / `variant` / `pools` | `false` / `c1` / `[worker]` | C1: NNCP `ipsec-nas-wildcard-<pool>`. C2: Kyverno policy `ipsec-nncp-wildcard-<pool>`, one NNCP per node, with Kyverno's two ClusterRoles (`kyvernoRBAC.create`). The same objects as `render.sh` (the chart test compares them) |
+| `nodeDomain`, `nas.fqdn`, `nas.ip`, `clusterIssuer` | – | As in Option B's chart |
+| `ipsec.type` / `left` / `right` | `transport` / node FQDN (C2) / `nas.fqdn` | As in Option B's chart. OpenShift Local: `tunnel`, `%defaultroute`, the NAS's IP |
+| `prerequisites.skipCheck` / `kyvernoNamespace` | `false` / `kyverno` | The checks: NMState (tunnel), Kyverno 1.19 (C2), cert-manager (certificate) served; the `ClusterIssuer` exists; Kyverno does not ignore Nodes |
+
+**The chart never makes the MachineConfig.** It carries the private key and reboots its pool. `scripts/option-c-certificate.sh from-secret` builds each pool's MachineConfig from the certificate's Secret, with every check of the manual path, and you apply it.
+
 ## Values
 
 | Value | Default | Meaning |

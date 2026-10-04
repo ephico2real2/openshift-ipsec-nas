@@ -46,3 +46,63 @@ metrics:
     enabled: true
     # -- Thanos Querier's cluster-wide port (Option B's choice, doc 61: 9092 refuses the Perses UI's POST queries).
     thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
+
+# Option C itself, optional: each part is off by default, and the chart then installs only the metrics above.
+# The names follow Option B's chart (charts/ipsec-nas). The MachineConfig is never made by this chart: it carries
+# the private key and reboots its pool, so it stays a deliberate step: scripts/option-c-certificate.sh from-secret
+# builds it from the certificate below (docs/53-option-c-cert-manager-kyverno.md).
+
+# -- The nodes' DNS domain: the wildcard certificate is for *.<nodeDomain>; C2's identities are <node>.<nodeDomain>.
+nodeDomain: ""
+
+nas:
+  # -- The NAS's DNS name (its certificate names it).
+  fqdn: ""
+  # -- The NAS address that carries NFS; only traffic to it is encrypted.
+  ip: ""
+
+# -- The EXISTING ClusterIssuer of the enterprise CA (oc get clusterissuer), for certificate.enabled. Never created here.
+clusterIssuer: ""
+
+ipsec:
+  # -- transport, or tunnel only when there is NAT between the nodes and the NAS (OpenShift Local).
+  type: transport
+  # -- C2 only: the node's "left". Empty means the node's FQDN, <node>.<nodeDomain>; OpenShift Local: %defaultroute.
+  left: ""
+  # -- The tunnel's "right". Empty means nas.fqdn; the NAS's IP when it is reached through NAT (OpenShift Local).
+  right: ""
+
+tunnel:
+  # -- Create the tunnel, one object per pool (docs/50, Step C.5).
+  enabled: false
+  # -- c1: one NNCP per pool, every node presents the certificate's DN (no Kyverno). c2: a Kyverno policy per pool that
+  # makes one NNCP per node, with the node's own name and address (Kyverno 1.19 or later). Both need the NAS to allow
+  # duplicate peer IDs (uniqueids=no) with rightid=%fromcert: docs/50, "What the NAS must allow".
+  variant: c1
+  # -- The pools that have Option C's MachineConfig: worker, master, or both.
+  pools:
+  - worker
+
+certificate:
+  # -- Create the wildcard certificate with cert-manager: a Certificate for *.<nodeDomain> from clusterIssuer, with
+  # the subject, key and usages of docs/50, Step C.1. Its Secret is what "option-c-certificate.sh from-secret" reads.
+  enabled: false
+  # -- The Secret cert-manager writes the key and the certificate into, in the release's namespace.
+  secretName: ipsec-nas-wildcard
+  # -- Two years, as docs/50 asks the CA for.
+  duration: 17520h
+  # -- cert-manager renews the Secret this long before expiry. The nodes keep the old certificate until the
+  # MachineConfig is built and applied again: do that before the old one expires (docs/53, renewal).
+  renewBefore: 720h
+  keySize: 3072
+
+kyvernoRBAC:
+  # -- tunnel.variant c2: the two ClusterRoles that let Kyverno create NNCPs and read Nodes. false if Kyverno has them.
+  create: true
+
+prerequisites:
+  # -- Skip the checks that the cluster serves NMState (tunnel), Kyverno 1.19 (c2) and cert-manager (certificate),
+  # that clusterIssuer exists, and that Kyverno does not ignore Nodes. Only for rendering without a cluster.
+  skipCheck: false
+  # -- Where Kyverno runs: its ConfigMap "kyverno" is read to check that Nodes are not in its resourceFilters.
+  kyvernoNamespace: kyverno

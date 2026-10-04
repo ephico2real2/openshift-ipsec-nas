@@ -1,0 +1,36 @@
+{{- if .Values.certificate.enabled }}
+# Option C's wildcard certificate, issued by cert-manager instead of a CSR sent by hand (doc 50, Steps C.1, C.2):
+# the same subject, SAN, key and usages as scripts/option-c-certificate.sh csr asks for. The key stays in the
+# Secret; "scripts/option-c-certificate.sh from-secret" builds each pool's MachineConfig from it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ipsec-nas-wildcard
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+  secretName: {{ .Values.certificate.secretName }}
+  commonName: ocp-ipsec-workers
+  subject:
+    organizations: [KCS]
+  dnsNames:
+  - {{ printf "*.%s" .Values.nodeDomain | quote }}
+  duration: {{ .Values.certificate.duration }}
+  renewBefore: {{ .Values.certificate.renewBefore }}
+  privateKey:
+    algorithm: RSA
+    size: {{ .Values.certificate.keySize }}
+    rotationPolicy: Always
+  usages:
+  - digital signature
+  - key encipherment
+  - server auth
+  - client auth
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ .Values.clusterIssuer }}
+{{- end }}

@@ -1,0 +1,32 @@
+{{- /*
+Renders nothing. Fails the install with a plain message when a value Option C's parts need is missing, or when
+the cluster does not serve an API they use. This chart never installs NMState, Kyverno or cert-manager.
+prerequisites.skipCheck skips the API checks (for rendering without a cluster); the value checks always run.
+*/ -}}
+{{- if or .Values.tunnel.enabled .Values.certificate.enabled }}
+{{- if not .Values.nodeDomain }}{{ fail "nodeDomain is required by tunnel and certificate: the DNS domain of the nodes" }}{{ end }}
+{{- end }}
+{{- if .Values.tunnel.enabled }}
+{{- if not .Values.nas.ip }}{{ fail "nas.ip is required by tunnel: the NAS address that carries NFS" }}{{ end }}
+{{- if and (not .Values.nas.fqdn) (not .Values.ipsec.right) }}{{ fail "nas.fqdn (or ipsec.right) is required by tunnel" }}{{ end }}
+{{- end }}
+{{- if and .Values.certificate.enabled (not .Values.clusterIssuer) }}
+{{- fail "clusterIssuer is required by certificate: the EXISTING ClusterIssuer of the enterprise CA (oc get clusterissuer)" }}
+{{- end }}
+{{- if not .Values.prerequisites.skipCheck }}
+{{- $apis := dict }}
+{{- if .Values.tunnel.enabled }}{{ $_ := set $apis "nmstate.io/v1" "the NMState Operator with an NMState instance (docs/00-prepare-the-cluster.md, Step 1.5)" }}{{ end }}
+{{- if and .Values.tunnel.enabled (eq .Values.tunnel.variant "c2") }}{{ $_ := set $apis "policies.kyverno.io/v1" "Kyverno 1.19 or later, for tunnel.variant c2 (docs/00-prepare-the-cluster.md, Step 1.6)" }}{{ end }}
+{{- if .Values.certificate.enabled }}{{ $_ := set $apis "cert-manager.io/v1" "cert-manager, for certificate.enabled" }}{{ end }}
+{{- range $api, $what := $apis }}
+{{- if not ($.Capabilities.APIVersions.Has $api) }}{{ fail (printf "prerequisite missing: %s. The cluster does not serve %s. Install it first; this chart does not install it. (Without a cluster, use --set prerequisites.skipCheck=true.)" $what $api) }}{{ end }}
+{{- end }}
+{{- /* As Option B's chart: the checks that read objects run only against a real cluster (Argo CD renders without one). */}}
+{{- if lookup "v1" "Namespace" "" "kube-system" }}
+{{- if and .Values.certificate.enabled (not (lookup "cert-manager.io/v1" "ClusterIssuer" "" .Values.clusterIssuer)) }}{{ fail (printf "prerequisite missing: ClusterIssuer %q does not exist. Set clusterIssuer to the existing enterprise CA issuer (oc get clusterissuer). This chart does not create one." .Values.clusterIssuer) }}{{ end }}
+{{- if and .Values.tunnel.enabled (eq .Values.tunnel.variant "c2") }}
+{{- $kyverno := lookup "v1" "ConfigMap" .Values.prerequisites.kyvernoNamespace "kyverno" }}
+{{- if and $kyverno (contains "[Node,*,*]" (get $kyverno.data "resourceFilters" | default "")) }}{{ fail "prerequisite missing: Kyverno ignores Node objects ([Node,*,*] is in its resourceFilters), so the C2 policy would do nothing. Fix: docs/00-prepare-the-cluster.md, Step 1.6.3 (config.resourceFiltersExclude)." }}{{ end }}
+{{- end }}
+{{- end }}
+{{- end }}

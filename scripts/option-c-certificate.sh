@@ -12,6 +12,11 @@
 #       and renders the MachineConfig <dir>/99-${MCP_ROLE}-ipsec-wildcard-cert.yaml.
 #       Applying it reboots every node of the pool, one at a time.
 #
+#   scripts/option-c-certificate.sh from-secret <dir> <namespace>/<secret> <root-ca.pem> [<intermediate.pem>]
+#       The same as machineconfig, for a certificate cert-manager issued into a Secret (the chart
+#       ipsec-nas-option-c-metrics with certificate.enabled): copies the Secret's tls.key and tls.crt
+#       into <dir> (needs oc and read access to the Secret), then runs every check of machineconfig.
+#
 # Environment: NODE_DOMAIN (required), MCP_ROLE (default worker), OCP_VERSION (default: the
 # cluster's x.y.0, read with oc). Needs openssl and butane.
 #
@@ -93,8 +98,24 @@ cmd_machineconfig() {
   echo "Every node of the ${MCP_ROLE} pool then reboots, one at a time (watch oc get mcp ${MCP_ROLE})."
 }
 
+cmd_from_secret() {
+  local dir="${1:?usage: option-c-certificate.sh from-secret <dir> <namespace>/<secret> <root-ca.pem> [<intermediate.pem>]}"
+  local ref="${2:?the Secret cert-manager wrote, as <namespace>/<name>}" root="${3:?the enterprise root CA}"
+  local ns="${ref%%/*}" name="${ref#*/}"
+  [[ "${ns}" != "${ref}" ]] || die "give the Secret as <namespace>/<name>, not '${ref}'"
+  [[ -e "${dir}/wildcard.key" ]] && die "${dir}/wildcard.key exists: use a new directory for every certificate"
+  ( umask 077; mkdir -p "${dir}"
+    oc get secret -n "${ns}" "${name}" -o jsonpath='{.data.tls\.key}' | base64 -d > "${dir}/wildcard.key"
+    oc get secret -n "${ns}" "${name}" -o jsonpath='{.data.tls\.crt}' | base64 -d > "${dir}/signed.pem" )
+  [[ -s "${dir}/wildcard.key" && -s "${dir}/signed.pem" ]] || die "Secret ${ref} has no tls.key or tls.crt (is the Certificate Ready?)"
+  ok "${dir}/wildcard.key and ${dir}/signed.pem from Secret ${ref}"
+  shift 3
+  cmd_machineconfig "${dir}" "${dir}/signed.pem" "${root}" "$@"
+}
+
 case "${1:-}" in
   csr)           shift; cmd_csr "$@" ;;
   machineconfig) shift; cmd_machineconfig "$@" ;;
-  *)             sed -n '2,20p' "$0"; exit 2 ;;
+  from-secret)   shift; cmd_from_secret "$@" ;;
+  *)             sed -n '2,25p' "$0"; exit 2 ;;
 esac

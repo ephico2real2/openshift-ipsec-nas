@@ -15,6 +15,7 @@ automated per node with **Kyverno**.
 | [`docs/50-option-c-wildcard-certificate.md`](docs/50-option-c-wildcard-certificate.md) | Option C, a wildcard certificate in a MachineConfig: evaluated and measured, with what the NAS team must configure |
 | [`docs/51-option-c-summary.md`](docs/51-option-c-summary.md) | Option C summary: what works, and the NAS settings for the three setups that work (`uniqueids=no`) |
 | [`docs/52-option-c-nas-team.md`](docs/52-option-c-nas-team.md) | Option C: the NAS team's handout, what they must do in one table |
+| [`docs/53-option-c-cert-manager-kyverno.md`](docs/53-option-c-cert-manager-kyverno.md) | Option C with cert-manager and Kyverno: the shared wildcard certificate and the per-node tunnels from the Option C chart, measured on CRC |
 | [`docs/60-monitoring-per-node.md`](docs/60-monitoring-per-node.md) | Monitoring: each node reports its own IPsec state, the metrics and alerts, and what was measured on kind (3 nodes) and CRC |
 | [`docs/61-perses-dashboard-review.md`](docs/61-perses-dashboard-review.md) | **The dashboard in the OpenShift console (Perses, on by default):** what it shows, how it works, how to turn it on and open it, who can see it, how to change it, troubleshooting |
 | [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
@@ -52,6 +53,7 @@ docs/10-option-a-shared-certificate.md  Option A (documented, not used), measure
 docs/50-option-c-wildcard-certificate.md  Option C (wildcard certificate in a MachineConfig), measured on CRC and in the lab
 docs/51-option-c-summary.md          Option C summary: what works
 docs/52-option-c-nas-team.md         Option C: the NAS team's handout
+docs/53-option-c-cert-manager-kyverno.md  Option C with cert-manager and Kyverno, from the chart
 docs/60-monitoring-per-node.md       monitoring: per-node metrics, alerts, dashboard; measured on kind and CRC
 docs/61-perses-dashboard-review.md   the dashboard in the console (Perses): use it, change it, troubleshoot it
 docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
@@ -73,7 +75,7 @@ manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as 
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
 charts/ipsec-nas/                    Helm chart of Option B (the same objects as the manifests)
-charts/ipsec-nas-option-c-metrics/   Helm chart of Option C's metrics: the collector without cert-sync, the alerts, the dashboard
+charts/ipsec-nas-option-c-metrics/   Helm chart of Option C: metrics, alerts, dashboard; optionally the certificate (cert-manager) and the tunnel (C1, or C2 by Kyverno)
 shared/collector/                    the collector, metrics server and alert rules; copied into both charts' files/
 scripts/sync-shared-collector.sh     copies shared/collector/ to both charts and manifest 25
 lab/                                 the Lima lab, CRC's libreswan extension, test PKI, NAS scripts, NAS container

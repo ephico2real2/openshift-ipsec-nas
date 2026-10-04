@@ -726,6 +726,8 @@ Things that went wrong while these docs were built, in the order they were met. 
 | 17 | After a MachineConfig reboot, `crc stop` timed out and `crc start` started nothing | CRC behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-17--after-a-machineconfig-reboot-crc-stop-timed-out-and-crc-start-started-nothing) |
 | 18 | NMState changed a running connection and libreswan dropped it | NMState and libreswan behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-18--nmstate-changed-a-running-connection-and-libreswan-dropped-it) |
 | 19 | The NAS refused a node's new identity while it held the old one | libreswan NAS behaviour | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md#gotcha-19--the-nas-refused-a-nodes-new-identity-while-it-held-the-old-one) |
+| 20 | On OpenShift Local, C2 needs `left=%defaultroute` | NAT in the lab | [53-option-c-cert-manager-kyverno.md](53-option-c-cert-manager-kyverno.md#gotcha-20--on-openshift-local-c2-needs-leftdefaultroute) |
+| 21 | Taking over a tunnel object applied by hand | Helm 4 server-side apply | [53-option-c-cert-manager-kyverno.md](53-option-c-cert-manager-kyverno.md#gotcha-21--taking-over-a-tunnel-object-applied-by-hand) |
 
 ### Gotcha 1 – `ipsecConfig.mode: External` cannot install libreswan on CRC
 

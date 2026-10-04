@@ -1,0 +1,59 @@
+# Option C with cert-manager and Kyverno, from the chart ipsec-nas-option-c-metrics (docs/53). CRC 4.22.7, cert-manager
+# with ClusterIssuer enterprise-ca, Kyverno 1.19.1, the lab NAS on rightid=%fromcert and uniqueids=no, Helm 4.3.0,
+# 2026-10-04 21:30-21:53Z. CRC's only node is in the master pool, and reaches the NAS through NAT.
+# (The chart's values were later renamed to Option B's: certificate.clusterIssuer -> clusterIssuer, tunnel.type ->
+# ipsec.type, tunnel.left -> ipsec.left, nas.right -> ipsec.right. The commands below use the names run at the time.)
+
+## 1. Before (21:30:01Z)
+  NNCP ipsec-nas-wildcard-master Available (applied by hand, C1); the node's certificate serial 304F5923...3FF6
+  Removed first: the two Kyverno ClusterRoles my C2 test had created at 19:25:40Z (evidence 49).
+
+## 2. The certificate, by cert-manager (chart revision 9, 21:30:01Z)
+  $ helm upgrade ipsec-nas-metrics charts/ipsec-nas-option-c-metrics -n kcs-ipsec -f values-crc.yaml \
+      --set certificate.enabled=true --set certificate.clusterIssuer=enterprise-ca --set nodeDomain=crc.testing \
+      --set tunnel.enabled=true --set tunnel.variant=c1 --set tunnel.pools={master} --set tunnel.type=tunnel \
+      --set nas.fqdn=crc-nas.lab.internal --set nas.ip=192.168.64.8 --set nas.right=192.168.64.8 --take-ownership --force-conflicts
+  (--take-ownership --force-conflicts: the NNCP of the same name existed, applied by hand; Helm adopted it)
+  Certificate ipsec-nas-wildcard Ready within seconds, notAfter 2028-10-03T21:30:03Z
+  Secret kcs-ipsec/ipsec-nas-wildcard: subject O=KCS, CN=ocp-ipsec-workers; SAN DNS:*.crc.testing;
+    extended key usage TLS Web Server Authentication, TLS Web Client Authentication; serial 12D0674FBA85D10B760D16535FF48E785DBFCCA6
+  NNCP ipsec-nas-wildcard-master Available, managed-by Helm (generation 2: labels added, the spec unchanged)
+
+## 3. The MachineConfig from the Secret (21:30:15Z)
+  $ MCP_ROLE=master NODE_DOMAIN=crc.testing scripts/option-c-certificate.sh from-secret <scratch>/cert-chart-2028 \
+      kcs-ipsec/ipsec-nas-wildcard enterprise-root.pem          (the root: the Secret's ca.crt, O=Enterprise POC, CN=Enterprise Root CA)
+  ok    wildcard.key and signed.pem from Secret kcs-ipsec/ipsec-nas-wildcard
+  ok    SAN DNS:*.crc.testing
+  ok    the certificate belongs to wildcard.key
+  ok    extended key usage includes client auth
+  ok    chains to O=Enterprise POC, CN=Enterprise Root CA
+  ok    valid from Oct  4 21:30:03 2026 GMT until Oct  3 21:30:03 2028 GMT
+  ok    left_server.p12
+  ok    99-master-ipsec-wildcard-cert.yaml (Butane 4.22.0, pool master)
+  Files: wildcard.key, signed.pem, left_server.p12 and ca.pem mode 600.
+
+## 4. The tunnel, C2 by Kyverno (chart revisions 10 and 11)
+  21:30:39Z tunnel.variant=c2, pools {master}: GeneratingPolicy ipsec-nncp-wildcard-master; Kyverno's NNCP ipsec-nas-crc
+            Degraded: left crc.crc.testing (C2's default, the node's FQDN). OpenShift Local reaches the NAS through NAT
+            and needs left=%defaultroute, doc 40's fourth override, which I had not passed. The tunnel was down
+            21:30:39Z to 21:40:25Z; the demo application's NFS stalled (reading its log on the NFS volume hung).
+  21:40:29Z revision 11 with tunnel.left=%defaultroute: ipsec-nas-crc Available, left %defaultroute, leftid @crc.crc.testing
+  21:40:36Z node: our id=@crc.crc.testing; IKE SAs authenticated(1); IPsec SAs authenticated(1); ESP SA add_time 1791150025
+
+## 5. The MachineConfig applied: the node imports cert-manager's certificate at boot
+  21:40:58Z oc apply -f 99-master-ipsec-wildcard-cert.yaml (boot before: d6a17ad7-...)
+  21:48:05Z OpenShift still Unreachable (Gotcha 17); 21:48:29Z crc stop; 21:48:35Z crc start; 21:51:40Z Running
+  21:52:51Z boot e17b575e-2311-4c3b-bb25-be6653731d4c; mcp master UPDATED=True UPDATING=False DEGRADED=False
+            the node's left_server: serial 12D0674FBA85D10B760D16535FF48E785DBFCCA6, notAfter Oct 3 21:30:03 2028 GMT,
+            one left_server entry; journal: 21:48:41 Finished Import the IPsec certificate ...
+            C2 tunnel up with no NAS restart: our id=@crc.crc.testing, ESP SA add_time 1791150592 (21:49:52Z), inBytes 2415500
+            NNCP ipsec-nas-crc Available
+
+## 6. The collector and the alerts (21:53:04Z)
+  ipsec_nas_tunnel_up{node="crc",connection="ipsec-nas"} 1
+  ipsec_nas_certificate_not_after_timestamp_seconds{node="crc",nickname="left_server"} 1854221403   (2028-10-03T21:30:03Z)
+  ipsec_nas_certificate_import_timestamp_seconds{node="crc"} 1791150521                              (2026-10-04T21:48:41Z, the boot's import)
+  ipsec_nas_certificate_source_info{node="crc",mode="C"} 1
+  NFS: the demo application wrote at 21:53:01Z. ALERTS{namespace="kcs-ipsec",alertstate="firing"}: none.
+  Left on CRC: chart release ipsec-nas-metrics revision 11 (certificate on, tunnel C2 for the master pool),
+  MachineConfig 99-master-ipsec-wildcard-cert with cert-manager's certificate.

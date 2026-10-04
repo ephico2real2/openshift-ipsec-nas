@@ -3,27 +3,199 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "nodeSelector": {"type": "object", "additionalProperties": {"type": ["string", "null"]}},
-    "excludeNodeLabels": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "tolerations": {"type": "array"},
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "excludeNodeLabels": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "tolerations": {
+      "type": "array"
+    },
     "images": {
-      "type": "object", "additionalProperties": false, "required": ["cli", "python"],
-      "properties": {"cli": {"type": "string", "minLength": 1}, "python": {"type": "string", "minLength": 1}}
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cli",
+        "python"
+      ],
+      "properties": {
+        "cli": {
+          "type": "string",
+          "minLength": 1
+        },
+        "python": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
     },
     "serviceAccount": {
-      "type": "object", "additionalProperties": false, "required": ["name"],
-      "properties": {"name": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"}}
-    },
-    "scc": {"type": "object", "additionalProperties": false, "properties": {"bind": {"type": "boolean"}}},
-    "metrics": {
-      "type": "object", "additionalProperties": false,
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
       "properties": {
-        "serviceMonitor": {"type": "boolean"},
-        "prometheusRule": {"type": "boolean"},
-        "grafanaDashboard": {"type": "boolean"},
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        }
+      }
+    },
+    "scc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bind": {
+          "type": "boolean"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "serviceMonitor": {
+          "type": "boolean"
+        },
+        "prometheusRule": {
+          "type": "boolean"
+        },
+        "grafanaDashboard": {
+          "type": "boolean"
+        },
         "persesDashboard": {
-          "type": "object", "additionalProperties": false,
-          "properties": {"enabled": {"type": "boolean"}, "thanosURL": {"type": "string", "pattern": "^https://"}}
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "thanosURL": {
+              "type": "string",
+              "pattern": "^https://"
+            }
+          }
+        }
+      }
+    },
+    "nodeDomain": {
+      "type": "string"
+    },
+    "nas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fqdn": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        }
+      }
+    },
+    "tunnel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "variant": {
+          "enum": [
+            "c1",
+            "c2"
+          ]
+        },
+        "pools": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "worker",
+              "master"
+            ]
+          }
+        }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "secretName": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "renewBefore": {
+          "type": "string"
+        },
+        "keySize": {
+          "enum": [
+            2048,
+            3072,
+            4096
+          ]
+        }
+      }
+    },
+    "kyvernoRBAC": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "create": {
+          "type": "boolean"
+        }
+      }
+    },
+    "prerequisites": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "skipCheck": {
+          "type": "boolean"
+        },
+        "kyvernoNamespace": {
+          "type": "string"
+        }
+      }
+    },
+    "clusterIssuer": {
+      "type": "string"
+    },
+    "ipsec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": [
+            "transport",
+            "tunnel"
+          ]
+        },
+        "left": {
+          "type": "string"
+        },
+        "right": {
+          "type": "string"
         }
       }
     }

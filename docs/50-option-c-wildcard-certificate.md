@@ -214,6 +214,10 @@ Option B remains the standard. Option C is the alternative where no component be
 
 ## Step C.1 – A key and a certificate request
 
+> [!TIP]
+> **With cert-manager and Kyverno**, the Option C chart issues the certificate and makes the tunnels, and a script builds each pool's MachineConfig from the certificate: [53-option-c-cert-manager-kyverno.md](53-option-c-cert-manager-kyverno.md). The steps below are the manual path.
+
+
 Set the variables of [00-prepare-the-cluster.md, Part 0.3](00-prepare-the-cluster.md#03-open-a-shell-and-set-variables), and `MCP_ROLE` to the pool that reaches the NAS: `worker`, or `master` for the control plane. **Each pool gets its own MachineConfig and its own NNCP or policy**: for both pools, do Steps C.3 to C.5 once with `MCP_ROLE=worker` and once with `MCP_ROLE=master` (one certificate request serves both, since the wildcard covers every node's name). The script needs `openssl` and `butane`, and an `oc` login: it reads the cluster's version for Butane's MachineConfig format (or set `OCP_VERSION`, for example `4.19.0`). Work in a directory outside Git:
 
 ```bash

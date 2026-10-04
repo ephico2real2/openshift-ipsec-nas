@@ -10,4 +10,17 @@ Option C's IPsec metrics: the collector without cert-sync, on {{ toJson .Values.
   with the user workload Alertmanager settings; nothing in openshift-monitoring is changed).
 {{- end }}
 
+{{- if .Values.certificate.enabled }}
+
+Certificate: cert-manager issues *.{{ .Values.nodeDomain }} into Secret {{ .Release.Namespace }}/{{ .Values.certificate.secretName }}.
+  Then, for each pool, build and apply its MachineConfig (every node of the pool reboots once):
+    MCP_ROLE=<worker|master> NODE_DOMAIN={{ .Values.nodeDomain }} scripts/option-c-certificate.sh from-secret <new dir> {{ .Release.Namespace }}/{{ .Values.certificate.secretName }} <enterprise-root.pem>
+    oc apply -f <new dir>/99-<pool>-ipsec-wildcard-cert.yaml
+{{- end }}
+{{- if .Values.tunnel.enabled }}
+
+Tunnel: {{ .Values.tunnel.variant | upper }} for the pools {{ join ", " .Values.tunnel.pools }}: oc get nncp; oc get nnce | grep ipsec-nas
+  The NAS must allow duplicate peer IDs (uniqueids=no) with rightid=%fromcert.
+{{- end }}
+
 NEVER deploy this chart together with Option B's ipsec-nas chart: one option per cluster.
