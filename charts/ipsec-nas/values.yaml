@@ -79,9 +79,9 @@ metrics:
   # -- The six alert rules.
   prometheusRule: true
   # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1"): the Grafana integration.
-  # REQUIRES a Grafana that loads it: one in this namespace, or a central Grafana that watches this
-  # namespace (a dashboard sidecar on the label grafana_dashboard: "1", or grafana-operator with a
-  # GrafanaDashboard: docs/20-option-b-per-node-certificates.md, Step B.12). Not checked by the chart:
+  # REQUIRES a Grafana that loads it: a Grafana dashboard sidecar on the label grafana_dashboard: "1", in
+  # this namespace or central and searching this namespace (both measured: docs/evidence/kind/03). A
+  # grafana-operator GrafanaDashboard (docs/20, Step B.12) was not measured. Not checked by the chart:
   # without a Grafana the ConfigMap is simply unused. Off by default: the dashboard ships for Perses (below);
   # both may be on.
   grafanaDashboard: false

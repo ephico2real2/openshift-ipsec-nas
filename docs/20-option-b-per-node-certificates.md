@@ -402,7 +402,7 @@ oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml
 
 It appears under **Observe → Dashboards (Perses)**, project `kcs-ipsec`. Viewers need `view` in `kcs-ipsec` and `cluster-monitoring-view`. Everything about it, from how it works to troubleshooting: [doc 61](61-perses-dashboard-review.md). The Helm chart installs it by default.
 
-**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana, and the ConfigMap needs one: a Grafana in `kcs-ipsec` with a dashboard sidecar on that label, or a central Grafana that watches this namespace. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
+**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana, and the ConfigMap needs one: a Grafana with a dashboard sidecar on that label, in `kcs-ipsec` or central and searching this namespace (both measured: [evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)). If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
 
 ```bash
 cat <<'EOF' > 31-grafana-dashboard-cr.yaml
@@ -442,7 +442,7 @@ oc apply -f 31-grafana-dashboard-cr.yaml
 > - **The ServiceMonitor, the alert rules and the per-node checks** were measured on CRC (OpenShift 4.22.7) and on a three-node kind cluster: [doc 60](60-monitoring-per-node.md#what-was-tested-and-where).
 > - **The alert rules** pass `promtool` unit tests (`tests/test-alert-rules.sh`).
 > - **The Perses dashboard** was measured on CRC with COO 1.5.3: [doc 61](61-perses-dashboard-review.md).
-> - **The Grafana dashboard** was loaded in a real Grafana 13.2.3 (the Lima lab, and against CRC's Thanos), and all of its queries returned data. The `GrafanaDashboard` object above was not tested against a central Grafana.
+> - **The Grafana dashboard** was loaded in a real Grafana 13.2.3 (the Lima lab, and against CRC's Thanos), and all of its queries returned data. The ConfigMap's loading by a Grafana dashboard sidecar, in the same namespace or central, was measured on kind ([evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)); the `GrafanaDashboard` object above was not tested against a central Grafana.
 
 ## Step B.13 – Clean up after a deleted node
 

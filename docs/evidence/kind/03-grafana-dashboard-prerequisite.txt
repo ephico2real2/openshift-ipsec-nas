@@ -1,0 +1,32 @@
+# The Grafana integration's prerequisite, measured: which Grafana loads the chart's dashboard ConfigMap.
+# kind v0.33.0 on podman (one node), Grafana Helm chart grafana/grafana 10.5.15 (Grafana 12.3.1), its dashboard sidecar
+# (k8s-sidecar) on the label grafana_dashboard="1". Recorded 2026-10-04T02:45:36Z.
+
+$ helm template ... --set metrics.grafanaDashboard=true -s templates/grafana-dashboard.yaml | kubectl apply -f -   # namespace kcs-ipsec
+configmap/ipsec-nas-grafana-dashboard labels: {"app":"ipsec-cert-sync","grafana_dashboard":"1"}
+
+# Three Grafanas (helm install grafana/grafana --set sidecar.dashboards.enabled=true --set sidecar.dashboards.label=grafana_dashboard --set-string sidecar.dashboards.labelValue=1 ...):
+#   grafana-same     in kcs-ipsec        sidecar.dashboards.searchNamespace: (default: its own namespace)
+#   grafana-central  in central-grafana  sidecar.dashboards.searchNamespace: ALL
+#   grafana-other    in other-grafana    sidecar.dashboards.searchNamespace: (default: its own namespace)   <- negative control
+
+== grafana-same (namespace kcs-ipsec)
+$ kubectl -n kcs-ipsec logs deploy/grafana-same -c grafana-sc-dashboard | grep ipsec-nas
+{"time": "2026-10-04T02:44:10.759540+00:00", "level": "INFO", "msg": "Writing /tmp/dashboards/ipsec-nas.json (ascii)"}
+$ GET /api/search?query=IPsec   (inside the Grafana container)
+[{"uid": "ipsec-nas", "title": "IPsec to the NAS"}]
+
+== grafana-central (namespace central-grafana)
+$ kubectl -n central-grafana logs deploy/grafana-central -c grafana-sc-dashboard | grep ipsec-nas
+{"time": "2026-10-04T02:44:28.868064+00:00", "level": "INFO", "msg": "Writing /tmp/dashboards/ipsec-nas.json (ascii)"}
+$ GET /api/search?query=IPsec   (inside the Grafana container)
+[{"uid": "ipsec-nas", "title": "IPsec to the NAS"}]
+
+== grafana-other (namespace other-grafana)
+$ kubectl -n other-grafana logs deploy/grafana-other -c grafana-sc-dashboard | grep ipsec-nas
+$ GET /api/search?query=IPsec   (inside the Grafana container)
+[]
+
+# Result: a Grafana in the same namespace, and a central Grafana whose sidecar searches all namespaces, load the dashboard;
+# a Grafana in another namespace watching only its own does not. grafana-operator (a GrafanaDashboard pointing at the
+# ConfigMap) was NOT measured here.

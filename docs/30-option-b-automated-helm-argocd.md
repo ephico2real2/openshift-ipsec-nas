@@ -50,7 +50,7 @@ The chart treats these as **prerequisites**. It checks for them and stops with a
 | libreswan on the nodes | [Part E](40-lab-crc-and-nas.md#part-e--libreswan-on-the-crc-node-crc-only) (a production cluster: `ipsecConfig.mode: External`) | Not checked |
 | The namespace, with the privileged pod-security labels | `kcs-ipsec` ([20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md), Step B.2) | Not checked |
 | Cluster Observability Operator 1.5 or later, with Perses: for the dashboard in the console, **on by default**. Not needed with `metrics.persesDashboard.enabled: false` | COO 1.5.3 ([openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm)) | The API `perses.dev/v1alpha2` is served ([doc 61](61-perses-dashboard-review.md)) |
-| Grafana: only for the Grafana integration (`metrics.grafanaDashboard: true`, off by default). A Grafana in the release's namespace, or a central Grafana that watches it (sidecar on the label `grafana_dashboard: "1"`, or grafana-operator with a `GrafanaDashboard`) | none on this CRC | Not checked: without a Grafana the ConfigMap is unused ([doc 61](61-perses-dashboard-review.md#grafana-if-you-need-it)) |
+| Grafana: only for the Grafana integration (`metrics.grafanaDashboard: true`, off by default). A Grafana with a dashboard sidecar on the label `grafana_dashboard: "1"`, in the release's namespace or central and searching it (both measured, [evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)); grafana-operator with a `GrafanaDashboard`: not measured | none on this CRC | Not checked: without a Grafana the ConfigMap is unused ([doc 61](61-perses-dashboard-review.md#grafana-if-you-need-it)) |
 
 ```bash
 tests/test-chart.sh

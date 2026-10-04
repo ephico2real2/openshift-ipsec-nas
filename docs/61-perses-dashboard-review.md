@@ -168,10 +168,14 @@ If the Grafana dashboard's panels change shape (more panels, a moved table), the
 
 The same dashboard is still available for Grafana: `metrics.grafanaDashboard: true` ships it as a ConfigMap labelled `grafana_dashboard: "1"`. Both flags may be on at once: they add data only (measured: 47 KiB for the ConfigMap, 44 KiB for the two Perses objects, no pods), and both dashboards come from the same JSON.
 
-**Prerequisite for the Grafana integration: a Grafana that loads the ConfigMap.** Either:
+**Prerequisite for the Grafana integration: a Grafana that loads the ConfigMap.** Measured on kind with the Grafana Helm chart and its dashboard sidecar ([evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)):
 
-- **a Grafana in the same namespace** (`kcs-ipsec`) with a dashboard sidecar on the label `grafana_dashboard: "1"`; or
-- **a central Grafana** that watches this namespace: a dashboard sidecar searching it (or all namespaces) for that label, or grafana-operator with a `GrafanaDashboard` that points at the ConfigMap ([doc 20, Step B.12](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard), step 5).
+| Grafana | Its dashboard sidecar searches | Loads the dashboard? |
+|---|---|---|
+| **In the same namespace** (`kcs-ipsec`) | its own namespace | **yes**, measured |
+| **Central**, in another namespace | all namespaces (`searchNamespace: ALL`) | **yes**, measured |
+| In another namespace | only its own namespace | **no**, measured: the prerequisite is not met |
+| grafana-operator, with a `GrafanaDashboard` pointing at the ConfigMap ([doc 20, Step B.12](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard), step 5) | — | **not measured** |
 
 The chart **does not check** this: nothing on the cluster tells it a Grafana sidecar is there, and without a Grafana the ConfigMap is simply unused. Its install notes say so when the flag is on.
 
