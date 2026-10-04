@@ -20,7 +20,7 @@ Per-node **IPsec metrics and alerts for Option C** ([`docs/50-option-c-wildcard-
 | ConfigMap | `ipsec-metrics-scripts` | `collect.sh` and `serve.py` |
 | DaemonSet | `ipsec-nas-metrics` | Two containers: `collector` (every 30 s) and `metrics` (port 9754, `restricted-v2`). No cert-sync |
 | Service, ServiceMonitor | `ipsec-nas-metrics`, `ipsec-nas` | One scrape target per pod, with `exporter_node` from the pod's node |
-| PrometheusRule | `ipsec-nas` | Option B's twelve rules; the descriptions name this DaemonSet, and "exporter missing" watches the role of `nodeSelector` |
+| PrometheusRule | `ipsec-nas` | Option B's twelve rules; the descriptions name this DaemonSet, "exporter missing" watches the role of `nodeSelector`, and the two alerts on platform metrics carry the release's namespace |
 
 ## What differs from Option B
 
@@ -33,6 +33,7 @@ The same series, the same names, under the same `node` label. One series is miss
 | Option C installed (doc 50, Steps C.1 to C.6) | The collector reads its tunnel and certificate |
 | A namespace with the privileged pod-security labels | The collector runs privileged |
 | User workload monitoring | For `metrics.serviceMonitor` and `metrics.prometheusRule` |
+| `namespacesWithoutLabelEnforcement` listing the release's namespace, in `user-workload-monitoring-config` (OpenShift 4.18 or later, a cluster administrator; [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard)) | `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` read platform metrics; without it they never fire ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)) |
 | **No** Option B release on the cluster | See the caution above |
 
 ## Install
@@ -52,6 +53,27 @@ oc get pods -n kcs-ipsec -l app=ipsec-nas-metrics -o wide
 ```
 
 On OpenShift Local add `-f charts/ipsec-nas-option-c-metrics/values-crc.yaml`. The single node carries the worker, control-plane and master labels: the worker selector picks it, and the file only empties `excludeNodeLabels`, which would otherwise exclude it.
+
+## Cluster setting: the release namespace in `user-workload-monitoring-config`
+
+> [!IMPORTANT]
+> **No Helm chart manages this ConfigMap yet: add the release namespace by hand** (a cluster administrator, OpenShift 4.18 or later). Without it, `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` never fire: they read platform metrics (`kube_node_role`, `node_nfs_requests_total`), which user workload monitoring hides from a project's rules ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)). The other ten alerts work without it.
+
+List only the namespace this chart is installed in (`kcs-ipsec` below, as in the install steps above). Option B uses the same setting.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    # keep every key already here; add this one, or add the namespace to the existing list
+    namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+```
+
+The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard).
 
 ## Values
 

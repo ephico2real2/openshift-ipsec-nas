@@ -43,13 +43,55 @@
   ALERTS{namespace="kcs-ipsec"}                           -> no series (none pending or firing)
   /api/v1/rules, group kcs-ipsec/ipsec-nas                -> 12 rules, state inactive 12, health ok
 
-## 5. Finding: IpsecNasExporterMissing cannot fire on OpenShift (shared rule; Option B too)
-  The rule as loaded (/api/v1/rules), with the namespace label that user workload monitoring enforces:
-    kube_node_role{namespace="kcs-ipsec",role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds{namespace="kcs-ipsec"}
-  Its left side, queried on its own:
-    kube_node_role{namespace="kcs-ipsec",role="worker"} -> no series
-    kube_node_role{role="worker"}                       -> 1 series, namespace=openshift-monitoring job=kube-state-metrics node=crc
-  kube_node_role carries the namespace of the platform's kube-state-metrics, so the enforced selector matches nothing
-  and the expression can never return a series. The rule comes from shared/collector/prometheus-rule-groups.yaml: the
-  same holds for Option B's chart. It fired on kind (evidence kind/02), where kube-prometheus-stack enforces no namespace.
-  Not changed in #39; to be decided separately.
+## 5. Finding: two shared alerts could not fire on OpenShift (Option B too), and the fix (15:28-16:15Z)
+  User workload monitoring adds namespace="<the rule's namespace>" to every selector of a project's rules. Two rules of
+  shared/collector/prometheus-rule-groups.yaml read platform series, which carry namespace=openshift-monitoring:
+    IpsecNasExporterMissing, as loaded (/api/v1/rules):
+      kube_node_role{namespace="kcs-ipsec",role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds{namespace="kcs-ipsec"}
+    IpsecNasNfsWithoutTunnel, as loaded:
+      sum by (node) (label_replace(rate(node_nfs_requests_total{namespace="kcs-ipsec"}[5m]), ...)) > 0 and on (node) ...
+  Their platform selectors, queried on their own through Thanos Querier:
+    kube_node_role{namespace="kcs-ipsec",role="worker"}             -> no series
+    kube_node_role{role="worker"}                                   -> 1 series, namespace=openshift-monitoring job=kube-state-metrics node=crc
+    count(node_nfs_requests_total{namespace="kcs-ipsec"})           -> no series
+    count by (namespace, job) (node_nfs_requests_total)             -> namespace=openshift-monitoring job=node-exporter: 99
+  So both expressions could never return a series. They fired on kind (evidence kind/02), where kube-prometheus-stack
+  enforces no namespace.
+
+  5a. Red Hat's setting (operator decision 2026-10-04: kcs-ipsec is a platform namespace, "Excemption permitted").
+    cluster-monitoring-operator, release-4.18, Documentation/api.md (absent on release-4.17):
+      namespacesWithoutLabelEnforcement: "Defines the list of namespaces for which Prometheus and Thanos Ruler in
+      user-defined monitoring don't enforce the namespace label value in PrometheusRule objects. [...] To make the
+      resulting alerts and metrics visible to project users, the query expressions should return a namespace label
+      with a non-empty value."
+      rulesWithoutLabelEnforcementAllowed (cluster-monitoring-config): default true.
+    Before: user-workload-monitoring-config had no data; cluster-monitoring-config: enableUserWorkload: true only.
+    15:32:09Z oc patch configmap user-workload-monitoring-config -n openshift-user-workload-monitoring --type merge \
+                -p '{"data":{"config.yaml":"namespacesWithoutLabelEnforcement: [ kcs-ipsec ]\n"}}'
+    15:32:23Z ThanosRuler user-workload and Prometheus user-workload: spec.excludedFromEnforcement =
+              [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]
+    15:54:13Z loaded without the rewrite, health ok:
+      IpsecNasExporterMissing: kube_node_role{role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds
+      IpsecNasNfsWithoutTunnel: sum by (node) (label_replace(rate(node_nfs_requests_total[5m]), ...)) > 0 and on (node) ipsec_nas_tunnel_up == 0
+    The NFS rule's left side now: node=crc -> 2.011 requests/s (the right side, tunnel down, is empty: the tunnel is up).
+
+  5b. The alert, driven: the collector kept off crc (helm upgrade --set-string nodeSelector.ipsec-nas\.test/no-such-node=x).
+    15:54:36Z upgrade (revision 2); 15:55:08Z the pod gone.
+    15:55:57Z pending, with the labels of kube-state-metrics' series:
+      namespace=openshift-monitoring job=kube-state-metrics service=kube-state-metrics container=kube-rbac-proxy-main
+      endpoint=https-main prometheus=openshift-monitoring/k8s node=crc role=worker severity=warning
+    An alert in namespace openshift-monitoring is not this project's. Fix in the shared rules: IpsecNasExporterMissing
+    takes max by (node, role) (kube_node_role{role="worker"}), and both rules set the label namespace: kcs-ipsec, which
+    each chart replaces with the release namespace. Firing conditions unchanged; only the labels.
+    tests/test-alert-rules.sh: the fixtures now carry namespace=openshift-monitoring and job; the expected labels
+    namespace=kcs-ipsec. Against the previous rules the same test fails with job="kube-state-metrics",
+    namespace="openshift-monitoring" (ExporterMissing) and no namespace (NfsWithoutTunnel).
+    15:58:26Z upgrade with the fix (revision 3), the collector still kept off crc:
+      ALERTS 15:59:12Z pending  namespace=kcs-ipsec node=crc role=worker severity=warning
+      ALERTS 16:14:14Z firing   namespace=kcs-ipsec node=crc role=worker severity=warning      (for: 15m)
+      alertmanager-main /api/v2/alerts: {"alertname":"IpsecNasExporterMissing","namespace":"kcs-ipsec","node":"crc",
+        "role":"worker","severity":"warning"} state=active startsAt=2026-10-04T16:14:08.068Z
+    16:14:36Z restored (revision 4, values-crc only): pod ipsec-nas-metrics-278rc 2/2 Running on crc, up=1;
+    16:14:55Z the alert resolved; ALERTS{namespace="kcs-ipsec"}: none.
+  IpsecNasNfsWithoutTunnel was not driven to firing (it needs NFS traffic while the tunnel is down); its platform
+  selector and its labels are covered by 5a and by tests/test-alert-rules.sh.

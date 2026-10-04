@@ -16,6 +16,12 @@ Check it:
 Dashboard, in the OpenShift console: Observe → Dashboards (Perses), project {{ .Release.Namespace }}, "IPsec to the NAS".
   Viewers need view in {{ .Release.Namespace }} and cluster-monitoring-view (docs/61-perses-dashboard-review.md).
 {{- end }}
+{{- if .Values.metrics.prometheusRule }}
+
+Alerts: IpsecNasExporterMissing and IpsecNasNfsWithoutTunnel read platform metrics. They fire only if a cluster
+  administrator lists {{ .Release.Namespace }} in namespacesWithoutLabelEnforcement (ConfigMap user-workload-monitoring-config,
+  OpenShift 4.18 or later; docs/20, Step B.12, 2).
+{{- end }}
 {{- if .Values.metrics.grafanaDashboard }}
 
 Grafana integration: ConfigMap ipsec-nas-grafana-dashboard (label grafana_dashboard: "1").

@@ -17,6 +17,7 @@ These must **already be on the cluster**. They are prerequisites, not dependenci
 | **The namespace**, with the privileged pod-security labels | The cert-sync pod runs privileged | 20, Step B.2 | Not checked: create it before installing |
 | **The NAS side** | Its own certificate from the same CA, and its IPsec settings | 00, Part 3.1 | Not checked |
 | User workload monitoring | Only for `metrics.serviceMonitor` and `metrics.prometheusRule` | 20, Step B.12 | Not checked |
+| `namespacesWithoutLabelEnforcement: [ kcs-ipsec ]` in `user-workload-monitoring-config` (OpenShift 4.18 or later, a cluster administrator) | Only for two alerts: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` read platform metrics, which user workload monitoring hides from a project's rules; without it they never fire ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)) | 20, Step B.12, 2 | Not checked |
 | Grafana | Only for `metrics.grafanaDashboard: true` (off by default): it loads the dashboard ConfigMap | A Grafana with a dashboard sidecar on the label `grafana_dashboard: "1"`, in the release's namespace or **central and searching it** (both measured: [evidence kind/03](../../docs/evidence/kind/03-grafana-dashboard-prerequisite.txt)). grafana-operator with a `GrafanaDashboard` (docs/20, Step B.12): not measured | **Not checked**: no API tells a Grafana sidecar is there, and without a Grafana the ConfigMap is simply unused. The install notes repeat it |
 | **Cluster Observability Operator** 1.5 or later, with Perses | The dashboard in the console. Required by default; not needed with `metrics.persesDashboard.enabled: false` | The [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) | The API `perses.dev/v1alpha2` is served |
 
@@ -69,6 +70,27 @@ oc get application -n openshift-gitops ipsec-nas
 Measured on CRC with Argo CD 3.4.7: `Synced` and `Healthy` 12 seconds after the sync started, tunnel up within 23 seconds of applying the Application. [`docs/30-option-b-automated-helm-argocd.md`](../../docs/30-option-b-automated-helm-argocd.md#step-i3--install-with-argo-cd-from-git) has the steps, the diagram and screenshots of the application.
 
 Argo CD renders the chart without a cluster connection, so the checks that read objects (the `ClusterIssuer`, Kyverno's Node filter) do not run there; the checks for the served APIs do.
+
+## Cluster setting: the release namespace in `user-workload-monitoring-config`
+
+> [!IMPORTANT]
+> **No Helm chart manages this ConfigMap yet: add the release namespace by hand** (a cluster administrator, OpenShift 4.18 or later). Without it, `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` never fire: they read platform metrics (`kube_node_role`, `node_nfs_requests_total`), which user workload monitoring hides from a project's rules ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)). The other ten alerts work without it.
+
+List only the namespace this chart is installed in (`kcs-ipsec` in this repository's steps):
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    # keep every key already here; add this one, or add the namespace to the existing list
+    namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+```
+
+The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard).
 
 ## Values
 

@@ -66,6 +66,8 @@ Every metric carries `node`. All are read-only: the collector changes nothing on
 | `IpsecNasMetricsStale` | The collector has not written for 5 minutes | 5m | warning |
 | `IpsecNasCertificateExpiringSoon`, `…Expired` | Less than 14 days left; expired | 1h; – | warning; critical |
 
+**Two alerts need a cluster setting.** `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` read platform series (`kube_node_role` from kube-state-metrics, `node_nfs_requests_total` from node-exporter), which carry `namespace="openshift-monitoring"`. User workload monitoring adds `namespace="kcs-ipsec"` to every selector of a rule in `kcs-ipsec`, so on OpenShift both found no series and could never fire, until `kcs-ipsec` was listed in `namespacesWithoutLabelEnforcement` (ConfigMap `user-workload-monitoring-config`, OpenShift 4.18 or later; [doc 20, Step B.12, 2](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard)). With it, `IpsecNasExporterMissing` fired on CRC for a node without a collector, 15 minutes after going pending, as `namespace=kcs-ipsec node=crc role=worker`, and reached Alertmanager ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Both rules set `namespace` themselves: the series they read belong to `openshift-monitoring`, and an alert labelled so would not be this project's.
+
 Two of the waits are measured, not chosen:
 
 - **`IpsecNasDuplicateNode`, 10 minutes.** When the ServiceMonitor changed on CRC, the old and the new series of the same pod both existed for one 15-second step (18:08:15Z); the alert went pending and cleared by 18:09:00Z ([evidence 39](evidence/crc/39-metrics-dashboard-queries.txt)). Without the wait, that change alone would have paged.
@@ -121,6 +123,7 @@ With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a 
 | `tests/test-alert-rules.sh` (promtool) | Six nodes, one fault each: every new alert fires for its node and only that node | All pass; a swapped node makes it fail |
 | **kind, 3 nodes** (1 control plane, 2 workers), kube-prometheus-stack, the chart's real collector, ServiceMonitor, rules and dashboard | 2 targets, each `node == exporter_node`, the control plane excluded; a duplicate pod and a pod naming `ghost-node` each caught on its node only; one pod deleted changes only its node; a worker without a pod raises `IpsecNasExporterMissing` for that worker only | [evidence kind/01](evidence/kind/01-per-node-metrics-faults.txt), [kind/02](evidence/kind/02-exporter-missing.txt) |
 | **CRC** (OpenShift 4.22.7, real IPsec), deployed from Git by Argo CD | Every new series with real values; every dashboard query answers; the certificate deleted from NSS and put back by cert-sync | [evidence 38](evidence/crc/38-metrics-certificate-removed.txt), [39](evidence/crc/39-metrics-dashboard-queries.txt) |
+| **CRC**, Option C with the `ipsec-nas-option-c-metrics` chart | The same 41 series without cert-sync; with `namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`, `IpsecNasExporterMissing` fires for a node without a collector, labelled `namespace=kcs-ipsec`, and resolves when it is back | [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) |
 | A real multi-node OpenShift cluster | — | **Not tested yet**: tracked in issue #20 |
 
 What the tests showed, beyond pass or fail:
@@ -128,7 +131,8 @@ What the tests showed, beyond pass or fail:
 1. **`tunnel_up` does not see a tunnel restart.** On CRC, cert-sync restarted the tunnel at 18:11:44Z; `tunnel_up` stayed 1 in every sample. Only `tunnel_established_timestamp_seconds` moved (12:39:20Z to 18:11:44Z) and `changes()` counted 1 ([evidence 38](evidence/crc/38-metrics-certificate-removed.txt)). A tunnel that keeps restarting looks up on every other panel; `IpsecNasTunnelFlapping` is the only alert for it, and the tunnel age panel the only other place it shows.
 2. **A stray pod is removed by the DaemonSet** when it is in the DaemonSet's namespace with its labels (measured). A duplicate that lasts comes from elsewhere, such as the second copy in another namespace that was measured here.
 3. **The NFS join needs OpenShift's node-exporter.** There, `instance` is the node's name (`crc`, measured). In the kube-prometheus-stack on kind it is `IP:9100`, so `IpsecNasNfsWithoutTunnel` and the NFS column find nothing outside OpenShift.
-4. **kind is not OpenShift.** The kind run used `ubi9/ubi` for the collector (the `openshift/cli` image is amd64 only), had no `sync` container, and no IPsec. It proves the per-node plumbing; CRC proves the IPsec values.
+4. **On OpenShift, a project's rules see only that project's series** unless the project is in `namespacesWithoutLabelEnforcement`. kind enforces nothing, which is why `IpsecNasExporterMissing` fired there ([evidence kind/02](evidence/kind/02-exporter-missing.txt)) but could not on CRC before the setting ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)).
+5. **kind is not OpenShift.** The kind run used `ubi9/ubi` for the collector (the `openshift/cli` image is amd64 only), had no `sync` container, and no IPsec. It proves the per-node plumbing; CRC proves the IPsec values.
 
 ## Not covered here
 

@@ -12,6 +12,8 @@ metadata:
 spec:
 {{- /* The "exporter missing" alert must not fire for excluded nodes: put their roles in, or take the clause out. */}}
 {{- $rules := .Files.Get "files/prometheus-rule-groups.yaml" }}
+{{- /* The alerts built on platform metrics carry this project's namespace label. */}}
+{{- $rules = replace "namespace: kcs-ipsec" (printf "namespace: %s" .Release.Namespace) $rules }}
 {{- $roles := include "ipsec-nas.excludedRoles" . }}
 {{- if $roles }}
 {{- $rules = replace "role=~\"control-plane|master|ingress\"" (printf "role=~\"%s\"" $roles) $rules }}

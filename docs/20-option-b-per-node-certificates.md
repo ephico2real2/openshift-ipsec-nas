@@ -381,7 +381,25 @@ oc get pods -n openshift-user-workload-monitoring
 
 ✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
 
-**2. Apply the Service and ServiceMonitor, and the alert rules**, from the repository root:
+**2. Let the alert rules in `kcs-ipsec` read platform metrics** (a cluster administrator, OpenShift 4.18 or later). Two alerts need series that OpenShift's own monitoring collects: `IpsecNasExporterMissing` reads `kube_node_role` (kube-state-metrics) and `IpsecNasNfsWithoutTunnel` reads `node_nfs_requests_total` (node-exporter). Both carry `namespace="openshift-monitoring"`. User workload monitoring adds `namespace="kcs-ipsec"` to every selector of a rule in `kcs-ipsec`, so without this step those two alerts can never fire; on CRC both selectors returned no series ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Red Hat's setting for this, `namespacesWithoutLabelEnforcement`, lifts that rewrite for the rules of the projects it lists, and only those. List `kcs-ipsec` alone.
+
+```bash
+# What is configured already? Keep it: the setting is one key among others in config.yaml.
+oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o jsonpath='{.data.config\.yaml}'
+
+# Empty output: add the key.
+oc -n openshift-user-workload-monitoring patch configmap user-workload-monitoring-config --type merge \
+  -p '{"data":{"config.yaml":"namespacesWithoutLabelEnforcement: [ kcs-ipsec ]\n"}}'
+# Otherwise: oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
+# and add the line namespacesWithoutLabelEnforcement: [ kcs-ipsec ] under config.yaml (or add kcs-ipsec to the list).
+
+oc get thanosruler,prometheus user-workload -n openshift-user-workload-monitoring \
+  -o jsonpath='{range .items[*]}{.kind}: {.spec.excludedFromEnforcement}{"\n"}{end}'
+```
+
+✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]` and the same for `Prometheus` (on CRC 14 seconds after the change). It works only while `rulesWithoutLabelEnforcementAllowed` is not set to `false` in `cluster-monitoring-config` (the default is `true`). The two alerts carry `namespace="kcs-ipsec"` themselves, so they show in the project like the others; Red Hat: *"To make the resulting alerts and metrics visible to project users, the query expressions should return a `namespace` label with a non-empty value"* ([cluster-monitoring-operator, release-4.18, `namespacesWithoutLabelEnforcement`](https://github.com/openshift/cluster-monitoring-operator/blob/release-4.18/Documentation/api.md); [Managing alerts as a Developer](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.21/html/managing_alerts/managing-alerts-as-a-developer)).
+
+**3. Apply the Service and ServiceMonitor, and the alert rules**, from the repository root:
 
 ```bash
 oc apply -f manifests/option-b-per-node-certs/28-metrics-servicemonitor.yaml
@@ -390,11 +408,11 @@ oc apply -f manifests/option-b-per-node-certs/29-prometheus-rule.yaml
 oc get servicemonitor,prometheusrule -n kcs-ipsec
 ```
 
-**3. See it in the console.** Open **Observe → Metrics**, run the query `ipsec_nas_tunnel_up`, and you get one row per worker. The alerts are under **Observe → Alerting → Alerting rules** (filter by source *User*).
+**4. See it in the console.** Open **Observe → Metrics**, run the query `ipsec_nas_tunnel_up`, and you get one row per worker. The alerts are under **Observe → Alerting → Alerting rules** (filter by source *User*).
 
 ✅ **Expected:** value `1` for every worker, with labels `node` and `connection="ipsec-nas"`.
 
-**4. The dashboard in the console (Perses).** On a cluster with the Cluster Observability Operator 1.5 or later (installed by the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo)):
+**5. The dashboard in the console (Perses).** On a cluster with the Cluster Observability Operator 1.5 or later (installed by the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo)):
 
 ```bash
 oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml
@@ -402,7 +420,7 @@ oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml
 
 It appears under **Observe → Dashboards (Perses)**, project `kcs-ipsec`. Viewers need `view` in `kcs-ipsec` and `cluster-monitoring-view`. Everything about it, from how it works to troubleshooting: [doc 61](61-perses-dashboard-review.md). The Helm chart installs it by default.
 
-**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana, and the ConfigMap needs one: a Grafana with a dashboard sidecar on that label, in `kcs-ipsec` or central and searching this namespace (both measured: [evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)). If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
+**6. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana, and the ConfigMap needs one: a Grafana with a dashboard sidecar on that label, in `kcs-ipsec` or central and searching this namespace (both measured: [evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)). If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
 
 ```bash
 cat <<'EOF' > 31-grafana-dashboard-cr.yaml
@@ -641,6 +659,8 @@ The page itself, opened through the Route in a browser:
 *Screenshot 20. `https://nas-demo-ipsec-nas-demo.apps-crc.testing/` at 21:54:44 UTC. This one is a real browser screenshot; the page reads the file from the NAS.*
 
 #### Step H.7 – Metrics in Observe, and the alert rules (Step B.12 above)
+
+First the exemption of Step B.12, 2 (`namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`); this lab run predates it.
 
 ```bash
 oc apply -f rendered/option-b-per-node-certs/28-metrics-servicemonitor.yaml

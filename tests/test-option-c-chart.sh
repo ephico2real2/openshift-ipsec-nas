@@ -23,6 +23,13 @@ grep -q 'ipsec-cert-sync' <<<"$out" && bad "a reference to ipsec-cert-sync remai
 grep -A1 '^      nodeSelector:' <<<"$out" | grep -q 'node-role.kubernetes.io/worker: ""' && ok "default: worker nodes" || bad "default nodeSelector"
 grep -A1 'alert: IpsecNasExporterMissing' -A3 <<<"$out" | grep -q 'kube_node_role{role="worker"}' && ok "default: the alert watches workers" || bad "default watched role"
 grep -q 'kube_node_role{role=~"control-plane|master|ingress"}' <<<"$out" && ok "default: excluded roles left out of the alert" || bad "default exclusion"
+# The two alerts built on platform metrics carry the release's namespace, not kube-state-metrics' or node-exporter's.
+labelled="$(helm template m "${CHART}" -n ipsec-other --kube-version 1.35.0 2>&1 | ruby -ryaml -e '
+  YAML.load_stream(STDIN.read).compact.select { |d| d["kind"] == "PrometheusRule" }.each do |d|
+    d["spec"]["groups"].flat_map { |g| g["rules"] }.each { |r| ns = (r["labels"] || {})["namespace"]; puts "#{r["alert"]}=#{ns}" if ns }
+  end')"
+[[ "$(tr '\n' ' ' <<<"$labelled")" == "IpsecNasExporterMissing=ipsec-other IpsecNasNfsWithoutTunnel=ipsec-other " ]] \
+  && ok "the platform-metric alerts carry the release namespace: $(tr '\n' ' ' <<<"$labelled")" || bad "alert namespace labels: ${labelled}"
 
 crc="$(render -f "${CHART}/values-crc.yaml")"
 sel="$(sed -n '/^      nodeSelector:/,/^      [a-z]/p' <<<"$crc" | grep 'node-role')"

@@ -27,7 +27,7 @@ tests:
     values: '1x30'
   - series: 'kube_node_role{node="worker-1",role="worker"}'
     values: '1x30'
-  - series: 'kube_node_role{node="worker-2",role="worker"}'
+  - series: 'kube_node_role{namespace="openshift-monitoring",job="kube-state-metrics",node="worker-2",role="worker"}'
     values: '1x30'
   - series: 'kube_node_role{node="master-0",role="master"}'
     values: '1x30'
@@ -66,6 +66,7 @@ tests:
     exp_alerts:
     - exp_labels:
         severity: warning
+        namespace: kcs-ipsec
         node: worker-2
         role: worker
       exp_annotations:
@@ -170,7 +171,7 @@ tests:
   # the platform's node-exporter: NFS requests on w0 (tunnel up) and on w3 (tunnel down)
   - series: 'node_nfs_requests_total{instance="w0",method="WRITE",proto="4"}'
     values: '0+30x70'
-  - series: 'node_nfs_requests_total{instance="w3",method="WRITE",proto="4"}'
+  - series: 'node_nfs_requests_total{namespace="openshift-monitoring",job="node-exporter",instance="w3",method="WRITE",proto="4"}'
     values: '0+30x70'
   alert_rule_test:
   - eval_time: 6m
@@ -213,7 +214,7 @@ tests:
   - eval_time: 12m
     alertname: IpsecNasNfsWithoutTunnel
     exp_alerts:
-    - exp_labels: {severity: critical, node: w3}
+    - exp_labels: {severity: critical, namespace: kcs-ipsec, node: w3}
       exp_annotations:
         summary: "Node w3 sends NFS requests while its IPsec tunnel is down"
         description: "The NFS traffic is not encrypted, or is failing if the NAS rejects cleartext. Counts all NFS servers of the node."

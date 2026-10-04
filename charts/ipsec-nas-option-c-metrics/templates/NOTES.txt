@@ -3,5 +3,10 @@ Option C's IPsec metrics: the collector without cert-sync, on {{ toJson .Values.
   Pods:     oc get pods -n {{ .Release.Namespace }} -l app=ipsec-nas-metrics -o wide
   Metrics:  Observe > Metrics, ipsec_nas_tunnel_up (one series per node)
   Alerts:   Observe > Alerting, the twelve IpsecNas* rules
+{{- if .Values.metrics.prometheusRule }}
+  IpsecNasExporterMissing and IpsecNasNfsWithoutTunnel read platform metrics: they fire only if a cluster administrator
+  lists {{ .Release.Namespace }} in namespacesWithoutLabelEnforcement (ConfigMap user-workload-monitoring-config,
+  OpenShift 4.18 or later; docs/20, Step B.12, 2).
+{{- end }}
 
 NEVER deploy this chart together with Option B's ipsec-nas chart: one option per cluster.
