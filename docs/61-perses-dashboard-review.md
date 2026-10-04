@@ -2,7 +2,7 @@
 
 The *IPsec to the NAS* dashboard lives in the **OpenShift console**: **Observe → Dashboards (Perses)**. It runs on Perses, the dashboard tool Red Hat ships with the Cluster Observability Operator (COO). The ipsec chart installs it **by default**. The Grafana version is **off** by default and kept for clusters that run Grafana.
 
-Everything below was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 and 2026-10-04 ([evidence 41](evidence/crc/41-perses-dashboard-review.txt), [42](evidence/crc/42-console-perses-capture.txt)). The metrics, the alerts and the collector are described in [doc 60](60-monitoring-per-node.md). COO itself is installed by its own chart, [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
+The dashboard was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 and 2026-10-04 ([evidence 41](evidence/crc/41-perses-dashboard-review.txt), [42](evidence/crc/42-console-perses-capture.txt), [43](evidence/crc/43-dashboard-sections.txt)); the Grafana prerequisite on kind ([evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)). The metrics, the alerts and the collector are described in [doc 60](60-monitoring-per-node.md). COO itself is installed by its own chart, [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
 
 ## At a glance
 
@@ -23,7 +23,7 @@ The dashboard has five sections, top to bottom. Each answers one question:
 | **Summary** | Tunnels up, tunnels down, workers reporting, soonest certificate expiry | Is anything wrong? |
 | **Tunnels per node** | Tunnel state, certificate time left, traffic to and from the NAS, tunnel age, metrics age, libreswan version | Which node, and how is it doing? A young tunnel age means a recent restart; an old metrics age, a stopped collector |
 | **Checks (all should be 0)** | Nodes reported twice, pods reporting the wrong node, kernel IPsec errors in the last hour | Can these numbers be trusted? (doc 60, *How each node's data stays its own*) |
-| **Per-node detail** | **Per node** table: one row per node; NAS identity per node | **Why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import; which pod reports each node, and the identity the NAS presented |
+| **Per-node detail** | **Per node** table: one row per node; NAS identity per node | **Why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import; for each node whose tunnel is up, which pod reports it and the identity the NAS presented (both come from `ipsec_nas_tunnel_info`, which the collector writes only while the tunnel is up) |
 | **History** | Tunnel re-establishments in the last hour, kernel IPsec errors per node | Is a tunnel flapping (alert above 3 an hour), and are errors growing? "No data" there means no errors: it shows only counters above 0 |
 
 Each section folds with the arrow beside its title; all are open when the dashboard loads.
@@ -42,7 +42,7 @@ Each section folds with the arrow beside its title; all are open when the dashbo
 
 ```text
 COLLECTING (always on)
-  ipsec-cert-sync pod, one per worker ──scrape──▶ user workload Prometheus ──store──▶ Thanos Querier :9091
+  ipsec-cert-sync pod, one per worker ──scrape──▶ user workload Prometheus ──read by──▶ Thanos Querier :9091
   (kcs-ipsec, :9754/metrics, node=itself)          (ServiceMonitor, every 30 s)       (all namespaces, checks the caller's token)
 
 VIEWING (with your own login)
@@ -99,7 +99,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 
 | To | You need | Who usually has it |
 |---|---|---|
-| Open the dashboard | **`view`** in `kcs-ipsec` (or `edit` / `admin`) | The namespace's team. COO's Perses roles are part of OpenShift's `view`, `edit` and `admin`, so no extra role is needed (measured: `view` alone reads the dashboard, and cannot change it) |
+| Open the dashboard | **`view`** in `kcs-ipsec` (or `edit` / `admin`) | The namespace's team. OLM aggregates the per-kind roles of COO's Perses CRDs into OpenShift's `view`, `edit` and `admin` (for example `persesdashboards.perses.dev-v1alpha2-view`), so no extra role is needed (measured: `view` alone reads the dashboard, and cannot change it) |
 | See its data | **`cluster-monitoring-view`** | Granted by the platform: the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) binds it to the groups in `metricsAccess.groups`, for example `system:authenticated` (everyone who logs in) |
 | Change the dashboard | Edit the Grafana JSON in Git and regenerate: [Change the dashboard](#change-the-dashboard) | — |
 
@@ -133,7 +133,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 5. The finished dashboard (after Appendix A.5) as the same reader, before it had sections. Taken in the upstream Perses 0.54.0 UI, the version COO builds on, signed in as that reader.*
+*Capture 5. The finished dashboard (after Appendix A.5) as the same reader, before it had sections. Taken in the upstream Perses 0.54.0 UI, the Perses version in COO 1.5.2's and `release-1.5`'s `go.mod` (COO's own server reports no version), signed in as that reader.*
 
 A namespace-only data source becomes possible only if Perses learns to query with `GET`.
 
@@ -153,7 +153,7 @@ The Grafana dashboard, `charts/ipsec-nas/files/ipsec-nas.json`, is the **one sou
 
 **What the generator fixes after `percli`** (`scripts/perses-dashboard-fix.py`; each fix is measured in Appendix A.5):
 - every query and the **Node** filter name the data source `ipsec-nas-thanos`;
-- the per-node table keeps one row per node, and the NAS identity moves to its own panel, under it in **Per-node detail**;
+- the per-node table keeps one row per node; its two queries labelled `node, pod` and `node, peer_id` are replaced by one, `max by (node, pod, peer_id) (ipsec_nas_tunnel_info{...})`, in its own panel under it in **Per-node detail** (so a node whose tunnel is down shows no reporting pod);
 - the libreswan panel shows the version;
 - the certificate panels count days;
 - it **refuses** output in which `percli` produced placeholders, which happens when the plugins are not unpacked.
@@ -175,7 +175,7 @@ The generator finds panels by their **title** and sections by theirs: `percli` n
 
 ## Grafana, if you need it
 
-The same dashboard is still available for Grafana: `metrics.grafanaDashboard: true` ships it as a ConfigMap labelled `grafana_dashboard: "1"`. Both flags may be on at once: they add data only (measured: 47 KiB for the ConfigMap, 44 KiB for the two Perses objects, no pods), and both dashboards come from the same JSON.
+The same dashboard is still available for Grafana: `metrics.grafanaDashboard: true` ships it as a ConfigMap labelled `grafana_dashboard: "1"`. Both flags may be on at once: they add data only (rendered at 8b9c06a: 48.5 KiB for the ConfigMap, 45.0 KiB for the two Perses objects; no pods), and both dashboards come from the same JSON.
 
 **Prerequisite for the Grafana integration: a Grafana that loads the ConfigMap.** Measured on kind with the Grafana Helm chart and its dashboard sidecar ([evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)):
 
@@ -199,7 +199,7 @@ percli migrate -f charts/ipsec-nas/files/ipsec-nas.json --format cr --project kc
   --plugin.path <unpacked Perses plugins> --use-default-datasource -o yaml
 ```
 
-- **The tool.** `percli` 0.54.0, the Perses version COO 1.5 builds on. Its plugins must be **unpacked**; pointed at the packed archives it silently turns every panel into a placeholder.
+- **The tool.** `percli` 0.54.0, the Perses version in COO 1.5.2's and `release-1.5`'s `go.mod` (1.5.0 and 1.5.1: 0.53.1). Its plugins must be **unpacked**; pointed at the packed archives it silently turns every panel into a placeholder.
 - **The result.** 16 panels: 11 stat charts, 1 table, 3 time series and 1 bar chart. The `node` filter became a Perses variable over the `node` label of `ipsec_nas_tunnel_up`.
 - **COO's own converter** (`POST /api/migrate` on its Perses) produces the same, except the table: it names the value columns `Value #A…` and drops value mappings and units.
 - **The resource version.** `percli` writes `perses.dev/v1alpha1`, which the API server reports as deprecated. `v1alpha2` puts the dashboard under `spec.config`.
@@ -285,7 +285,7 @@ These captures are from the upstream Perses 0.54.0 UI run locally on CRC's data,
 
 | Gap in the first conversion | In the dashboard the chart ships |
 |---|---|
-| The table split a node into three rows | **Fixed**: the table keeps the nine queries labelled by `node`; the reporting pod and the NAS identity moved to *NAS identity per node* |
+| The table split a node into three rows | **Fixed**: the table keeps the nine queries labelled by `node`; the reporting pod and the NAS identity are shown in *NAS identity per node*, from one query on `ipsec_nas_tunnel_info` (only nodes whose tunnel is up) |
 | libreswan version showed `1` | **Fixed**: shows `5.3` (`percli` had garbled the label to show) |
 | The "days" unit was lost | **Fixed**, with a twist: Perses writes days in its largest fitting unit, so 364 days reads 12.1 months |
 | NFS requests/s empty on a namespace data source | **Fixed** by port 9091: 39.8 requests/sec under load |
@@ -294,7 +294,7 @@ These captures are from the upstream Perses 0.54.0 UI run locally on CRC's data,
 | *(found in the second pass)* The node filter had no data source, so it used the namespace's default one, and the chart's is not the default | **Fixed**: the variables name `ipsec-nas-thanos`. Measured with no default data source: before, the filter sent no request; after, it queries `ipsec-nas-thanos` |
 | "No data" where Grafana said "No drops" | Not fixed: the value is right (no drops) |
 
-The generated dashboard carries every Grafana expression over verbatim, except the two queries moved to the identity panel. Applied on CRC, both objects are `Available`; queries through COO's Perses with the chart's data source answer with `GET` and `POST`; Argo CD deploys them from Git.
+The generated dashboard carries 25 of the 27 Grafana expressions over verbatim; the table's two queries labelled `node, pod` and `node, peer_id` are replaced by one, `max by (node, pod, peer_id) (ipsec_nas_tunnel_info{node=~"$node"})`, in the identity panel. Applied on CRC, both objects are `Available`; a `POST` query through COO's Perses with the chart's data source answers (openshift-coo-helm evidence 11, section 10); Argo CD deploys them from Git.
 
 ## Not covered here
 

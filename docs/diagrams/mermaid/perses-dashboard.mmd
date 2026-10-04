@@ -5,7 +5,7 @@ flowchart LR
         POD["ipsec-cert-sync pods<br/>one per worker, in kcs-ipsec<br/>:9754/metrics, node=itself"]
         PROM["User workload Prometheus<br/>scrapes every pod (ServiceMonitor)<br/>every 30 seconds"]
         THANOS["Thanos Querier, port 9091<br/>all namespaces, platform metrics too<br/>checks the caller's token"]
-        POD -- scrape --> PROM -- store --> THANOS
+        POD -- scrape --> PROM -- read by --> THANOS
     end
     subgraph VIEW["2. Viewing: with your own login"]
         YOU["You, in the OpenShift console<br/>Observe → Dashboards (Perses)<br/>project kcs-ipsec"]

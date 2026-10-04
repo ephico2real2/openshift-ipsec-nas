@@ -76,7 +76,7 @@ scc:
 metrics:
   # -- Headless Service and ServiceMonitor, for Observe. Needs user workload monitoring.
   serviceMonitor: true
-  # -- The six alert rules.
+  # -- The twelve alert rules (files/prometheus-rule-groups.yaml).
   prometheusRule: true
   # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1"): the Grafana integration.
   # REQUIRES a Grafana that loads it: a Grafana dashboard sidecar on the label grafana_dashboard: "1", in

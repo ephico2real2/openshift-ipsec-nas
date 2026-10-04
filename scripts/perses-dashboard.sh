@@ -6,7 +6,7 @@
 #   and refreshes the Grafana ConfigMap of the plain manifests, manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 # Run from the repository root after changing ipsec-nas.json:  scripts/perses-dashboard.sh
 #
-# Needs percli at the cluster's Perses version (0.54.0 for COO 1.5) and its plugins UNPACKED; see
+# Needs percli 0.54.0 (the Perses version in COO 1.5.2's go.mod; COO's server reports none) and its plugins UNPACKED; see
 # https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md
 #   PERCLI=percli  PERSES_PLUGINS=~/.local/share/perses/plugins
 set -euo pipefail
