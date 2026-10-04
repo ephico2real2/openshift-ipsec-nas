@@ -1,0 +1,34 @@
+# Dynatrace's sample assets/samples/dynakube/v1beta5/cloudNativeFullStack.yaml (operator v1.11.0), as measured on CRC (docs/62).
+# Set apiUrl to your environment. The token Secret "dynakube" is created separately (docs/62, Step D.3); none here.
+apiVersion: dynatrace.com/v1beta5
+kind: DynaKube
+metadata:
+  name: dynakube
+  namespace: dynatrace
+spec:
+  apiUrl: https://<ENVIRONMENT_ID>.live.dynatrace.com/api   # your environment
+  metadataEnrichment:
+    enabled: true
+  oneAgent:
+    cloudNativeFullStack:
+      tolerations:
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/master
+          operator: Exists
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
+          operator: Exists
+  activeGate:
+    # the tenant's API returned no ActiveGate image ("no matching image in DT API response"): name it, as dtwiz does
+    image: public.ecr.aws/dynatrace/dynatrace-activegate:1.337.36.20260526-135434
+    capabilities:
+      - routing
+      - kubernetes-monitoring
+      - dynatrace-api
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1.5Gi
+      limits:
+        cpu: 1000m
+        memory: 1.5Gi

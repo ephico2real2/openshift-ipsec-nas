@@ -18,6 +18,7 @@ automated per node with **Kyverno**.
 | [`docs/53-option-c-cert-manager-kyverno.md`](docs/53-option-c-cert-manager-kyverno.md) | Option C with cert-manager and Kyverno: the shared wildcard certificate and the per-node tunnels from the Option C chart, measured on CRC |
 | [`docs/60-monitoring-per-node.md`](docs/60-monitoring-per-node.md) | Monitoring: each node reports its own IPsec state, the metrics and alerts, and what was measured on kind (3 nodes) and CRC |
 | [`docs/61-perses-dashboard-review.md`](docs/61-perses-dashboard-review.md) | **The dashboard in the OpenShift console (Perses, on by default):** what it shows, how it works, how to turn it on and open it, who can see it, how to change it, troubleshooting |
+| [`docs/62-dynatrace-operator-on-openshift.md`](docs/62-dynatrace-operator-on-openshift.md) | Dynatrace on OpenShift: how the Dynatrace Operator was installed (Dynatrace's OpenShift manifest, full stack), what did not work and why |
 | [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
 | [`docs/lab/`](docs/lab/) | A test NAS on RHEL 10, the Lima lab, and an application that uses the NAS |
 | [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart: every value, the prerequisites it checks, cleanup on node deletion and uninstall |
@@ -56,6 +57,7 @@ docs/52-option-c-nas-team.md         Option C: the NAS team's handout
 docs/53-option-c-cert-manager-kyverno.md  Option C with cert-manager and Kyverno, from the chart
 docs/60-monitoring-per-node.md       monitoring: per-node metrics, alerts, dashboard; measured on kind and CRC
 docs/61-perses-dashboard-review.md   the dashboard in the console (Perses): use it, change it, troubleshoot it
+docs/62-dynatrace-operator-on-openshift.md  the Dynatrace Operator on OpenShift, as installed
 docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
 docs/30-option-b-automated-helm-argocd.md  Option B with Helm and Argo CD; CEL or legacy Kyverno policies
 docs/40-lab-crc-and-nas.md           the CRC lab, testing with an application, gotchas
@@ -73,6 +75,7 @@ manifests/option-b-per-node-certs/   Option B: namespace, Kyverno CEL policies, 
                                      ServiceMonitor, alert rules, Grafana dashboard, orphaned-Secret cleanup
 manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as legacy ClusterPolicy/CleanupPolicy
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
+manifests/dynatrace/                 the DynaKube used in docs/62 (no token)
 render.sh                            fills in the *.tmpl variables → rendered/
 charts/ipsec-nas/                    Helm chart of Option B (the same objects as the manifests)
 charts/ipsec-nas-option-c-metrics/   Helm chart of Option C: metrics, alerts, dashboard; optionally the certificate (cert-manager) and the tunnel (C1, or C2 by Kyverno)
