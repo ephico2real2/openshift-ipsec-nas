@@ -29,18 +29,19 @@ automated per node with **Kyverno**.
 
 ## Certificate delivery: one certificate per node
 
-Our standard for a production cluster, and the enterprise north star, is **one certificate per node** (Option B): cert-manager issues it from the cluster's enterprise CA and a DaemonSet imports it. The shared-certificate method Red Hat documents (Option A) is kept for reference and is not used.
+Our standard for a production cluster, and the enterprise north star, is **one certificate per node** (Option B): cert-manager issues it from the cluster's enterprise CA and a DaemonSet imports it. The shared-certificate method Red Hat documents (Option A) is kept for reference and is not used. Option C, one wildcard certificate in a MachineConfig, was evaluated and measured; it works only where the NAS allows several peers with the same identity ([doc 50](docs/50-option-c-wildcard-certificate.md)).
 
-| | Per-node certificates (Option B, our standard) | Shared certificate (Option A, not used) |
-|---|---|---|
-| Cert delivery | cert-manager per node + import DaemonSet | One `.p12` in a MachineConfig |
-| Red Hat documented | NMState/IPsec part yes; cert delivery is custom | Yes |
-| Adding a worker | Automatic, no reboot | Manual re-issue + full worker reboot |
-| Renewal | Automatic | Manual, disruptive |
-| Revoke one node | Yes | No |
-| Monitoring | Per-node metrics, alerts, Grafana dashboard | None |
+| | Per-node certificates (Option B, our standard) | Wildcard certificate (Option C, evaluated) | Shared certificate (Option A, not used) |
+|---|---|---|---|
+| Cert delivery | cert-manager per node + import DaemonSet | One wildcard `.p12` (`*.<domain>`, valid 2 years) in a MachineConfig | One `.p12` in a MachineConfig |
+| Red Hat documented | NMState/IPsec part yes; cert delivery is custom | Option A's mechanism with a wildcard certificate and our own import script; C1 uses only Red Hat components (MachineConfig, NMState) | Yes |
+| Adding a worker | Automatic, no reboot | Automatic: it gets the MachineConfig and the NNCP (by design; not measured, CRC has one node) | Manual re-issue + full worker reboot |
+| Renewal | Automatic | By hand every 2 years; every node reboots once | Manual, disruptive |
+| Revoke one node | Yes | No | No |
+| NAS must allow duplicate peer IDs | No | Yes (measured, every variant) | Yes |
+| Monitoring | Per-node metrics, alerts, and a dashboard (Perses in the console; Grafana optional) | None (no DaemonSet) | None |
 
-> ⚠️ Never run both on the same cluster — both write the NSS nickname `left_server`.
+> ⚠️ Never run two options on the same cluster: all of them import a certificate into each node's NSS database under the nickname `left_server`.
 
 ## Layout
 
