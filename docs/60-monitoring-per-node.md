@@ -71,9 +71,14 @@ Two of the waits are measured, not chosen:
 - **`IpsecNasDuplicateNode`, 10 minutes.** When the ServiceMonitor changed on CRC, the old and the new series of the same pod both existed for one 15-second step (18:08:15Z); the alert went pending and cleared by 18:09:00Z ([evidence 39](evidence/crc/39-metrics-dashboard-queries.txt)). Without the wait, that change alone would have paged.
 - **`IpsecNasCertificateMissing`, 10 minutes.** cert-sync puts a deleted certificate back at its next check (every 5 minutes). On CRC it was missing for 72 seconds and the alert never fired ([evidence 38](evidence/crc/38-metrics-certificate-removed.txt)).
 
-## The cluster setting two alerts need: `namespacesWithoutLabelEnforcement`
+## The cluster settings: `user-workload-monitoring-config`
 
-`IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` fire on OpenShift only when the namespace of the rules, `kcs-ipsec`, is listed in `namespacesWithoutLabelEnforcement`. No Helm chart manages that ConfigMap yet: a cluster administrator adds it once, by hand, on OpenShift 4.18 or later.
+Two settings, both in the ConfigMap `user-workload-monitoring-config` in `openshift-user-workload-monitoring`. Nothing in `openshift-monitoring` is changed.
+
+- **`namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`**: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` fire on OpenShift only with it (OpenShift 4.18 or later).
+- **`alertmanager: {enabled: true, enableAlertmanagerConfig: true}`**: the alerts are delivered to a dedicated Alertmanager in `openshift-user-workload-monitoring`, not to the platform's in `openshift-monitoring`, and a project may route its own alerts with an `AlertmanagerConfig`. This one applies to **every** user project's alerts, not only ours.
+
+No Helm chart manages that ConfigMap yet (planned: [openshift-coo-helm#5](https://github.com/ephico2real2/openshift-coo-helm/issues/5)): a cluster administrator sets it once, by hand.
 
 ```yaml
 apiVersion: v1
@@ -83,8 +88,11 @@ metadata:
   namespace: openshift-user-workload-monitoring
 data:
   config.yaml: |
-    # keep every key already here; add this one, or add kcs-ipsec to an existing list
+    # keep every key already here and merge these in (or add the namespace to an existing list)
     namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+    alertmanager:
+      enabled: true
+      enableAlertmanagerConfig: true
 ```
 
 ```bash
@@ -92,12 +100,13 @@ data:
 oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml
 oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
 
-# The operator applies it to user workload monitoring's Prometheus and Thanos Ruler:
+# The operator applies it to user workload monitoring's Prometheus and Thanos Ruler, and starts the Alertmanager:
 oc get thanosruler,prometheus user-workload -n openshift-user-workload-monitoring \
   -o jsonpath='{range .items[*]}{.kind}: {.spec.excludedFromEnforcement}{"\n"}{end}'
+oc get alertmanager,pods -n openshift-user-workload-monitoring | grep -i alertmanager
 ```
 
-✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]`, and the same for `Prometheus` (on CRC 14 seconds after the change, [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5a).
+✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]`, and the same for `Prometheus` (on CRC 14 seconds after the change, [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5a); the Alertmanager `user-workload` and its pod `alertmanager-user-workload-0` `Running` (on CRC 10 seconds after the change, §5c).
 
 ### Why: what OpenShift does to a project's rules
 
@@ -132,7 +141,17 @@ Red Hat: *"To make the resulting alerts and metrics visible to project users, th
 | The label `openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus` | Red Hat: with it, *"your alerting rule can use only those metrics exposed by your user-defined project. Alerting rules you create based on default platform metrics might not trigger alerts"* (*Creating alerting rules for user-defined projects*, above) |
 | A platform `AlertingRule` (`monitoring.openshift.io/v1`) in `openshift-monitoring` | Red Hat: it is for *"new alerting rules based on platform metrics"*, and *"You must create the `AlertingRule` object in the `openshift-monitoring` namespace"* ([openshift-docs, enterprise-4.18, *Creating new alerting rules*](https://github.com/openshift/openshift-docs/blob/enterprise-4.18/modules/monitoring-creating-new-alerting-rules.adoc)). Our series are user-defined (on CRC labelled `prometheus=openshift-user-workload-monitoring/user-workload`), and the rule would leave the project |
 
-### What it changes, and the care it needs
+### Why the user workload Alertmanager
+
+The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-monitoring`; the alerts should be delivered there too, not into `openshift-monitoring`.
+
+- **Without it.** Red Hat: if `alertmanager.enabled` is `false` or omitted, *"user-defined alerts are routed to the default platform Alertmanager instance"*, which is `alertmanager-main` in `openshift-monitoring` ([openshift-docs, enterprise-4.18, *Enabling a separate Alertmanager instance for user-defined alert routing*](https://github.com/openshift/openshift-docs/blob/enterprise-4.18/modules/monitoring-enabling-a-separate-alertmanager-instance-for-user-defined-alert-routing.adoc)). On CRC, user workload Prometheus sent its alerts to `alertmanager-main` before the change.
+- **With `enabled: true`.** Red Hat: *"a dedicated instance of the Alertmanager for user-defined projects"*. On CRC `alertmanager-user-workload-0` was running 10 seconds after the change, and both user workload Prometheus and Thanos Ruler, which evaluates our rules, send to it.
+- **With `enableAlertmanagerConfig: true`.** Red Hat: it lets *"users to define their own alert routing configurations with `AlertmanagerConfig` objects"*. A team routes the IPsec alerts to its receiver with an `AlertmanagerConfig` in `kcs-ipsec`; the charts create none.
+- **Measured.** With the collector kept off `crc`, `IpsecNasExporterMissing` arrived in the user workload Alertmanager at 17:03:09Z as `namespace=kcs-ipsec node=crc role=worker severity=warning`, and `alertmanager-main` had nothing; it resolved there at 17:03:56Z once the collector was back ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5c).
+- **It applies to every user project.** All user-defined alerts move to this Alertmanager, not only ours: on CRC also those of `group-sync-dashboard`, `modernize-demo` and `mongodb-poc`. A team that was notified through the platform Alertmanager needs its own `AlertmanagerConfig`. Agree the switch with the cluster's monitoring owners; openshift-coo-helm#5 puts the ConfigMap under a chart.
+
+### What the exemption changes, and the care it needs
 
 - **Only the rules of the listed namespaces.** The rules of every other project stay enforced, and the setting grants no one access to metrics.
 - **The rules in `kcs-ipsec` can read every project's metrics.** Red Hat: these `PrometheusRule` objects *"are then applicable to all projects"*. Whoever can create or edit a `PrometheusRule` in `kcs-ipsec` gets that reach, so keep that right to the platform team. Red Hat lists the `monitoring-rules-edit` cluster role for the project as the one that creates such rules.

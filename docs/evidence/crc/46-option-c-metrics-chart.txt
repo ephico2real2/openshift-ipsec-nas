@@ -95,3 +95,30 @@
     16:14:55Z the alert resolved; ALERTS{namespace="kcs-ipsec"}: none.
   IpsecNasNfsWithoutTunnel was not driven to firing (it needs NFS traffic while the tunnel is down); its platform
   selector and its labels are covered by 5a and by tests/test-alert-rules.sh.
+
+  5c. The operator's scope, and the final state on CRC (2026-10-04 16:36-17:04Z)
+    Rule: nothing in openshift-monitoring is modified. Rules and alerts live in openshift-user-workload-monitoring
+    or the release namespace. Allowed: user-workload-monitoring-config in openshift-user-workload-monitoring.
+    16:36:43Z exemption removed while the scope was clarified (excludedFromEnforcement empty at 16:36:49Z)
+    16:42:43Z exemption re-applied (excludedFromEnforcement kcs-ipsec at 16:42:49Z); 16:43:26Z rule health ok=12
+    Alert delivery before: Prometheus user-workload alerting -> openshift-monitoring/alertmanager-main (Red Hat: without
+    a user workload Alertmanager "user-defined alerts are routed to the default platform Alertmanager instance").
+    16:44:25Z alertmanager {enabled: true, enableAlertmanagerConfig: true} added; 16:46:04Z removed (my misreading);
+    16:46:41Z added again at the operator's word. config.yaml since:
+      namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+      alertmanager:
+        enabled: true
+        enableAlertmanagerConfig: true
+    16:46:51Z Alertmanager user-workload, pod alertmanager-user-workload-0 6/6 Running (10 s after the change).
+    Prometheus user-workload alerting -> openshift-user-workload-monitoring/alertmanager-user-workload; Thanos Ruler
+    (secret thanos-ruler-alertmanagers-config) -> dnssrv+_web._tcp.alertmanager-operated.openshift-user-workload-monitoring.svc
+    Other projects with PrometheusRules on CRC, whose alerts move with it: group-sync-dashboard, modernize-demo,
+    mongodb-poc (no AlertmanagerConfig anywhere).
+    Delivery, driven (collector kept off crc, helm revision 5 at 16:47:13Z; amtool in alertmanager-user-workload-0,
+    and alertmanager-main's /api/v2/alerts read as kubeadmin, every 20 s):
+      16:47:52Z user-workload Alertmanager: none | alertmanager-main: none          (the alert pending)
+      17:03:09Z user-workload Alertmanager: {"alertname":"IpsecNasExporterMissing","namespace":"kcs-ipsec","node":"crc",
+                "role":"worker","severity":"warning"} active | alertmanager-main: none
+      17:03:22Z restored (revision 6, pod ipsec-nas-metrics-gb278); 17:03:56Z resolved in the user workload Alertmanager
+    Queries from 16:42Z run as kubeadmin; the earlier ones used short-lived prometheus-k8s tokens (TokenRequest in
+    openshift-monitoring, nothing stored), stopped under the same rule.

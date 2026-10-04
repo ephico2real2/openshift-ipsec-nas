@@ -54,10 +54,10 @@ oc get pods -n kcs-ipsec -l app=ipsec-nas-metrics -o wide
 
 On OpenShift Local add `-f charts/ipsec-nas-option-c-metrics/values-crc.yaml`. The single node carries the worker, control-plane and master labels: the worker selector picks it, and the file only empties `excludeNodeLabels`, which would otherwise exclude it.
 
-## Cluster setting: the release namespace in `user-workload-monitoring-config`
+## Cluster settings: `user-workload-monitoring-config`
 
 > [!IMPORTANT]
-> **No Helm chart manages this ConfigMap yet: add the release namespace by hand** (a cluster administrator, OpenShift 4.18 or later). Without it, `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` never fire: they read platform metrics (`kube_node_role`, `node_nfs_requests_total`), which user workload monitoring hides from a project's rules ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)). The other ten alerts work without it.
+> **No Helm chart manages this ConfigMap (namespace `openshift-user-workload-monitoring`) yet: a cluster administrator sets it by hand** (OpenShift 4.18 or later). Nothing in `openshift-monitoring` is changed. Without `namespacesWithoutLabelEnforcement`, `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` never fire: they read platform metrics (`kube_node_role`, `node_nfs_requests_total`), which user workload monitoring hides from a project's rules ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)). The other ten alerts work without it. `alertmanager.enabled` delivers user workload alerts to a dedicated Alertmanager in `openshift-user-workload-monitoring` instead of the platform's; it applies to every user project's alerts, so agree it with the cluster's monitoring owners.
 
 List only the namespace this chart is installed in (`kcs-ipsec` below, as in the install steps above). Option B uses the same setting.
 
@@ -69,11 +69,14 @@ metadata:
   namespace: openshift-user-workload-monitoring
 data:
   config.yaml: |
-    # keep every key already here; add this one, or add the namespace to the existing list
+    # keep every key already here and merge these in (or add the namespace to an existing list)
     namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+    alertmanager:
+      enabled: true
+      enableAlertmanagerConfig: true
 ```
 
-The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard). Why it is needed, what it changes and the alternatives: [doc 60](../../docs/60-monitoring-per-node.md#the-cluster-setting-two-alerts-need-namespaceswithoutlabelenforcement).
+The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard). Why it is needed, what it changes and the alternatives: [doc 60](../../docs/60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
 
 ## Values
 

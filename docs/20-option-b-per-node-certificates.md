@@ -381,7 +381,7 @@ oc get pods -n openshift-user-workload-monitoring
 
 ✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
 
-**2. Let the alert rules in `kcs-ipsec` read platform metrics** (a cluster administrator, OpenShift 4.18 or later; no chart does this yet). `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` need series that OpenShift's own monitoring collects (`kube_node_role`, `node_nfs_requests_total`). Without this setting, user workload monitoring limits the rules in `kcs-ipsec` to series labelled `kcs-ipsec`, and those two alerts can never fire. The technical justification, the measurements, the alternatives and the care it needs: [doc 60, *The cluster setting two alerts need*](60-monitoring-per-node.md#the-cluster-setting-two-alerts-need-namespaceswithoutlabelenforcement).
+**2. The user workload monitoring settings** (`openshift-user-workload-monitoring`; a cluster administrator, OpenShift 4.18 or later; no chart does this yet; nothing in `openshift-monitoring` changes). The `alertmanager` lines deliver user workload alerts to a dedicated Alertmanager in `openshift-user-workload-monitoring`, for every user project, not only this one. The exemption lets the rules in `kcs-ipsec` read platform metrics: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` need series that OpenShift's own monitoring collects (`kube_node_role`, `node_nfs_requests_total`). Without this setting, user workload monitoring limits the rules in `kcs-ipsec` to series labelled `kcs-ipsec`, and those two alerts can never fire. The technical justification, the measurements, the alternatives and the care it needs: [doc 60, *The cluster settings*](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
 
 ```yaml
 apiVersion: v1
@@ -391,8 +391,11 @@ metadata:
   namespace: openshift-user-workload-monitoring
 data:
   config.yaml: |
-    # keep every key already here; add this one, or add kcs-ipsec to an existing list
+    # keep every key already here and merge these in (or add the namespace to an existing list)
     namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+    alertmanager:
+      enabled: true
+      enableAlertmanagerConfig: true
 ```
 
 ```bash
@@ -402,9 +405,10 @@ oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring
 
 oc get thanosruler,prometheus user-workload -n openshift-user-workload-monitoring \
   -o jsonpath='{range .items[*]}{.kind}: {.spec.excludedFromEnforcement}{"\n"}{end}'
+oc get alertmanager,pods -n openshift-user-workload-monitoring | grep -i alertmanager
 ```
 
-✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]` and the same for `Prometheus` (on CRC 14 seconds after the change).
+✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]` and the same for `Prometheus` (on CRC 14 seconds after the change); the Alertmanager `user-workload` and its pod `alertmanager-user-workload-0` `Running`. Why each setting, and what it changes: [doc 60, *The cluster settings*](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
 
 **3. Apply the Service and ServiceMonitor, and the alert rules**, from the repository root:
 

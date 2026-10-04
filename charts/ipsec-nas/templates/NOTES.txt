@@ -20,7 +20,8 @@ Dashboard, in the OpenShift console: Observe → Dashboards (Perses), project {{
 
 Alerts: IpsecNasExporterMissing and IpsecNasNfsWithoutTunnel read platform metrics. They fire only if a cluster
   administrator lists {{ .Release.Namespace }} in namespacesWithoutLabelEnforcement (ConfigMap user-workload-monitoring-config,
-  OpenShift 4.18 or later; docs/20, Step B.12, 2).
+  OpenShift 4.18 or later; docs/20, Step B.12, 2,
+  with the user workload Alertmanager settings; nothing in openshift-monitoring is changed).
 {{- end }}
 {{- if .Values.metrics.grafanaDashboard }}
 
