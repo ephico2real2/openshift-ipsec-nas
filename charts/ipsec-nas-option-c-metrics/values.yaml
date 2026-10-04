@@ -36,3 +36,13 @@ metrics:
   serviceMonitor: true
   # -- The twelve alert rules (files/prometheus-rule-groups.yaml, shared with Option B).
   prometheusRule: true
+  # -- The dashboard as a ConfigMap labelled grafana_dashboard: "1", for a Grafana dashboard sidecar in this
+  # namespace or a central one searching it (as Option B's; docs/61-perses-dashboard-review.md). Off by default.
+  grafanaDashboard: false
+  # The dashboard in the OpenShift console (Observe -> Dashboards (Perses)), from the Cluster Observability
+  # Operator 1.5 or later: a PersesDashboard and the PersesDatasource it queries, in this namespace.
+  persesDashboard:
+    # -- On by default: COO's Perses (the API perses.dev/v1alpha2) is then a prerequisite.
+    enabled: true
+    # -- Thanos Querier's cluster-wide port (Option B's choice, doc 61: 9092 refuses the Perses UI's POST queries).
+    thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091

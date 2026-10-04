@@ -1,0 +1,60 @@
+# #43: Option C's dashboards, Perses and Grafana. CRC 4.22.7, Option C (C1), chart ipsec-nas-option-c-metrics with the
+# dashboards (revision 8), COO 1.5.3, 2026-10-04 18:30-18:59Z. Load: the bounded NFS Job of capture 2 (8 MiB written
+# and read back every 2 seconds on the NAS volume), 18:33:24Z to about 18:58Z.
+
+## 1. The source: Option B's Grafana dashboard, unchanged panels
+  scripts/option-c-dashboard.py < charts/ipsec-nas/files/ipsec-nas.json > charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
+  diff against Option B's: 5 lines, all intended: uid ipsec-nas-option-c, title "IPsec to the NAS (Option C)", and the three
+  descriptions that name the reporting pod (ipsec-cert-sync -> ipsec-nas-metrics).
+  scripts/perses-dashboard.sh (percli 0.54.0, REPORTING_POD=ipsec-nas-metrics for the fixer) writes
+  files/ipsec-nas-option-c.perses.json. Option B's generated files were rebuilt byte-identical by the same run.
+
+## 2. Perses on CRC (defaults: persesDashboard on, grafanaDashboard off)
+  18:30:14Z helm upgrade (revision 8); 18:30:18Z
+    persesdashboard/ipsec-nas:         Available=True (Reconciled) Degraded=False (Reconciled)
+    persesdatasource/ipsec-nas-thanos: Available=True (Reconciled) Degraded=False (Reconciled)
+    title "IPsec to the NAS (Option C)", 17 panels
+  Every query of the dashboard, $node = .*, through Thanos Querier (as kubeadmin), 18:30:28Z: every panel's query
+  returned one series for crc, except "Kernel IPsec errors per node", whose query keeps only counters above 0
+  (sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total[5m])) > 0): no kernel IPsec errors, so no series.
+  Values: tunnels up 1, down 0, workers reporting 1, soonest expiry 729.8 days, NFS 2.03 requests/s,
+  cert imported 490 s before (the 18:22:19Z boot import, evidence 47), NAS identity O=KCS OpenShift lab, CN=crc-nas.lab.internal
+  by pod ipsec-nas-metrics-tcmr8.
+
+## 3. The console capture: docs/images/crc/48-console-perses-ipsec-nas-option-c.light.png
+  As capture 42 (evidence 42): a local console (quay.io/openshift/origin-console:4.22, bridge, authentication disabled,
+  kubeadmin's token from a mode-600 env file) on 127.0.0.1:9000; COO's monitoring plugin and Perses through
+  port-forwards of svc/monitoring and svc/perses in openshift-cluster-observability-operator. Thanos through its route
+  (thanos-querier-openshift-monitoring.apps-crc.testing) and a local relay: nothing run or requested in
+  openshift-monitoring. Headless Chromium (Playwright), 1600x2700 at 1.5x, light.
+  First take 18:33Z: the 30-minute window held the collector pod replaced at 18:20Z and the tunnel re-established
+  after the 18:22Z reboot, so the stat panels showed crc twice. Retaken at 18:58:27Z, when
+  count(count_over_time(ipsec_nas_tunnel_up[30m])) = 1.
+  Seen: title "IPsec to the NAS (Option C)"; sections Summary, Tunnels per node, Checks (all should be 0), Per-node detail,
+  History; tunnels up 1, down 0, workers reporting 1, soonest expiry 2.0 years, tunnel UP, traffic ~3.8 MiB/s during the
+  load, tunnel age 34.9m, metrics age 47s, libreswan 5.3, checks 0/0/0, per-node row crc (UP, YES, PRESENT, YES, YES,
+  2 NFS mounts (the load Job mounts the same export), 39.5 requests/sec, 0 drops, cert imported 35.7m), NAS identity
+  crc / ipsec-nas-metrics-tcmr8 / O=KCS OpenShift lab, CN=crc-nas.lab.internal; "Kernel IPsec errors per node": No data.
+  HTTP responses >= 400: one, 404 for apis/metal3.io/.../provisionings/provisioning-configuration (the console asks for a
+  bare-metal resource CRC does not have; not the dashboard).
+
+## 4. Grafana loads the ConfigMap through a dashboard sidecar (as evidence kind/03 for Option B)
+  kind v0.33.0 on podman, cluster ipsec-grafana (Kubernetes v1.37.0), 18:35:59Z:
+  $ helm template m charts/ipsec-nas-option-c-metrics -n kcs-ipsec --set metrics.grafanaDashboard=true -s templates/grafana-dashboard.yaml | kubectl apply -f -
+    configmap/ipsec-nas-grafana-dashboard created; labels {"app":"ipsec-nas-metrics","grafana_dashboard":"1"}
+  $ helm install grafana-same grafana/grafana --version 10.5.15 -n kcs-ipsec --set sidecar.dashboards.enabled=true \
+      --set sidecar.dashboards.label=grafana_dashboard --set-string sidecar.dashboards.labelValue=1      -> deployed
+    images: k8s-sidecar 2.5.0, grafana 12.3.1
+  sidecar log: {"time": "2026-10-04T18:36:05.191295+00:00", "level": "INFO", "msg": "Writing /tmp/dashboards/ipsec-nas-option-c.json (ascii)"}
+  GET /api/search?query=IPsec (inside the Grafana container): [{'uid': 'ipsec-nas-option-c', 'title': 'IPsec to the NAS (Option C)'}]
+  18:37:08Z the kind cluster deleted.
+
+## 5. Grafana with Option C's data: docs/images/crc/48-grafana-ipsec-nas-option-c.light.png
+  As capture 40 (Option B's): Grafana 13.2.3 run locally, the dashboard provisioned from the chart's rendered ConfigMap
+  (byte-identical to files/ipsec-nas-option-c.json), a Prometheus datasource on CRC's Thanos route through a local relay,
+  kubeadmin's token from a mode-600 env file. Kiosk, light, last 30 minutes, 18:59Z; HTTP responses >= 400: none.
+  Seen: tunnels up 1, down 0, workers reporting 1, soonest expiry 729.8 days, tunnel UP, certificate 729.8 days,
+  traffic ~4 MB/s in each direction during the load, tunnel age 36.1 mins, metrics age 31.6 s, libreswan crc: 5.3,
+  checks 0/0/0, per-node row crc / ipsec-nas-metrics-tcmr8 / UP / YES / PRESENT / YES / YES / 1 NFS mount / 35.9 req/s /
+  0 drops / cert imported 36.9 mins / O=KCS OpenShift lab, CN=crc-nas..., re-establishments 1 (the 18:22Z reboot),
+  "Kernel IPsec errors per node": No drops.

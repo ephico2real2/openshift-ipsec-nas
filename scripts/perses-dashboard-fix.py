@@ -10,9 +10,12 @@ Each fix answers a gap measured in docs/61-perses-dashboard-review.md (appendix 
 title: percli keys them "<section>_<index>" after the Grafana rows, so a key moves whenever a section does.
 """
 import json
+import os
 import sys
 
 DATASOURCE = "ipsec-nas-thanos"   # the PersesDatasource the chart creates beside the dashboard
+# The DaemonSet whose pods report the metrics: ipsec-cert-sync (Option B) or ipsec-nas-metrics (Option C).
+REPORTING_POD = os.environ.get("REPORTING_POD", "ipsec-cert-sync")
 
 
 def fail(msg):
@@ -107,7 +110,7 @@ panels["nas_identity"] = {
     "spec": {
         "display": {
             "name": "NAS identity per node",
-            "description": "The identity the NAS presented, from its certificate, and the ipsec-cert-sync pod that "
+            "description": f"The identity the NAS presented, from its certificate, and the {REPORTING_POD} pod that "
                            "reports the node. A node with no tunnel has no row here. A node in two rows is "
                            "reported by two pods.",
         },

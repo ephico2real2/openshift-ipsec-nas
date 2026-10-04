@@ -20,6 +20,8 @@ Per-node **IPsec metrics and alerts for Option C** ([`docs/50-option-c-wildcard-
 | ConfigMap | `ipsec-metrics-scripts` | `collect.sh` and `serve.py` |
 | DaemonSet | `ipsec-nas-metrics` | Two containers: `collector` (every 30 s) and `metrics` (port 9754, `restricted-v2`). No cert-sync |
 | Service, ServiceMonitor | `ipsec-nas-metrics`, `ipsec-nas` | One scrape target per pod, with `exporter_node` from the pod's node |
+| PersesDashboard, PersesDatasource | `ipsec-nas`, `ipsec-nas-thanos` | The dashboard in the console, Observe → Dashboards (Perses): "IPsec to the NAS (Option C)". `metrics.persesDashboard.enabled`, on by default |
+| ConfigMap (optional) | `ipsec-nas-grafana-dashboard` | The same dashboard for a Grafana sidecar (label `grafana_dashboard: "1"`). `metrics.grafanaDashboard`, off by default |
 | PrometheusRule | `ipsec-nas` | Option B's twelve rules; the descriptions name this DaemonSet, "exporter missing" watches the role of `nodeSelector`, and the two alerts on platform metrics carry the release's namespace |
 
 ## What differs from Option B
@@ -33,6 +35,8 @@ The same series, the same names, under the same `node` label. Measured on CRC wi
 | Option C installed (doc 50, Steps C.1 to C.6) | The collector reads its tunnel and certificate |
 | A namespace with the privileged pod-security labels | The collector runs privileged |
 | User workload monitoring | For `metrics.serviceMonitor` and `metrics.prometheusRule` |
+| Cluster Observability Operator 1.5 or later, with Perses ([openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo)) | For `metrics.persesDashboard.enabled` (on by default) |
+| A Grafana with a dashboard sidecar on the label `grafana_dashboard: "1"`, in this namespace or searching it | Only for `metrics.grafanaDashboard: true` |
 | `namespacesWithoutLabelEnforcement` listing the release's namespace, in `user-workload-monitoring-config` (OpenShift 4.18 or later, a cluster administrator; [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard)) | `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` read platform metrics; without it they never fire ([evidence 46](../../docs/evidence/crc/46-option-c-metrics-chart.txt)) |
 | **No** Option B release on the cluster | See the caution above |
 
@@ -89,6 +93,10 @@ The ConfigMap may already hold other settings: read it first (`oc -n openshift-u
 | `serviceAccount.name` | `ipsec-nas-metrics` | The DaemonSet's ServiceAccount |
 | `scc.bind` | `true` | Binds the `privileged` SCC to it |
 | `metrics.serviceMonitor` / `prometheusRule` | `true` / `true` | Observe and the alert rules |
+| `metrics.persesDashboard.enabled` / `thanosURL` | `true` / Thanos Querier, port 9091 | The Perses dashboard; COO 1.5 or later is then a prerequisite. Viewers need `view` in the namespace and `cluster-monitoring-view` |
+| `metrics.grafanaDashboard` | `false` | The Grafana ConfigMap |
+
+The dashboards are generated: `scripts/perses-dashboard.sh` derives `files/ipsec-nas-option-c.json` from Option B's `charts/ipsec-nas/files/ipsec-nas.json` (`scripts/option-c-dashboard.py`: its own uid, title and reporting pod) and converts it to `files/ipsec-nas-option-c.perses.json`. Edit Option B's dashboard, then run the script; the chart test fails on a stale copy, and the Claude Code hook blocks hand edits.
 
 `values.schema.json` refuses unknown values.
 

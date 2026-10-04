@@ -4,6 +4,9 @@
 #     --> charts/ipsec-nas/files/ipsec-nas.perses.json            (the chart's PersesDashboard spec.config)
 #     --> manifests/option-b-per-node-certs/33-perses-dashboard.yaml (the same, for the plain manifests)
 #   and refreshes the Grafana ConfigMap of the plain manifests, manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
+# Then Option C's, from the same source:
+#   charts/ipsec-nas/files/ipsec-nas.json  --scripts/option-c-dashboard.py-->  charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
+#     --percli migrate--> scripts/perses-dashboard-fix.py --> charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
 # Run from the repository root after changing ipsec-nas.json:  scripts/perses-dashboard.sh
 #
 # Needs percli 0.54.0 (the Perses version in COO 1.5.2's go.mod; COO's server reports none) and its plugins UNPACKED; see
@@ -82,3 +85,13 @@ EOF
 grep -q '^  ipsec-nas.json: |$' "${GRAFANA_MANIFEST}.tmp" || { echo "${GRAFANA_MANIFEST}: no 'ipsec-nas.json: |' key" >&2; rm -f "${GRAFANA_MANIFEST}.tmp"; exit 1; }
 mv "${GRAFANA_MANIFEST}.tmp" "${GRAFANA_MANIFEST}"
 echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
+
+# Option C: the same dashboard, naming its own uid, title and reporting pod (ipsec-nas-metrics).
+C_GRAFANA=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
+C_CONFIG=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
+python3 scripts/option-c-dashboard.py < "${GRAFANA}" > "${C_GRAFANA}.tmp"
+mv "${C_GRAFANA}.tmp" "${C_GRAFANA}"
+"${PERCLI}" migrate -f "${C_GRAFANA}" --format native --plugin.path "${PLUGINS}" --use-default-datasource -o json \
+  | REPORTING_POD=ipsec-nas-metrics python3 scripts/perses-dashboard-fix.py > "${C_CONFIG}.tmp"
+mv "${C_CONFIG}.tmp" "${C_CONFIG}"
+echo "wrote ${C_GRAFANA} and ${C_CONFIG}"

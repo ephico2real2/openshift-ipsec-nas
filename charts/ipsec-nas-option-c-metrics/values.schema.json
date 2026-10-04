@@ -17,7 +17,15 @@
     "scc": {"type": "object", "additionalProperties": false, "properties": {"bind": {"type": "boolean"}}},
     "metrics": {
       "type": "object", "additionalProperties": false,
-      "properties": {"serviceMonitor": {"type": "boolean"}, "prometheusRule": {"type": "boolean"}}
+      "properties": {
+        "serviceMonitor": {"type": "boolean"},
+        "prometheusRule": {"type": "boolean"},
+        "grafanaDashboard": {"type": "boolean"},
+        "persesDashboard": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"enabled": {"type": "boolean"}, "thanosURL": {"type": "string", "pattern": "^https://"}}
+        }
+      }
     }
   }
 }

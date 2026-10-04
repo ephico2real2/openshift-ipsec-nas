@@ -12,8 +12,8 @@ helm lint "${CHART}" >/dev/null 2>&1 && ok "helm lint" || bad "helm lint"
 
 out="$(render)"
 kinds="$(grep -E '^kind:' <<<"$out" | sort | tr '\n' ' ')"
-[[ "$kinds" == "kind: ConfigMap kind: DaemonSet kind: PrometheusRule kind: RoleBinding kind: Service kind: ServiceAccount kind: ServiceMonitor " ]] \
-  && ok "exactly the collector's objects: ${kinds}" || bad "unexpected kinds: ${kinds}"
+[[ "$kinds" == "kind: ConfigMap kind: DaemonSet kind: PersesDashboard kind: PersesDatasource kind: PrometheusRule kind: RoleBinding kind: Service kind: ServiceAccount kind: ServiceMonitor " ]] \
+  && ok "exactly the collector's objects and the Perses dashboard: ${kinds}" || bad "unexpected kinds: ${kinds}"
 grep -q -E 'kind: (Certificate|GeneratingPolicy|MutatingPolicy|ClusterPolicy|NodeNetworkConfigurationPolicy)$' <<<"$out" \
   && bad "an Option B certificate or tunnel object is rendered" || ok "no Certificate, Kyverno policy or NNCP"
 containers="$(ruby -ryaml -e 'YAML.load_stream(STDIN.read).compact.each { |d| puts d["spec"]["template"]["spec"]["containers"].map { |c| c["name"] }.join(" ") if d["kind"] == "DaemonSet" }' <<<"$out")"
@@ -42,6 +42,28 @@ render --set scc.bind=false | grep -q 'kind: RoleBinding' && bad "scc.bind=false
 render --set metrics.serviceMonitor=false | grep -qE 'kind: (Service|ServiceMonitor)$' && bad "serviceMonitor=false" || ok "metrics.serviceMonitor=false renders no Service or ServiceMonitor"
 render --set metrics.prometheusRule=false | grep -q 'kind: PrometheusRule' && bad "prometheusRule=false" || ok "metrics.prometheusRule=false renders no PrometheusRule"
 render --set nodeselector.x=1 >/dev/null 2>&1 && bad "the schema refuses an unknown key" || ok "the schema refuses an unknown key"
+
+# The dashboards (#43): the same two switches and defaults as Option B, and generated files that are current.
+render --set metrics.persesDashboard.enabled=false | grep -qE 'kind: Perses(Dashboard|Datasource)$' \
+  && bad "persesDashboard.enabled=false" || ok "metrics.persesDashboard.enabled=false renders no Perses object"
+grep -q 'name: ipsec-nas-grafana-dashboard' <<<"$out" && bad "grafanaDashboard is off by default" || ok "the Grafana ConfigMap is off by default"
+graf="$(render --set metrics.grafanaDashboard=true)"
+ruby -ryaml -rjson -e '
+  cm = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "ConfigMap" && d["metadata"]["name"] == "ipsec-nas-grafana-dashboard" }
+  exit 1 unless cm && cm["metadata"]["labels"]["grafana_dashboard"] == "1"
+  d = JSON.parse(cm["data"]["ipsec-nas-option-c.json"])
+  exit(d["uid"] == "ipsec-nas-option-c" ? 0 : 1)' -- "$graf" \
+  && ok "grafanaDashboard=true: the labelled ConfigMap with the Option C dashboard (uid ipsec-nas-option-c)" || bad "Grafana ConfigMap"
+python3 scripts/option-c-dashboard.py < charts/ipsec-nas/files/ipsec-nas.json | cmp -s - "${CHART}/files/ipsec-nas-option-c.json" \
+  && ok "files/ipsec-nas-option-c.json is current (scripts/option-c-dashboard.py of Option B's)" || bad "files/ipsec-nas-option-c.json is stale: run scripts/perses-dashboard.sh"
+python3 - "${CHART}/files/ipsec-nas-option-c.perses.json" <<'PY' && ok "the Perses dashboard: Option C's title, every query on ipsec-nas-thanos" || bad "the Perses dashboard"
+import json, sys
+d = json.load(open(sys.argv[1]))
+qs = [q for p in d["panels"].values() for q in p["spec"].get("queries", [])]
+ok = d["display"]["name"] == "IPsec to the NAS (Option C)" and qs and all(
+    q["spec"]["plugin"]["spec"]["datasource"]["name"] == "ipsec-nas-thanos" for q in qs)
+sys.exit(0 if ok else 1)
+PY
 
 # The collector script inside the rendered ConfigMap parses.
 tmp="$(mktemp)"; trap 'rm -f "${tmp}"' EXIT

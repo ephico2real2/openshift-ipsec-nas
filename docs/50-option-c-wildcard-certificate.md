@@ -201,7 +201,7 @@ A NAS product other than libreswan may treat identities differently; the cases a
 | Private key | One, on every node and in the MachineConfig | One, on every node and in the MachineConfig | One per node, in a Secret |
 | NAS must allow duplicate peer IDs | Yes | Yes | No |
 | Components beyond OpenShift | Kyverno (or one NNCP per node by hand) | **C1: none.** C2: Kyverno | Kyverno, cert-manager |
-| Monitoring | None | Per-node metrics and alerts with the separate chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) (measured on CRC, C1: [evidence 46](evidence/crc/46-option-c-metrics-chart.txt)) | Per-node metrics and alerts |
+| Monitoring | None | **Optional**, the separate chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md): Option B's per-node metrics, alerts and dashboard (Perses; Grafana optional), our own privileged DaemonSet ([Monitoring, optional](#monitoring-optional)). C1 runs without it | Per-node metrics, alerts and dashboard |
 
 **What the measurements show about viability:**
 
@@ -286,6 +286,38 @@ oc apply -f ~/ipsec-option-c/2028/99-${MCP_ROLE}-ipsec-wildcard-cert.yaml
 ```
 
 Then ask the CA team to revoke the old certificate. Put the new expiry date in the team calendar: nothing renews it, and nothing warns before it expires.
+
+## Monitoring, optional
+
+Option C itself installs no pod, so without more it has no metrics. The chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) adds Option B's collector without cert-sync. Each node then reports the same metrics as on Option B, the twelve alerts apply, and the same dashboard opens in the console (Perses) or in Grafana.
+
+**What it adds beyond OpenShift**, so C1 is no longer "Red Hat components only" once it is installed:
+
+- our own **privileged DaemonSet** in `kcs-ipsec` (the collector reads the host as root; it changes nothing there), with a Service, a ServiceMonitor and a PrometheusRule;
+- a `PersesDashboard` and `PersesDatasource`, which need the Cluster Observability Operator (the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo));
+- for two alerts, the user workload monitoring settings of [doc 60, *The cluster settings*](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
+
+C1 works without any of it: the tunnel, the certificate and the NAS do not depend on the chart. **Never install it together with Option B's `ipsec-nas` chart.**
+
+```bash
+helm install ipsec-nas-metrics charts/ipsec-nas-option-c-metrics -n kcs-ipsec   # OpenShift Local: -f charts/ipsec-nas-option-c-metrics/values-crc.yaml
+```
+
+What it reports on Option C, measured on CRC with C1:
+
+- at first, Option B's series without the import time: 41 samples against Option B's 42 ([evidence 45](evidence/crc/45-option-c-collector.txt));
+- since #40, also the import time, which is the import at the **current boot**, because Option C imports at every boot. `ipsec_nas_certificate_source_info{mode="C"}` names the option ([evidence 47](evidence/crc/47-certificate-mode.txt));
+- the alerts firing on the node concerned, and the dashboards ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt), [48](evidence/crc/48-option-c-dashboards.txt)).
+
+<img alt="The OpenShift console, Observe, Dashboards (Perses), project kcs-ipsec, dashboard IPsec to the NAS (Option C), last 30 minutes, in five sections. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 2.0 years. Tunnels per node: tunnel state UP, certificate time left 2.0 years as a bar, traffic through the tunnel at about 3.8 MiB/s during a load run, tunnel age 34.9m, metrics age 47s, libreswan 5.3. Checks: nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0. Per-node detail: one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.5 requests/sec, 0 drops, certificate imported 35.7m ago), and the NAS identity table: crc, reporting pod ipsec-nas-metrics-tcmr8, O=KCS OpenShift lab, CN=crc-nas.lab.internal. History: tunnel re-establishments under the dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/48-console-perses-ipsec-nas-option-c.light.png">
+
+*Capture 48a. Option C's dashboard in the OpenShift console (Perses), CRC with C1, during a load run on the NAS volume. It is Option B's dashboard; the reporting pod is `ipsec-nas-metrics`, and "Cert imported" is the import at the node's boot. "Kernel IPsec errors per node" shows No data because its query keeps only counters above 0. Text: [evidence 48](evidence/crc/48-option-c-dashboards.txt).*
+
+<img alt="The same dashboard in Grafana 13.2.3, kiosk mode, light theme, last 30 minutes, reading CRC's Thanos. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 729.8 days. Tunnel state UP, certificate 729.8 days, traffic through the tunnel at about 4 MB/s in each direction during the load, tunnel age 36.1 mins, metrics age 31.6 s, libreswan crc: 5.3. Checks all 0. Per-node row: crc, reporting pod ipsec-nas-metrics-tcmr8, UP, YES, PRESENT, YES, YES, 1 NFS mount, 35.9 req/s, 0 drops, certificate imported 36.9 mins ago, NAS identity O=KCS OpenShift lab, CN=crc-nas. History: tunnel re-establishments 1, and kernel IPsec errors per node showing No drops." src="images/crc/48-grafana-ipsec-nas-option-c.light.png">
+
+*Capture 48b. The same dashboard in Grafana, from the chart's ConfigMap (`metrics.grafanaDashboard: true`), reading CRC's Thanos. A Grafana dashboard sidecar loaded that ConfigMap as for Option B (kind, evidence 48 section 4). Re-establishments reads 1: the node rebooted within the hour.*
+
+Remove it before Option C: `helm uninstall ipsec-nas-metrics -n kcs-ipsec`.
 
 ## Step C.7 – Remove Option C
 
