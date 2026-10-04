@@ -3,6 +3,7 @@
 #   charts/ipsec-nas/files/ipsec-nas.json  --percli migrate-->  scripts/perses-dashboard-fix.py
 #     --> charts/ipsec-nas/files/ipsec-nas.perses.json            (the chart's PersesDashboard spec.config)
 #     --> manifests/option-b-per-node-certs/33-perses-dashboard.yaml (the same, for the plain manifests)
+#   and refreshes the Grafana ConfigMap of the plain manifests, manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 # Run from the repository root after changing ipsec-nas.json:  scripts/perses-dashboard.sh
 #
 # Needs percli at the cluster's Perses version (0.54.0 for COO 1.5) and its plugins UNPACKED; see
@@ -15,6 +16,7 @@ PLUGINS="${PERSES_PLUGINS:-${HOME}/.local/share/perses/plugins}"
 GRAFANA=charts/ipsec-nas/files/ipsec-nas.json
 CONFIG=charts/ipsec-nas/files/ipsec-nas.perses.json
 MANIFEST=manifests/option-b-per-node-certs/33-perses-dashboard.yaml
+GRAFANA_MANIFEST=manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 
 command -v "${PERCLI}" >/dev/null || { echo "percli not found (set PERCLI)" >&2; exit 1; }
 [[ -d "${PLUGINS}" ]] || { echo "no Perses plugins at ${PLUGINS} (set PERSES_PLUGINS to the unpacked plugins)" >&2; exit 1; }
@@ -71,4 +73,12 @@ spec:
 EOF
   sed 's/^/    /' "${CONFIG}"
 } > "${MANIFEST}"
-echo "wrote ${CONFIG} and ${MANIFEST}"
+
+# The Grafana ConfigMap keeps its header and embeds the Grafana JSON verbatim under "ipsec-nas.json: |".
+{
+  sed '/^  ipsec-nas.json: |$/q' "${GRAFANA_MANIFEST}"
+  sed 's/^/    /' "${GRAFANA}"
+} > "${GRAFANA_MANIFEST}.tmp"
+grep -q '^  ipsec-nas.json: |$' "${GRAFANA_MANIFEST}.tmp" || { echo "${GRAFANA_MANIFEST}: no 'ipsec-nas.json: |' key" >&2; rm -f "${GRAFANA_MANIFEST}.tmp"; exit 1; }
+mv "${GRAFANA_MANIFEST}.tmp" "${GRAFANA_MANIFEST}"
+echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"

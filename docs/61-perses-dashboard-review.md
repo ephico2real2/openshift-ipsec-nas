@@ -10,24 +10,23 @@ Everything below was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 and 202
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/crc/42-console-perses-ipsec-nas.dark.png">
   <source media="(prefers-color-scheme: light)" srcset="images/crc/42-console-perses-ipsec-nas.light.png">
-  <img alt="The OpenShift console, Observe, Dashboards, project kcs-ipsec, dashboard IPsec to the NAS, node filter All, last 30 minutes: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months, tunnel state UP in green, certificate days left per node 12.1 months as a bar, traffic through the tunnel rising to about 3.8 MiB/s when the load starts, tunnel age 1.68h, metrics age 50s, libreswan version 5.3, nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0, a per-node table with one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, certificate imported 9.4h ago), a NAS identity table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal, tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/42-console-perses-ipsec-nas.light.png">
+  <img alt="The OpenShift console, Observe, Dashboards, project kcs-ipsec, dashboard IPsec to the NAS, node filter All, last 30 minutes, in five sections. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months. Tunnels per node: tunnel state UP in green, certificate time left 12.1 months as a bar, traffic through the tunnel at about 3.8 MiB/s during two load runs, tunnel age 2.33h, metrics age 39s, libreswan version 5.3. Checks (all should be 0): nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0. Per-node detail: one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, certificate imported 10.1h ago), and the NAS identity table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal. History: tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/42-console-perses-ipsec-nas.light.png">
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 6. **Observe → Dashboards (Perses)**, project `kcs-ipsec`: the dashboard the chart ships, on CRC's data. "No data" on the last panel means no kernel IPsec errors: it shows only error counters above 0. The console shell here is the community (OKD) build of the same console, `quay.io/openshift/origin-console:4.22`, run on a laptop against CRC with sign-in turned off (hence the `okd` logo and "Auth disabled"). The Perses plugin, the Perses server, the dashboard and the data are CRC's own ([evidence 42](evidence/crc/42-console-perses-capture.txt)).*
+*Capture 6. **Observe → Dashboards (Perses)**, project `kcs-ipsec`: the dashboard the chart ships, in its five sections, on CRC's data. "No data" on the last panel means no kernel IPsec errors: it shows only error counters above 0. The console shell here is the community (OKD) build of the same console, `quay.io/openshift/origin-console:4.22`, run on a laptop against CRC with sign-in turned off (hence the `okd` logo and "Auth disabled"). The Perses plugin, the Perses server, the dashboard and the data are CRC's own ([evidence 42](evidence/crc/42-console-perses-capture.txt)).*
 
-What you can read off it, top to bottom:
+The dashboard has five sections, top to bottom. Each answers one question:
 
-| Row | It tells you |
-|---|---|
-| Tunnels up / down, workers reporting, soonest certificate expiry | The cluster in four numbers |
-| Tunnel state per node, certificate time left | Each node's tunnel and certificate |
-| Traffic through the tunnel | NFS traffic to and from the NAS, per node |
-| Tunnel age, metrics age, libreswan version | Recent restarts, a stopped collector, the version running |
-| Nodes reported twice, pods reporting the wrong node, kernel IPsec errors | Must all be 0 (doc 60, *How each node's data stays its own*) |
-| **Per node** | One row per node: **why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import |
-| NAS identity per node | Which pod reports each node, and the identity the NAS presented |
-| Tunnel re-establishments, kernel IPsec errors per node | A tunnel that keeps restarting (alert above 3 an hour); drops over time |
+| Section | Panels | The question it answers |
+|---|---|---|
+| **Summary** | Tunnels up, tunnels down, workers reporting, soonest certificate expiry | Is anything wrong? |
+| **Tunnels per node** | Tunnel state, certificate time left, traffic to and from the NAS, tunnel age, metrics age, libreswan version | Which node, and how is it doing? A young tunnel age means a recent restart; an old metrics age, a stopped collector |
+| **Checks (all should be 0)** | Nodes reported twice, pods reporting the wrong node, kernel IPsec errors in the last hour | Can these numbers be trusted? (doc 60, *How each node's data stays its own*) |
+| **Per-node detail** | **Per node** table: one row per node; NAS identity per node | **Why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import; which pod reports each node, and the identity the NAS presented |
+| **History** | Tunnel re-establishments in the last hour, kernel IPsec errors per node | Is a tunnel flapping (alert above 3 an hour), and are errors growing? "No data" there means no errors: it shows only counters above 0 |
+
+Each section folds with the arrow beside its title; all are open when the dashboard loads.
 
 ## How it works
 
@@ -142,24 +141,24 @@ A namespace-only data source becomes possible only if Perses learns to query wit
 
 The Grafana dashboard, `charts/ipsec-nas/files/ipsec-nas.json`, is the **one source**. The Perses dashboard is **generated** from it; never edit `ipsec-nas.perses.json` by hand.
 
-1. Edit `charts/ipsec-nas/files/ipsec-nas.json`, for example in a Grafana, and export the JSON.
+1. Edit `charts/ipsec-nas/files/ipsec-nas.json`, for example in a Grafana, and export the JSON. The sections are Grafana **rows**: put a new panel under the row whose question it answers, and add a row for a new question. Keep rows expanded; a row saved collapsed becomes a folded section in Perses too.
 2. Regenerate, from the repository root. This needs `percli` 0.54.0 with its plugins unpacked ([how to install it](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md)):
 
    ```bash
    scripts/perses-dashboard.sh     # PERCLI=... PERSES_PLUGINS=... to point at another percli
    ```
 
-   It writes `charts/ipsec-nas/files/ipsec-nas.perses.json` and `manifests/option-b-per-node-certs/33-perses-dashboard.yaml`.
-3. Run `tests/test-chart.sh`, which keeps the chart and the manifest identical, and commit both files with the Grafana one.
+   It writes `charts/ipsec-nas/files/ipsec-nas.perses.json` and `manifests/option-b-per-node-certs/33-perses-dashboard.yaml`, and refreshes the Grafana ConfigMap `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`.
+3. Run `tests/test-chart.sh`, which keeps the chart and the manifests identical, and commit all of them with the Grafana one.
 
 **What the generator fixes after `percli`** (`scripts/perses-dashboard-fix.py`; each fix is measured in Appendix A.5):
 - every query and the **Node** filter name the data source `ipsec-nas-thanos`;
-- the per-node table keeps one row per node, and the NAS identity moves to its own panel;
+- the per-node table keeps one row per node, and the NAS identity moves to its own panel, under it in **Per-node detail**;
 - the libreswan panel shows the version;
 - the certificate panels count days;
 - it **refuses** output in which `percli` produced placeholders, which happens when the plugins are not unpacked.
 
-If the Grafana dashboard's panels change shape (more panels, a moved table), the generator stops with a message naming what to update.
+The generator finds panels by their **title** and sections by theirs: `percli` names panels after their section (`0_3`, `3_0`, …), so those names change whenever a section is added. If a panel or section it fixes is renamed, or the panels change shape (more panels, a moved table), it stops with a message naming what to update.
 
 ## Troubleshooting
 

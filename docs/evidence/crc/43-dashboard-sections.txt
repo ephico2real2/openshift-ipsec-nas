@@ -1,0 +1,43 @@
+# The dashboard in five named sections instead of one 'Panel Group 1' (2026-10-04, percli 0.54.0, CRC 4.22.7, COO 1.5.3)
+
+## 1. What percli makes of Grafana rows
+$ percli migrate -f <grafana json> --format native --plugin.path <unpacked> --use-default-datasource -o json   (layouts and panel keys)
+-- before (ipsec-nas.json at 2ca64f8, no rows)
+   panel keys: ['0', '1', '10', '11', '12', '13', '14', '15', '2', '3', '4', '5', '6', '7', '8', '9']
+   section {"title": "Panel Group 1"} items: 16
+-- after (five rows)
+   panel keys: ['0_0', '0_1', '0_2', '0_3', '1_0', '1_1', '1_2', '1_3', '1_4', '1_5', '2_0', '2_1', '2_2', '3_0', '4_0', '4_1']
+   section {"title": "Summary", "collapse": {"open": true}} items: 4
+   section {"title": "Tunnels per node", "collapse": {"open": true}} items: 6
+   section {"title": "Checks (all should be 0)", "collapse": {"open": true}} items: 3
+   section {"title": "Per-node detail", "collapse": {"open": true}} items: 1
+   section {"title": "History", "collapse": {"open": true}} items: 2
+-- a row saved collapsed (scratch copy, last row collapsed: true):
+   section {"title": "Over time", "collapse": {"open": false}}
+
+## 2. The generated dashboard: before (2ca64f8) vs after
+panels before/after: 17 17 | same titles: True
+panels whose spec differs (compared by title): []
+display unchanged: True
+duration unchanged: True
+variables unchanged: True
+  Summary -> ['Tunnels up', 'Tunnels down', 'Workers reporting', 'Soonest certificate expiry']
+  Tunnels per node -> ['Tunnel state per node', 'Certificate days left per node', 'Traffic through the tunnel', 'Tunnel age per node', 'Metrics age per node', 'libreswan version per node']
+  Checks (all should be 0) -> ['Nodes reported twice', 'Pods reporting the wrong node', 'Kernel IPsec errors, last hour']
+  Per-node detail -> ['Per node', 'NAS identity per node']
+  History -> ['Tunnel re-establishments in the last hour', 'Kernel IPsec errors per node']
+
+## 3. Checks
+$ percli lint (the generated dashboard): your resources look good
+$ tests/test-chart.sh
+all chart tests passed
+$ scripts/perses-dashboard.sh, rerun: 0 files changed (the three outputs are reproduced byte for byte)
+
+## 4. On CRC, after Argo CD synced aa7a012
+app ipsec-nas: Synced aa7a0120dcfd65761ebb412a725891a9e84688b1 Healthy
+PersesDashboard ipsec-nas: Available=True | sections: ['Summary', 'Tunnels per node', 'Checks (all should be 0)', 'Per-node detail', 'History']
+
+## 5. The same file in Grafana (layout only)
+A throwaway local grafana/grafana:latest (13.2.3), anonymous admin, no data source: POST /api/dashboards/db with ipsec-nas.json -> 200 success.
+Rows stored: Summary, Tunnels per node, Checks (all should be 0), Per-node detail, History; the page (kiosk) showed the same five
+row titles in that order, every panel under its row. Panels read 'No data' (no data source): this checked the layout, not data.
