@@ -394,7 +394,7 @@ oc get servicemonitor,prometheusrule -n kcs-ipsec
 
 ✅ **Expected:** value `1` for every worker, with labels `node` and `connection="ipsec-nas"`.
 
-**4. The dashboard in the console (Perses).** On a cluster with the Cluster Observability Operator 1.5 or later ([openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm)):
+**4. The dashboard in the console (Perses).** On a cluster with the Cluster Observability Operator 1.5 or later (installed by the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo)):
 
 ```bash
 oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml

@@ -68,7 +68,7 @@ It is **on by default** in the ipsec chart (`metrics.persesDashboard.enabled: tr
 
 | Needs | Why | How |
 |---|---|---|
-| COO 1.5 or later, with Perses enabled | It runs Perses and its console page | [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm). The chart refuses to install without the API `perses.dev/v1alpha2`, and says so |
+| COO 1.5 or later, with Perses enabled | It runs Perses and its console page | The [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) installs it, hands-free (on OpenShift 4.18, read its *Known issues*). The ipsec chart refuses to install without the API `perses.dev/v1alpha2`, and says so |
 | User workload monitoring | It collects the metrics | [doc 20, Step B.12](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard) |
 
 **What the chart creates**, in its own namespace, `perses.dev/v1alpha2`:
@@ -100,7 +100,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 | To | You need | Who usually has it |
 |---|---|---|
 | Open the dashboard | **`view`** in `kcs-ipsec` (or `edit` / `admin`) | The namespace's team. COO's Perses roles are part of OpenShift's `view`, `edit` and `admin`, so no extra role is needed (measured: `view` alone reads the dashboard, and cannot change it) |
-| See its data | **`cluster-monitoring-view`** | Granted by the platform: [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm) grants it to the groups it is given, for example everyone who logs in |
+| See its data | **`cluster-monitoring-view`** | Granted by the platform: the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) binds it to the groups in `metricsAccess.groups`, for example `system:authenticated` (everyone who logs in) |
 | Change the dashboard | Edit the Grafana JSON in Git and regenerate: [Change the dashboard](#change-the-dashboard) | — |
 
 ### Decision: one data source on Thanos port 9091; metrics readable by namespace owners
@@ -164,7 +164,7 @@ The generator finds panels by their **title** and sections by theirs: `percli` n
 
 | You see | Why | Do |
 |---|---|---|
-| No **Dashboards (Perses)** under Observe | COO is missing, or its console plugin is off | Install COO with Perses: [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm) |
+| No **Dashboards (Perses)** under Observe | COO is missing, or its console plugin is off | Install COO with Perses: the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo); its gate's log says what is missing |
 | The install is refused: *prerequisite missing: the Cluster Observability Operator* | The cluster does not serve `perses.dev/v1alpha2` | Install COO first, or set `metrics.persesDashboard.enabled: false` |
 | *IPsec to the NAS* is not in the list | No `view` in `kcs-ipsec`, or the dashboard is not `Available` | Ask for `view` in the namespace; run the checks in [Turn it on](#turn-it-on-or-off) |
 | Every panel says `Forbidden (… resource=prometheuses, subresource=api)` | You lack `cluster-monitoring-view` | The platform grants it ([Who can see it](#who-can-see-it)) |
@@ -299,5 +299,5 @@ The generated dashboard carries every Grafana expression over verbatim, except t
 ## Not covered here
 
 - COO itself, Perses' installation, `percli`: [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
-- Granting `cluster-monitoring-view` to teams: a setting of that chart ([its issue #1](https://github.com/ephico2real2/openshift-coo-helm/issues/1)).
+- Granting `cluster-monitoring-view` to teams: `metricsAccess.groups` of the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo).
 - The figure's source: [`diagrams/ipsec-nas/source.html`](diagrams/ipsec-nas/source.html) (its fourth figure), rendered with `diagrams/render.py`; Mermaid text: [`diagrams/mermaid/perses-dashboard.mmd`](diagrams/mermaid/perses-dashboard.mmd). Figure, text version and source change together.
