@@ -133,7 +133,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 5. The finished dashboard (after Appendix A.5) as the same reader. Taken in the upstream Perses 0.54.0 UI, the version COO builds on, signed in as that reader.*
+*Capture 5. The finished dashboard (after Appendix A.5) as the same reader, before it had sections. Taken in the upstream Perses 0.54.0 UI, the version COO builds on, signed in as that reader.*
 
 A namespace-only data source becomes possible only if Perses learns to query with `GET`.
 

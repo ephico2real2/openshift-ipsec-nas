@@ -73,14 +73,27 @@ Two of the waits are measured, not chosen:
 
 ## The dashboard
 
-**Where you see it:** in the OpenShift console, **Observe → Dashboards (Perses)**, project `kcs-ipsec`. The ipsec chart installs it there by default; how it works, who can see it and how to change it: [doc 61](61-perses-dashboard-review.md). The same dashboard ships to Grafana only if asked (`metrics.grafanaDashboard: true`). Both come from one source, `charts/ipsec-nas/files/ipsec-nas.json`; the captures below are from Grafana, taken before Perses was adopted.
+**Where you see it:** in the OpenShift console, **Observe → Dashboards (Perses)**, project `kcs-ipsec`. The ipsec chart installs it there by default; how it works, who can see it and how to change it: [doc 61](61-perses-dashboard-review.md). The same dashboard ships to Grafana only if asked (`metrics.grafanaDashboard: true`). Both come from one source, `charts/ipsec-nas/files/ipsec-nas.json`, and show the same five sections.
 
-Beside the first ten panels, it has:
+It has five sections, each answering one question ([doc 61, *At a glance*](61-perses-dashboard-review.md#at-a-glance)):
 
-- **Nodes reported twice** and **Pods reporting the wrong node**: both must be 0.
-- **Kernel IPsec errors, last hour**, and per node and counter over time.
-- **Per node**: one row per node with tunnel, IKE SA, certificate, connection, libreswan answering, NFS mounts and requests, IPsec drops, last certificate import, the NAS identity and the reporting pod. A node in two rows is reported by two pods. **"–" means unknown** (no series), never healthy.
-- **Tunnel re-establishments in the last hour**, with the alert's threshold.
+- **Summary**: is anything wrong? Tunnels up and down, workers reporting, the soonest certificate expiry.
+- **Tunnels per node**: tunnel state, certificate time left, traffic, tunnel age, metrics age, libreswan version.
+- **Checks (all should be 0)**: **Nodes reported twice**, **Pods reporting the wrong node**, **Kernel IPsec errors, last hour**.
+- **Per-node detail**: one row per node with tunnel, IKE SA, certificate, connection, libreswan answering, NFS mounts and requests, IPsec drops and last certificate import; beside it, the NAS identity and the reporting pod. A node in two rows is reported by two pods. **"–" means unknown** (no series), never healthy.
+- **History**: tunnel re-establishments in the last hour, with the alert's threshold; kernel IPsec errors per node and counter over time.
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/42-console-perses-ipsec-nas.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/42-console-perses-ipsec-nas.light.png">
+  <img alt="The OpenShift console, Observe, Dashboards, project kcs-ipsec, dashboard IPsec to the NAS, node filter All, last 30 minutes, in five sections. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months. Tunnels per node: tunnel state UP in green, certificate time left 12.1 months as a bar, traffic through the tunnel at about 3.8 MiB/s during two load runs, tunnel age 2.33h, metrics age 39s, libreswan version 5.3. Checks (all should be 0): nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0. Per-node detail: one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, certificate imported 10.1h ago), and the NAS identity table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal. History: tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/42-console-perses-ipsec-nas.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 3. The dashboard today, in the OpenShift console on CRC, in its five sections. How it was captured: [doc 61, Capture 6](61-perses-dashboard-review.md#at-a-glance) and [evidence 42](evidence/crc/42-console-perses-capture.txt).*
+
+The two Grafana captures below were taken earlier, before the sections and before Perses was adopted. Each shows a test of its own, recorded in its evidence file.
 
 <!-- markdownlint-disable MD033 -->
 <picture>
@@ -90,7 +103,7 @@ Beside the first ten panels, it has:
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 1. The dashboard on kind with a duplicate pod (`dup-on-worker`) and a pod naming the wrong node (`ghost-on-worker2`), the same two faults as in [`evidence/kind/01-per-node-metrics-faults.txt`](evidence/kind/01-per-node-metrics-faults.txt), applied again at 18:27Z after the tests of [evidence kind/02](evidence/kind/02-exporter-missing.txt) (hence other pod names). kind nodes have no libreswan, NSS database or NNCP, so the IPsec columns are DOWN or MISSING by design; what the capture shows is that each pod's data lands in its own row, and that unknown (the IKE SA) shows as –.*
+*Capture 1. The dashboard (in Grafana, before the sections) on kind with a duplicate pod (`dup-on-worker`) and a pod naming the wrong node (`ghost-on-worker2`), the same two faults as in [`evidence/kind/01-per-node-metrics-faults.txt`](evidence/kind/01-per-node-metrics-faults.txt), applied again at 18:27Z after the tests of [evidence kind/02](evidence/kind/02-exporter-missing.txt) (hence other pod names). kind nodes have no libreswan, NSS database or NNCP, so the IPsec columns are DOWN or MISSING by design; what the capture shows is that each pod's data lands in its own row, and that unknown (the IKE SA) shows as –.*
 
 With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a stand-in and reading CRC's Thanos Querier (CRC has no Grafana of ours; the console's Perses now shows the same dashboard, doc 61), while a bounded Job in `ipsec-nas-demo` wrote and read back 8 MiB on the NAS volume every 2 seconds:
 
@@ -102,7 +115,7 @@ With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a 
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 2. Every panel populated from CRC. Traffic: 4.13 MB/s out and 4.09 MB/s in (five-minute rates), 39.5 NFS requests/s; NFS mounts reads 2 because the load Job mounts the same export as the demo application. Text and the Job: [evidence 40](evidence/crc/40-grafana-dashboard-crc-data.txt).*
+*Capture 2. Every panel populated from CRC (in Grafana, before the sections). Traffic: 4.13 MB/s out and 4.09 MB/s in (five-minute rates), 39.5 NFS requests/s; NFS mounts reads 2 because the load Job mounts the same export as the demo application. Text and the Job: [evidence 40](evidence/crc/40-grafana-dashboard-crc-data.txt).*
 
 ## What was tested, and where
 

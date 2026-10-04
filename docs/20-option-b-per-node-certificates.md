@@ -434,7 +434,7 @@ oc apply -f 31-grafana-dashboard-cr.yaml
   <img alt="The IPsec to the NAS dashboard in Grafana: 2 tunnels up, 0 down, 2 workers reporting, 29.9 days until the soonest certificate expiry, both nodes UP, a traffic graph and per-node tunnel age, metrics age and libreswan version." src="images/grafana-ipsec-nas.light.png">
 </picture>
 
-*The dashboard in the Lima lab on 2026-10-02, fed by two stand-in workers: 2 tunnels up, 0 down, 29.9 days to the soonest certificate expiry (the lab's test certificates last 30 days, hence yellow), and the traffic of a 5 MiB test write on each node.*
+*The dashboard in the Lima lab on 2026-10-02, fed by two stand-in workers: 2 tunnels up, 0 down, 29.9 days to the soonest certificate expiry (the lab's test certificates last 30 days, hence yellow), and the traffic of a 5 MiB test write on each node. This is its first version, with ten panels; today's has more panels, in five sections: [doc 61, Capture 6](61-perses-dashboard-review.md#at-a-glance).*
 
 > [!NOTE]
 > **What was tested, and where.**
