@@ -8,7 +8,6 @@ In every combination that held both peers' tunnels, the NAS had `uniqueids=no` (
 
 **With the default `uniqueids=yes`, the nodes step on each other's tunnel.** Every node presents the same identity, so the NAS keeps one tunnel for it and each node's connection replaces the previous one, over and over. In case 1 the NAS never held more than one tunnel in 15 one-second samples, and its connection instance counter was at 444 by the end; in the earlier Option A run with one shared certificate it reached 744 in about 15 seconds ([`docs/lab/lima-lab.md`](lab/lima-lab.md), result 4). Per-node names (C2) do not prevent it: with `rightid=%fromcert` the NAS still identifies every node by the certificate's DN (case 3). What NFS does meanwhile was not measured: the lab checks NFS only when both tunnels hold. `uniqueids=no` on the NAS is the fix (cases 2, 6, 7):
 
-
 | Variant | Identity sent / NAS `rightid` | With `uniqueids=yes` | With `uniqueids=no` |
 |---|---|---|---|
 | C1 | certificate DN / `%fromcert` | case 1: one tunnel at a time | **case 2: works** |
