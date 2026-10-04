@@ -655,12 +655,12 @@ curl -sk -H "Authorization: Bearer $(oc whoami -t)" --data-urlencode 'query=ipse
   https://thanos-querier-openshift-monitoring.apps-crc.testing/api/v1/query
 ```
 
-✅ **Expected** (measured, less than a minute after the ServiceMonitor was applied): OpenShift's own monitoring has the metrics, with the node's name on each. The tunnel is up, the certificate has 365 days left, the scrape target is up, and none of the six alerts is firing.
+✅ **Expected** (measured, less than a minute after the ServiceMonitor was applied): OpenShift's own monitoring has the metrics, with the node's name on each. The tunnel is up, the certificate has 365 days left, the scrape target is up, and no alert is firing. The rule group had six alerts when this was captured; it has twelve now (`files/prometheus-rule-groups.yaml`).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/crc/19-option-b-observe.dark.png">
   <source media="(prefers-color-scheme: light)" srcset="images/crc/19-option-b-observe.light.png">
-  <img alt="Terminal capture: the exporter on node crc serving ipsec_nas_tunnel_up 1, the peer identity of the NAS, byte counters, the certificate expiry and libreswan version 5.3; the ServiceMonitor and PrometheusRule created; then queries against the Thanos querier returning ipsec_nas_tunnel_up 1 for node crc, the certificate with 364.998 days left, the scrape target up, zero firing alerts, and the six alert names of the rule group." src="images/crc/19-option-b-observe.light.png">
+  <img alt="Terminal capture: the exporter on node crc serving ipsec_nas_tunnel_up 1, the peer identity of the NAS, byte counters, the certificate expiry and libreswan version 5.3; the ServiceMonitor and PrometheusRule created; then queries against the Thanos querier returning ipsec_nas_tunnel_up 1 for node crc, the certificate with 364.998 days left, the scrape target up, zero firing alerts, and the six alert names the rule group had then." src="images/crc/19-option-b-observe.light.png">
 </picture>
 
 *Capture 19. The tunnel's metrics on the node and in OpenShift's monitoring. Text: [`evidence/crc/19-option-b-observe.txt`](evidence/crc/19-option-b-observe.txt).*
