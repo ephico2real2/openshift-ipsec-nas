@@ -4,7 +4,7 @@ Option C gives every node of a pool one wildcard certificate (`*.<NODE_DOMAIN>`)
 
 ## What the lab showed
 
-In every combination that held two nodes' tunnels, the NAS had `uniqueids=no` (cases 2, 6, 7). With the default `uniqueids=yes`, it failed in every variant. Measured with a libreswan 5.4 NAS and two stand-in workers (Lima VMs whose libreswan the lab script configures directly, not OpenShift nodes) sharing one wildcard certificate; on OpenShift, one CRC node confirmed that NMState sends the same identities for C1 and C2 (evidence 35, 49) ([`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt)):
+In every combination that held two nodes' tunnels, the NAS had `uniqueids=no` (cases 2, 6, 7). With the default `uniqueids=yes`, it failed in every variant. Measured with a libreswan 5.4 NAS and two stand-in workers (Lima VMs whose libreswan the lab script configures directly, not OpenShift nodes) sharing one wildcard certificate; on OpenShift, one CRC node confirmed that NMState sends the same identities for C1 and C2 (evidence 35, 49). **The results apply to an OpenShift cluster with the same settings:** the NAS decides from each peer's identity and certificate only, OpenShift nodes send the same ones (one wildcard certificate; the certificate's DN under C1, `@<node>.<domain>` under C2, measured on CRC), and the lab's two peers reached the NAS from two addresses, as nodes do ([`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt)):
 
 | Variant | Identity sent / NAS `rightid` | With `uniqueids=yes` | With `uniqueids=no` |
 |---|---|---|---|
