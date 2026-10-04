@@ -1,0 +1,169 @@
+# #38: what the IPsec collector reports on an Option C node (C1), CRC 4.22.7, 2026-10-04 13:54-14:59Z.
+# Option B removed first (never two options on one cluster). The collector is Option B's own: the ipsec-nas chart's
+# render (values-crc) with its DaemonSet edited to drop the cert-sync ("sync") container and the node-cert, trust-ca and
+# script volumes, renamed ipsec-nas-metrics, nodeSelector node-role.kubernetes.io/master (Option C's pool on CRC). The
+# chart's ServiceAccount, ipsec-metrics-scripts ConfigMap, privileged-SCC RoleBinding, Service, ServiceMonitor and
+# PrometheusRule unchanged. Key material stayed outside the repository.
+
+## 1. Before: Option B, its /metrics (the baseline)
+# before: Option B running (2026-10-04T13:54:00Z)
+app: Synced Healthy rev=8dee00d788c7403060f676f22fd97577f3b8114e finalizers=["resources-finalizer.argocd.argoproj.io","pre-delete-finalizer.argocd.argoproj.io","pre-delete-finalizer.argocd.argoproj.io/cleanup"]
+pod: ipsec-cert-sync-5mvdc Running crc
+  Option B /metrics: 42 samples, 15 families (file in the scratch record; families listed in section 5)
+
+## 2. Option B removed: doc 30 Step I.7 (detach the Application, run-cleanup.sh, delete the chart's objects)
+  # Option B removed with doc 30's Step I.7 procedure (2026-10-04T13:54:15Z)
+  2026-10-04T13:54:25Z 4. Remove each node's certificate and private key from its NSS database
+  2026-10-04T13:54:25Z Done. Ask the CA team to revoke the node certificates.
+  objects deleted: 20
+  after (2026-10-04T13:54:32Z):
+  trafficstatus: 
+  NSS: 
+
+## 3. Option C, C1: steps C.1 to C.5 of doc 50
+  $ scripts/option-c-certificate.sh csr <scratch>/cert-1
+  subject=CN=ocp-ipsec-workers, O=KCS
+  SAN: DNS:*.crc.testing
+  CSR: <scratch>/cert-1/wildcard.csr   (the key stays in <scratch>/cert-1/wildcard.key)
+  certificaterequest.cert-manager.io/ipsec-wildcard-c1 created
+  certificaterequest.cert-manager.io/ipsec-wildcard-c1 condition met
+  $ scripts/option-c-certificate.sh machineconfig <scratch>/cert-1 signed.pem enterprise-root.pem
+  ok    SAN DNS:*.crc.testing
+  ok    the certificate belongs to <scratch>/cert-1/wildcard.key
+  ok    extended key usage includes client auth
+  ok    chains to O=Enterprise POC, CN=Enterprise Root CA
+  ok    valid from Oct  4 13:54:56 2026 GMT until Oct  3 13:54:56 2028 GMT
+  ok    <scratch>/cert-1/left_server.p12
+  ok    <scratch>/cert-1/99-master-ipsec-wildcard-cert.yaml (Butane 4.22.0, pool master)
+  
+  Apply it with: oc apply -f <scratch>/cert-1/99-master-ipsec-wildcard-cert.yaml
+  Every node of the master pool then reboots, one at a time (watch oc get mcp master).
+  serial=304F5923486398A6BB711EEB07F31BB613E93FF6
+  subject=CN=ocp-ipsec-workers, O=KCS
+  CertificateRequest ipsec-wildcard-c1 (kcs-ipsec) -> ClusterIssuer enterprise-ca, duration 17520h, usages digital signature, key encipherment, server auth, client auth
+  2026-10-04T13:55:19Z boot id before: db9193d7-0390-456e-953b-aa5b373856ac
+  machineconfig.machineconfiguration.openshift.io/99-master-ipsec-wildcard-cert created
+  2026-10-04T13:55:19Z MachineConfig applied; waiting for the node to reboot
+  (the boot-id wait used oc debug, which hung while the API was down; stopped at 14:52Z)
+  2026-10-04T14:52:28Z crc stop (by hand; the boot-id wait had hung on oc debug while the API was down)
+  level=info msg="Stopping the instance, this may take a few minutes..."
+  Stopped the instance
+  2026-10-04T14:52:31Z crc status: CRC VM:          Stopped
+  2026-10-04T14:52:31Z crc start
+  Started the OpenShift cluster.
+  2026-10-04T14:56:02Z crc status:
+  CRC VM:          Running
+  OpenShift:       Running (v4.22.7)
+  RAM Usage:       22.8GB of 29.37GB
+  # after the boot (2026-10-04T14:56:15Z)
+  885c68bf-3bbc-4858-a68b-ca994dd38ddf
+  2026-10-04 14:52:34
+  total 8
+  -r--------. 1 root root 1874 Oct  4 13:55 ca.pem
+  -r--------. 1 root root 3682 Oct  4 13:55 left_server.p12
+  active
+  Oct 04 14:52:38 crc ipsec-nas-import.sh[1123]:             Not After : Tue Oct 03 13:54:56 2028
+  Oct 04 14:52:38 crc ipsec-nas-import.sh[1123]:         Subject: "O=KCS,CN=ocp-ipsec-workers"
+  Oct 04 14:52:38 crc ipsec-nas-import.sh[1123]:             DNS name: "*.crc.testing"
+  Oct 04 14:52:38 crc systemd[1]: Finished Import the IPsec certificate for the NAS into libreswan's NSS database.
+  KCS-IPSEC-CA                                                 CT,C,C
+  left_server                                                  u,u,u
+  serial=304F5923486398A6BB711EEB07F31BB613E93FF6
+  notAfter=Oct  3 13:54:56 2028 GMT
+  subject=CN=ocp-ipsec-workers, O=KCS
+  crc   Ready   control-plane,master,worker   67d   v1.35.6
+  pool: updated=1/1 config=rendered-master-4df6b98760d41655ba69463269bc5ce2 updated=True
+  machineconfig.machineconfiguration.openshift.io/99-master-ipsec-wildcard-cert
+  # Step C.5, C1 (2026-10-04T14:56:55Z)
+  nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-wildcard created
+  nodenetworkconfigurationpolicy.nmstate.io/ipsec-nas-wildcard condition met
+  NNCP Available after 9s
+  tunnel up after 10s
+  #2: "1e3e3074-af2b-4ea5-ad30-b5c6f0998670", type=ESP, add_time=1791125820, inBytes=0, outBytes=0, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+  "1e3e3074-af2b-4ea5-ad30-b5c6f0998670":   our idtype: DER_ASN1_DN; our id=CN=ocp-ipsec-workers, O=KCS; their idtype: DER_ASN1_DN; their id=O=KCS OpenShift lab, CN=crc-nas.lab.internal
+  IKE SAs: total(1), half-open(0), open(0), authenticated(1), anonymous(0)
+  IPsec SAs: total(1), authenticated(1), anonymous(0)
+
+## 4. The collector without cert-sync on the Option C node
+  # collector-only DaemonSet on Option C, C1 (2026-10-04T14:57:28Z)
+  dry-run: serviceaccount/ipsec-cert-sync created (server dry run)
+  dry-run: configmap/ipsec-metrics-scripts created (server dry run)
+  dry-run: rolebinding.rbac.authorization.k8s.io/system:openshift:scc:privileged created (server dry run)
+  dry-run: service/ipsec-nas-metrics created (server dry run)
+  dry-run: Warning: spec.template.spec.nodeSelector[node-role.kubernetes.io/master]: use "node-role.kubernetes.io/control-plane" instead
+  dry-run: daemonset.apps/ipsec-nas-metrics created (server dry run)
+  dry-run: prometheusrule.monitoring.coreos.com/ipsec-nas created (server dry run)
+  dry-run: servicemonitor.monitoring.coreos.com/ipsec-nas created (server dry run)
+  serviceaccount/ipsec-cert-sync created
+  configmap/ipsec-metrics-scripts created
+  rolebinding.rbac.authorization.k8s.io/system:openshift:scc:privileged created
+  service/ipsec-nas-metrics created
+  Warning: spec.template.spec.nodeSelector[node-role.kubernetes.io/master]: use "node-role.kubernetes.io/control-plane" instead
+  daemonset.apps/ipsec-nas-metrics created
+  prometheusrule.monitoring.coreos.com/ipsec-nas created
+  servicemonitor.monitoring.coreos.com/ipsec-nas created
+  Waiting for daemon set "ipsec-nas-metrics" rollout to finish: 0 of 1 updated pods are available...
+  daemon set "ipsec-nas-metrics" successfully rolled out
+  (eval):1: no matches found: custom-columns=NAME:.metadata.name,READY:.status.containerStatuses[*].ready,NODE:.spec.nodeName,SCC:.metadata.annotations.openshift\.io/scc
+  containers: collector metrics
+  ipsec-nas-metrics-hrm29   true,true   crc   privileged
+  2d1
+  # through Thanos Querier (2026-10-04T14:59:05Z)
+  up{namespace=kcs-ipsec}: 1 [(('exporter_node', 'crc'), ('job', 'ipsec-nas-metrics'), ('value', '1'))]
+  ipsec_nas_tunnel_up: 1 [(('exporter_node', 'crc'), ('job', 'ipsec-nas-metrics'), ('node', 'crc'), ('value', '1'))]
+  count of ipsec_nas_* series: 1 [(('value', '41'),)]
+  ALERTS for ipsec-nas (firing or pending): 0 []
+  rules loaded: 12 rules in ['ipsec-nas']
+
+## 5. /metrics, Option C1 vs Option B (samples; HELP/TYPE lines removed)
+  Option B:  42 samples   Option C1: 41 samples
+  families only in Option B: ipsec_nas_certificate_import_timestamp_seconds (read from cert-sync's stamp /etc/pki/certs/kcs-ipsec/.installed-sha256)
+  families only in Option C1: none.  Per family, both: 28 ipsec_nas_xfrm_errors_total and 1 sample for each other family.
+  certificate_not_after_timestamp_seconds 1854194096 = 2028-10-03T13:54:56Z, the signed certificate's notAfter
+  Option C1 /metrics, as served:
+    ipsec_nas_collect_success{node="crc"} 1
+    ipsec_nas_collect_timestamp_seconds{node="crc"} 1791125879
+    ipsec_nas_tunnel_up{node="crc",connection="ipsec-nas"} 1
+    ipsec_nas_tunnel_info{node="crc",connection="ipsec-nas",peer_id="O=KCS OpenShift lab, CN=crc-nas.lab.internal"} 1
+    ipsec_nas_tunnel_established_timestamp_seconds{node="crc",connection="ipsec-nas"} 1791125820
+    ipsec_nas_tunnel_in_bytes_total{node="crc",connection="ipsec-nas"} 1031976
+    ipsec_nas_tunnel_out_bytes_total{node="crc",connection="ipsec-nas"} 67740
+    ipsec_nas_certificate_not_after_timestamp_seconds{node="crc",nickname="left_server"} 1854194096
+    ipsec_nas_connection_configured{node="crc",connection="ipsec-nas"} 1
+    ipsec_nas_certificate_present{node="crc",nickname="left_server"} 1
+    ipsec_nas_ike_sa_established{node="crc",connection="ipsec-nas"} 1
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInBufferError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInHdrError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInNoStates"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateProtoError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateModeError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateSeqError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateExpired"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateMismatch"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInStateInvalid"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInTmplMismatch"} 1
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInNoPols"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInPolBlock"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmInPolError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutBundleGenError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutBundleCheckError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutNoStates"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutStateProtoError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutStateModeError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutStateSeqError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutStateExpired"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutPolBlock"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutPolDead"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutPolError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmFwdHdrError"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmOutStateInvalid"} 0
+    ipsec_nas_xfrm_errors_total{node="crc",counter="XfrmAcquireError"} 0
+    ipsec_nas_nfs_mounts{node="crc",server="192.168.64.8"} 1
+    ipsec_nas_libreswan_info{node="crc",version="5.3"} 1
+
+## 6. Not measured here
+  C2 (per-node FQDN identity): on this CRC NAS (rightid=%fromcert, uniqueids=yes) C2 never established a tunnel in the
+  2026-10-03 run (evidence 36: AUTHENTICATION_FAILED, also after a NAS libreswan restart). The working C2 setups of doc 51
+  (cases 6, 7) need uniqueids=no on the NAS. Not attempted in this run.
