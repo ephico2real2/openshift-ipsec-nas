@@ -214,7 +214,7 @@ Option B remains the standard. Option C is the alternative where no component be
 
 ## Step C.1 – A key and a certificate request
 
-Set the variables of [00-prepare-the-cluster.md, Part 0.3](00-prepare-the-cluster.md#03-open-a-shell-and-set-variables), and `MCP_ROLE` to the pool that reaches the NAS (`worker` on most clusters). Work in a directory outside Git:
+Set the variables of [00-prepare-the-cluster.md, Part 0.3](00-prepare-the-cluster.md#03-open-a-shell-and-set-variables), and `MCP_ROLE` to the pool that reaches the NAS (`worker` on most clusters). The script needs `openssl` and `butane`, and an `oc` login: it reads the cluster's version for Butane's MachineConfig format (or set `OCP_VERSION`, for example `4.19.0`). Work in a directory outside Git:
 
 ```bash
 export MCP_ROLE=worker
@@ -253,12 +253,19 @@ oc debug node/${NODE} -q -- chroot /host bash -c 'journalctl -b -u ipsec-nas-imp
 
 The key is now in the MachineConfig, and anyone who can read `machineconfigs` can extract it. Delete the working directory once the MachineConfig is applied.
 
+**To keep it in Git (kustomize, Argo CD):** the Butane template and the NNCP are safe to commit. The rendered MachineConfig is not: Butane embeds `left_server.p12`, the private key included, into it. Keep that file in the team's secret store, or produce it at deploy time, and commit only what has no key.
+
 ## Step C.5 – The tunnel: C1 or C2
 
 > [!IMPORTANT]
 > **Stop here until the NAS side is ready**, including duplicate peer IDs ([above](#what-the-nas-must-allow-measured)).
 
-From the repository root, after `./render.sh` with `MCP_ROLE` set:
+From the repository root, render the manifests with the variables of Part 0.3 (`NODE_DOMAIN`, `NAS_FQDN`, `NAS_IP`) and `MCP_ROLE`. `IPSEC_TYPE` defaults to `transport`; use `tunnel` only with NAT between the nodes and the NAS. C2's policy leaves out nodes labelled control-plane, master or ingress. On a compact cluster, whose nodes are masters and workers at once, and on OpenShift Local, render with `EXCLUDE_NODES=none`, or C2 makes no NNCP. C1's NNCP selects the pool by its role and has no exclusion.
+
+```bash
+MCP_ROLE=worker ./render.sh          # compact cluster or OpenShift Local: EXCLUDE_NODES=none MCP_ROLE=... ./render.sh
+```
+
 
 ```bash
 # C1: one NNCP for the pool, no Kyverno
@@ -271,6 +278,14 @@ oc apply -f rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml
 
 > [!IMPORTANT]
 > **After an NNCP change on a running node, restart the node's connection.** Switching a node from C1 to C2 changed its connection in place; NetworkManager then reported it `activated` while libreswan had no SA, and nothing restarted it (measured on CRC). Option B's cert-sync pod does this restart by itself; Option C has no such pod. On each node: `nmcli connection down ipsec-nas; nmcli connection up ipsec-nas`. On a new node or after a reboot the connection starts fresh, so this applies only to changes of a running tunnel.
+
+```bash
+oc get nncp                                   # C1: ipsec-nas-wildcard; C2: ipsec-nas-<node> for each node
+oc get nnce | grep ipsec-nas                  # one per node
+oc debug node/${NODE} -q -- chroot /host bash -c 'ipsec status | grep -o "our id=[^;]*"; ipsec trafficstatus'
+```
+
+✅ **Expected** (measured on CRC, C1): `ipsec-nas-wildcard   Available   SuccessfullyConfigured`; `crc.ipsec-nas-wildcard   Available ... SuccessfullyConfigured`; `our id=CN=ocp-ipsec-workers, O=KCS` (C2: `our id=@<node>.<NODE_DOMAIN>`), and one `type=ESP` line whose `id=` is the NAS's certificate.
 
 C1's NNCP selects the nodes by the pool's role label, so a new node of the pool gets it with no other step. Its `left: '%defaultroute'` uses the address of the node's default-route interface: if the NAS is reached through another interface, use C2. Then verify as in [00-prepare-the-cluster.md, 3.2](00-prepare-the-cluster.md#32-verify-end-to-end).
 
