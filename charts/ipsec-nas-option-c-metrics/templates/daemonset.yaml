@@ -1,0 +1,121 @@
+# Option B's collector and metrics server, without cert-sync: Option C's MachineConfig imports the certificate.
+# Measured on an Option C node: docs/evidence/crc/45.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ipsec-nas-metrics
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  selector:
+    matchLabels:
+      app: ipsec-nas-metrics
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: ipsec-nas-metrics
+      annotations:
+        # a changed script must restart the pods: a running script is not read again
+        checksum/scripts: {{ printf "%s%s" (.Files.Get "files/collect.sh") (.Files.Get "files/serve.py") | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- with .Values.excludeNodeLabels }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              {{- range . }}
+              - key: {{ . }}
+                operator: DoesNotExist
+              {{- end }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      # Reads the tunnel and certificate state from the host every 30 seconds and writes it as
+      # Prometheus metrics into the shared "metrics" volume. The host is mounted read-only.
+      - name: collector
+        image: {{ .Values.images.cli }}
+        command: ["/bin/bash", "/metrics-scripts/collect.sh"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: true
+          runAsUser: 0
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        volumeMounts:
+        - name: host
+          mountPath: /host
+          readOnly: true
+        - name: metrics
+          mountPath: /metrics
+        - name: metrics-scripts
+          mountPath: /metrics-scripts
+          readOnly: true
+      # Serves the collector's file on :9754/metrics. Unprivileged: the only network listener in
+      # this pod has no access to the host.
+      - name: metrics
+        image: {{ .Values.images.python }}
+        command: ["python3", "/metrics-scripts/serve.py"]
+        ports:
+        - name: metrics
+          containerPort: 9754
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: metrics
+          periodSeconds: 30
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 5m
+            memory: 32Mi
+          limits:
+            memory: 64Mi
+        volumeMounts:
+        - name: metrics
+          mountPath: /metrics
+          readOnly: true
+        - name: metrics-scripts
+          mountPath: /metrics-scripts
+          readOnly: true
+      volumes:
+      - name: host
+        hostPath:
+          path: /
+          type: Directory
+      - name: metrics
+        emptyDir: {}
+      - name: metrics-scripts
+        configMap:
+          name: ipsec-metrics-scripts
+          defaultMode: 0555

@@ -1,0 +1,7 @@
+Option C's IPsec metrics: the collector without cert-sync, on {{ toJson .Values.nodeSelector }}.
+
+  Pods:     oc get pods -n {{ .Release.Namespace }} -l app=ipsec-nas-metrics -o wide
+  Metrics:  Observe > Metrics, ipsec_nas_tunnel_up (one series per node)
+  Alerts:   Observe > Alerting, the twelve IpsecNas* rules
+
+NEVER deploy this chart together with Option B's ipsec-nas chart: one option per cluster.

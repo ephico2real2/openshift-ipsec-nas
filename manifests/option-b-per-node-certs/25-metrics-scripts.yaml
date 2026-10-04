@@ -6,6 +6,12 @@ metadata:
 data:
   collect.sh: |
     #!/bin/bash
+    # ************************************************************************************************
+    # *** SHARED CODE. The source is shared/collector/collect.sh.
+    # *** Byte-identical copies live in charts/ipsec-nas/files/ and charts/ipsec-nas-option-c-metrics/files/.
+    # *** Change the shared file first, then run scripts/sync-shared-collector.sh: it copies it to BOTH charts.
+    # *** tests/test-shared-collector.sh fails when a copy differs.
+    # ************************************************************************************************
     # ipsec-nas metrics collector: runs on every worker, beside the cert-sync container.
     # Every COLLECT_EVERY seconds it asks the HOST's libreswan about the ipsec-nas connection, the
     # HOST's NSS database about the node certificate, and the HOST's kernel about IPsec errors and
@@ -186,6 +192,12 @@ data:
     fi
   serve.py: |
     #!/usr/bin/env python3
+    # ************************************************************************************************
+    # *** SHARED CODE. The source is shared/collector/serve.py.
+    # *** Byte-identical copies live in charts/ipsec-nas/files/ and charts/ipsec-nas-option-c-metrics/files/.
+    # *** Change the shared file first, then run scripts/sync-shared-collector.sh: it copies it to BOTH charts.
+    # *** tests/test-shared-collector.sh fails when a copy differs.
+    # ************************************************************************************************
     """Serves the metrics file written by the collector container, and nothing else."""
     import http.server
     import os

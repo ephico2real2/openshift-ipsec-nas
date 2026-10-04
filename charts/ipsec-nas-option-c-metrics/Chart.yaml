@@ -1,0 +1,17 @@
+apiVersion: v2
+name: ipsec-nas-option-c-metrics
+description: >-
+  Per-node IPsec metrics and alerts for Option C (one wildcard certificate in a MachineConfig): the ipsec-nas
+  collector without cert-sync, on the nodes where Option C enables IPsec. Never deploy it together with Option B's
+  ipsec-nas chart.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
+keywords:
+  - openshift
+  - ipsec
+  - libreswan
+  - metrics
+annotations:
+  ipsec-nas/prerequisites: "Option C installed (docs/50-option-c-wildcard-certificate.md); user workload monitoring for the ServiceMonitor and PrometheusRule"

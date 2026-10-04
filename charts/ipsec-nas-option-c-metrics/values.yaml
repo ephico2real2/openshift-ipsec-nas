@@ -1,0 +1,38 @@
+# ipsec-nas-option-c-metrics: Option C's per-node IPsec metrics, the same collector and alerts as Option B.
+# NEVER deploy it together with Option B's ipsec-nas chart: one option per cluster (docs/50, CAUTION).
+# The collector, the metrics server and the alert rules are SHARED CODE: shared/collector/, copied into files/.
+
+# -- The nodes where Option C enables IPsec: its worker pool. On OpenShift Local the single node is also a worker,
+# so the same selector picks it (values-crc.yaml only empties excludeNodeLabels).
+nodeSelector:
+  node-role.kubernetes.io/worker: ""
+
+# -- Label KEYS that exclude a Node even if it matches nodeSelector. The roles among them are also left out of the
+# "exporter missing" alert. An empty list excludes nothing.
+excludeNodeLabels:
+- node-role.kubernetes.io/control-plane
+- node-role.kubernetes.io/master
+- node-role.kubernetes.io/ingress
+
+# -- Tolerations for the DaemonSet, for example for tainted nodes that mount the NAS.
+tolerations: []
+
+images:
+  # -- The collector: a shell and oc's base image (it runs commands on the host through /host).
+  cli: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+  # -- The metrics server.
+  python: registry.access.redhat.com/ubi9/python-312:latest
+
+serviceAccount:
+  # -- The DaemonSet's ServiceAccount.
+  name: ipsec-nas-metrics
+
+scc:
+  # -- Bind the privileged SCC to the ServiceAccount. The collector reads the host (privileged, runAsUser 0).
+  bind: true
+
+metrics:
+  # -- Headless Service and ServiceMonitor, for Observe. Needs user workload monitoring.
+  serviceMonitor: true
+  # -- The twelve alert rules (files/prometheus-rule-groups.yaml, shared with Option B).
+  prometheusRule: true

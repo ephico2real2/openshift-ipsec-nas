@@ -1,0 +1,45 @@
+{{- if .Values.metrics.serviceMonitor }}
+# Makes the per-node metrics visible in OpenShift's Observe pages, as Option B's chart does.
+# Needs user workload monitoring (enableUserWorkload: true in cluster-monitoring-config).
+apiVersion: v1
+kind: Service
+metadata:
+  name: ipsec-nas-metrics
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+  clusterIP: None            # one endpoint per node; nothing load-balances metrics
+  selector:
+    app: ipsec-nas-metrics
+  ports:
+  - name: metrics
+    port: 9754
+    targetPort: metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ipsec-nas
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+  selector:
+    matchLabels:
+      app: ipsec-nas-metrics
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    relabelings:
+    # The node Kubernetes placed the pod on, set by Prometheus and not by the collector.
+    # Alert IpsecNasNodeLabelMismatch compares it with the collector's own node label.
+    - sourceLabels: [__meta_kubernetes_pod_node_name]
+      targetLabel: exporter_node
+{{- end }}

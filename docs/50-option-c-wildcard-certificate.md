@@ -201,14 +201,14 @@ A NAS product other than libreswan may treat identities differently; the cases a
 | Private key | One, on every node and in the MachineConfig | One, on every node and in the MachineConfig | One per node, in a Secret |
 | NAS must allow duplicate peer IDs | Yes | Yes | No |
 | Components beyond OpenShift | Kyverno (or one NNCP per node by hand) | **C1: none.** C2: Kyverno | Kyverno, cert-manager |
-| Monitoring | None | None | Per-node metrics and alerts |
+| Monitoring | None | Per-node metrics and alerts with the separate chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) (measured on CRC, C1: [evidence 46](evidence/crc/46-option-c-metrics-chart.txt)) | Per-node metrics and alerts |
 
 **What the measurements show about viability:**
 
 - It works on a real OpenShift node through Red Hat's own mechanisms: the MachineConfig imported the certificate at boot, and with C1 the tunnel was up 10 seconds after the NNCP, with no Kyverno and no DaemonSet (cert-manager only signed the certificate, because that is how this CRC reaches its CA) ([CRC run](#measured-on-openshift-local-crc)).
 - A renewal is a new MachineConfig and one reboot per node; the node came back with the new certificate (one copy, new serial), its tunnel came back by itself, and the NAS needed no change.
 - It holds only if the NAS allows several peers with the same identity: on a libreswan NAS that is required in every variant tested, C2 included. C2's per-node identity added Kyverno, a NAS-side cleanup at the switch and a connection restart, and did not remove that requirement.
-- What it does not change from Option A: one private key on every node and readable in the MachineConfig, no revocation of a single node, no per-node identity on the NAS, a reboot of the pool at every renewal, and no monitoring.
+- What it does not change from Option A: one private key on every node and readable in the MachineConfig, no revocation of a single node, no per-node identity on the NAS, and a reboot of the pool at every renewal. Monitoring is added by a separate chart, never together with Option B's.
 
 Option B remains the standard. Option C is the alternative where no component beyond OpenShift may be added and the NAS team accepts shared identities.
 

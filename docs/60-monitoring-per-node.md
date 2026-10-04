@@ -133,5 +133,5 @@ What the tests showed, beyond pass or fail:
 ## Not covered here
 
 - **The dashboard in the console (Perses)**: [doc 61](61-perses-dashboard-review.md).
-- **Option C** has no DaemonSet, so no metrics. Whether a metrics-only DaemonSet is wanted is open.
+- **Option C** gets the same collector and alerts from a separate chart, [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md), without cert-sync and without `ipsec_nas_certificate_import_timestamp_seconds` ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Its dashboards: issue #43.
 - **Per-flow encryption** (was this NFS packet encrypted?) is out of reach of a collector that reads counters. Issue #35 evaluates the Network Observability Operator's eBPF agent and its IPsec feature, as a read-only probe that must run beside OVN-Kubernetes without touching its datapath.

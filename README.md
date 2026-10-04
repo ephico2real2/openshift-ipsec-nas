@@ -39,7 +39,7 @@ Our standard for a production cluster, and the enterprise north star, is **one c
 | Renewal | Automatic | By hand every 2 years; every node reboots once | Manual, disruptive |
 | Revoke one node | Yes | No | No |
 | NAS must allow duplicate peer IDs | No | Yes (measured, every variant) | Yes |
-| Monitoring | Per-node metrics, alerts, and a dashboard (Perses in the console; Grafana optional) | None (no DaemonSet) | None |
+| Monitoring | Per-node metrics, alerts, and a dashboard (Perses in the console; Grafana optional) | Per-node metrics and alerts with the separate [`ipsec-nas-option-c-metrics`](charts/ipsec-nas-option-c-metrics/README.md) chart (measured on CRC, C1); no dashboard yet | None |
 
 > ⚠️ Never run two options on the same cluster: all of them import a certificate into each node's NSS database under the nickname `left_server`.
 
@@ -73,6 +73,9 @@ manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as 
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
 render.sh                            fills in the *.tmpl variables → rendered/
 charts/ipsec-nas/                    Helm chart of Option B (the same objects as the manifests)
+charts/ipsec-nas-option-c-metrics/   Helm chart of Option C's metrics: the collector without cert-sync, and the alerts
+shared/collector/                    the collector, metrics server and alert rules; copied into both charts' files/
+scripts/sync-shared-collector.sh     copies shared/collector/ to both charts and manifest 25
 lab/                                 the Lima lab, CRC's libreswan extension, test PKI, NAS scripts, NAS container
 tests/                               chart equals manifests, metrics parser, alert rules, doc links
 ```

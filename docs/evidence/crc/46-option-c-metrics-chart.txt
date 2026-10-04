@@ -1,0 +1,55 @@
+# #39: the ipsec-nas-option-c-metrics chart (0.1.0) on Option C (C1), CRC 4.22.7 (Kubernetes v1.35.6), Helm v4.3.0,
+# 2026-10-04 15:26-15:29Z. Option C installed as in evidence 45 (MachineConfig 99-master-ipsec-wildcard-cert, NNCP
+# ipsec-nas-wildcard); Option B absent. The node: crc, labels control-plane, master and worker.
+# The chart replaces the hand-made spike of evidence 45 (same collector, ServiceAccount renamed ipsec-nas-metrics).
+
+## 1. The spike removed (its objects, by name)
+  oc delete -n kcs-ipsec ds/ipsec-nas-metrics svc/ipsec-nas-metrics servicemonitor/ipsec-nas prometheusrule/ipsec-nas \
+    cm/ipsec-metrics-scripts rolebinding/system:openshift:scc:privileged sa/ipsec-cert-sync
+  2026-10-04T15:26:45Z left in kcs-ipsec (besides OpenShift's defaults): configmap/ipsec-trust-ca (Option B's, kept)
+
+## 2. Install
+  $ helm install ipsec-nas-metrics charts/ipsec-nas-option-c-metrics -n kcs-ipsec \
+      -f charts/ipsec-nas-option-c-metrics/values-crc.yaml          # values-crc: excludeNodeLabels: []
+  2026-10-04T15:26:45Z STATUS: deployed, REVISION: 1
+  NOTES: Option C's IPsec metrics: the collector without cert-sync, on {"node-role.kubernetes.io/worker":""}.
+  daemon set "ipsec-nas-metrics" successfully rolled out                                   (15:26:49Z, 4 s)
+  objects (helm get manifest): ConfigMap 1, DaemonSet 1, PrometheusRule 1, RoleBinding 1, Service 1,
+                               ServiceAccount 1, ServiceMonitor 1
+  pod/ipsec-nas-metrics-4hkn2   2/2 Running   10.217.0.57   crc
+  No warning from the API server: the worker selector is not deprecated (evidence 45 §4: the master label was).
+
+## 3. The pod and its privileges (15:27:26Z)
+  nodeSelector: {"node-role.kubernetes.io/worker":""}    affinity: (none: excludeNodeLabels is empty on CRC)
+  serviceAccount: ipsec-nas-metrics    containers: collector metrics    (no cert-sync container)
+  ipsec-nas-metrics-4hkn2   ready true,true   node crc   SCC privileged
+  oc auth can-i use securitycontextconstraints/privileged    --as system:serviceaccount:kcs-ipsec:ipsec-nas-metrics -> yes
+  oc auth can-i use securitycontextconstraints/restricted-v2 --as system:serviceaccount:kcs-ipsec:ipsec-nas-metrics -> yes
+  collector securityContext: {"privileged":true,"runAsUser":0}
+  metrics   securityContext: allowPrivilegeEscalation false, capabilities drop ALL, privileged false,
+            readOnlyRootFilesystem true, runAsNonRoot true, seccompProfile RuntimeDefault
+  The same as evidence 45 §4b, under the chart's own ServiceAccount.
+
+## 4. Through Thanos Querier
+  Method: curl -H "Authorization: Bearer $(oc create token prometheus-k8s -n openshift-monitoring --duration=10m)" \
+            --data-urlencode "query=<q>" https://<route thanos-querier>/api/v1/query   (and /api/v1/rules)
+  The user workload Prometheus loaded the new configuration at 15:27:55Z; first up=1 at 15:28:05Z (80 s after install).
+  At 15:28:15Z:
+  up{namespace="kcs-ipsec"}                               -> 1   job=ipsec-nas-metrics pod=ipsec-nas-metrics-4hkn2 exporter_node=crc
+  ipsec_nas_tunnel_up                                     -> 1   node=crc exporter_node=crc connection=ipsec-nas
+  count({__name__=~"ipsec_nas_.*",namespace="kcs-ipsec"}) -> 41  (the same 41 as evidence 45 §5)
+  count by (node, exporter_node, pod) (ipsec_nas_collect_timestamp_seconds) -> node=crc exporter_node=crc pod=ipsec-nas-metrics-4hkn2: 1
+  ipsec_nas_certificate_import_timestamp_seconds          -> no series (Option C has no cert-sync stamp; issue #40)
+  ALERTS{namespace="kcs-ipsec"}                           -> no series (none pending or firing)
+  /api/v1/rules, group kcs-ipsec/ipsec-nas                -> 12 rules, state inactive 12, health ok
+
+## 5. Finding: IpsecNasExporterMissing cannot fire on OpenShift (shared rule; Option B too)
+  The rule as loaded (/api/v1/rules), with the namespace label that user workload monitoring enforces:
+    kube_node_role{namespace="kcs-ipsec",role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds{namespace="kcs-ipsec"}
+  Its left side, queried on its own:
+    kube_node_role{namespace="kcs-ipsec",role="worker"} -> no series
+    kube_node_role{role="worker"}                       -> 1 series, namespace=openshift-monitoring job=kube-state-metrics node=crc
+  kube_node_role carries the namespace of the platform's kube-state-metrics, so the enforced selector matches nothing
+  and the expression can never return a series. The rule comes from shared/collector/prometheus-rule-groups.yaml: the
+  same holds for Option B's chart. It fired on kind (evidence kind/02), where kube-prometheus-stack enforces no namespace.
+  Not changed in #39; to be decided separately.

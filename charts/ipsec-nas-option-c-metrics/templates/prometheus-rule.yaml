@@ -1,0 +1,26 @@
+{{- if .Values.metrics.prometheusRule }}
+# The twelve alerts of Option B (shared/collector/prometheus-rule-groups.yaml, copied into files/), adapted at render:
+# - the pod named in the descriptions is this chart's DaemonSet, ipsec-nas-metrics;
+# - "exporter missing" watches the role of nodeSelector (worker by default, OpenShift Local included), and leaves
+#   out the excluded roles, as Option B's chart does.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ipsec-nas
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app: ipsec-nas-metrics
+spec:
+{{- $rules := .Files.Get "files/prometheus-rule-groups.yaml" }}
+{{- $rules = replace "ipsec-cert-sync pod" "ipsec-nas-metrics pod" $rules }}
+{{- $rules = replace "kube_node_role{role=\"worker\"}" (printf "kube_node_role{role=\"%s\"}" (include "optc.watchedRole" .)) $rules }}
+{{- $roles := include "optc.excludedRoles" . }}
+{{- if $roles }}
+{{- $rules = replace "role=~\"control-plane|master|ingress\"" (printf "role=~\"%s\"" $roles) $rules }}
+{{- else }}
+{{- $rules = regexReplaceAll "(?m)^[ \\t]*# exclude-nodes:begin\\n.*\\n[ \\t]*# exclude-nodes:end\\n" $rules "" }}
+{{- end }}
+{{ $rules | trimSuffix "\n" | indent 2 }}
+{{- end }}

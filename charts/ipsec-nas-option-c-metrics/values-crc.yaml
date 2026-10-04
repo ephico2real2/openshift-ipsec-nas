@@ -1,0 +1,3 @@
+# OpenShift Local (CRC): one node with every role (control-plane, master, worker). The worker selector picks it;
+# no role may be excluded, or the only node would be.
+excludeNodeLabels: []
