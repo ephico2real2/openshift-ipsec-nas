@@ -27,6 +27,19 @@
   "links": [],
   "panels": [
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 17,
+      "panels": [],
+      "title": "Summary",
+      "type": "row"
+    },
+    {
       "id": 1,
       "type": "stat",
       "title": "Tunnels up",
@@ -37,7 +50,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -98,7 +111,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -163,7 +176,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -224,7 +237,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -284,6 +297,19 @@
       }
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 18,
+      "panels": [],
+      "title": "Tunnels per node",
+      "type": "row"
+    },
+    {
       "id": 5,
       "type": "stat",
       "title": "Tunnel state per node",
@@ -294,7 +320,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 5
       },
@@ -373,7 +399,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 5
       },
@@ -441,7 +467,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 11,
         "w": 24,
         "h": 8
       },
@@ -504,7 +530,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 19,
         "w": 8,
         "h": 5
       },
@@ -565,7 +591,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 17,
+        "y": 19,
         "w": 8,
         "h": 5
       },
@@ -634,7 +660,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 17,
+        "y": 19,
         "w": 8,
         "h": 5
       },
@@ -685,6 +711,19 @@
       }
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 19,
+      "panels": [],
+      "title": "Checks (all should be 0)",
+      "type": "row"
+    },
+    {
       "id": 11,
       "type": "stat",
       "title": "Nodes reported twice",
@@ -695,7 +734,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 25,
         "w": 8,
         "h": 4
       },
@@ -760,7 +799,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 22,
+        "y": 25,
         "w": 8,
         "h": 4
       },
@@ -825,7 +864,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 22,
+        "y": 25,
         "w": 8,
         "h": 4
       },
@@ -880,6 +919,19 @@
       }
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "id": 20,
+      "panels": [],
+      "title": "Per-node detail",
+      "type": "row"
+    },
+    {
       "id": 14,
       "type": "table",
       "title": "Per node",
@@ -890,7 +942,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 30,
         "w": 24,
         "h": 9
       },
@@ -1462,6 +1514,19 @@
       }
     },
     {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
+      "id": 21,
+      "panels": [],
+      "title": "History",
+      "type": "row"
+    },
+    {
       "id": 15,
       "type": "timeseries",
       "title": "Tunnel re-establishments in the last hour",
@@ -1472,7 +1537,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 35,
+        "y": 40,
         "w": 12,
         "h": 8
       },
@@ -1542,7 +1607,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 35,
+        "y": 40,
         "w": 12,
         "h": 8
       },

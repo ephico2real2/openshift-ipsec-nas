@@ -6,8 +6,8 @@ Input (stdin): the JSON of
       --use-default-datasource -o json
 Output (stdout): the dashboard's spec (PersesDashboard v1alpha2 spec.config), as indented JSON.
 
-Each fix answers a gap measured in docs/61-perses-dashboard-review.md (section 5); the panel keys are
-percli's, which follow the order of the Grafana panels.
+Each fix answers a gap measured in docs/61-perses-dashboard-review.md (appendix A). Panels are found by their
+title: percli keys them "<section>_<index>" after the Grafana rows, so a key moves whenever a section does.
 """
 import json
 import sys
@@ -25,6 +25,20 @@ def queries(panel):
 
 def query_spec(q):
     return q["spec"]["plugin"]["spec"]
+
+
+def panel(title):
+    found = [p for p in panels.values() if p["spec"]["display"]["name"] == title]
+    if len(found) != 1:
+        fail(f"expected one panel titled {title!r}, found {len(found)}: update this script with the Grafana dashboard")
+    return found[0]
+
+
+def section(title):
+    found = [l for l in spec["layouts"] if l["spec"].get("display", {}).get("title") == title]
+    if len(found) != 1:
+        fail(f"expected one section (Grafana row) titled {title!r}, found {len(found)}")
+    return found[0]["spec"]["items"]
 
 
 spec = json.load(sys.stdin)["spec"]
@@ -53,24 +67,25 @@ for v in spec["variables"]:
     if plugin.get("kind", "").startswith("Prometheus"):
         plugin["spec"]["datasource"] = {"kind": "PrometheusDatasource", "name": DATASOURCE}
 
-# Panels 3 and 5 count days; percli kept the number and lost the unit.
-for key in ("3", "5"):
-    panels[key]["spec"]["plugin"]["spec"]["format"]["unit"] = "days"
+# These two count days; percli kept the number and lost the unit.
+for title in ("Soonest certificate expiry", "Certificate days left per node"):
+    panel(title)["spec"]["plugin"]["spec"]["format"]["unit"] = "days"
 
-# Panel 9 showed "1" (the info metric's value): percli wrote metricLabel "node}}: {{version".
-lib = panels["9"]["spec"]
-if not query_spec(queries(panels["9"])[0])["query"].startswith("ipsec_nas_libreswan_info"):
-    fail("panel 9 is no longer the libreswan version panel")
-lib["plugin"]["spec"]["metricLabel"] = "version"
-query_spec(queries(panels["9"])[0])["seriesNameFormat"] = "{{node}}"
+# The libreswan panel showed "1" (the info metric's value): percli wrote metricLabel "node}}: {{version".
+libreswan = panel("libreswan version per node")
+if not query_spec(queries(libreswan)[0])["query"].startswith("ipsec_nas_libreswan_info"):
+    fail("the libreswan version panel no longer queries ipsec_nas_libreswan_info")
+libreswan["spec"]["plugin"]["spec"]["metricLabel"] = "version"
+query_spec(queries(libreswan)[0])["seriesNameFormat"] = "{{node}}"
 
-# Panel 13, the per-node table, split a node into three rows: its merge joins series by their labels,
-# and two of its 11 queries carry more than "node" (the first, node+pod; the last, node+peer_id).
-# They move to a table of their own (panel 16); the table keeps the nine queries labelled by node only.
-table = panels["13"]["spec"]
-tq = queries(panels["13"])
+# The per-node table split a node into three rows: its merge joins series by their labels, and two of
+# its 11 queries carry more than "node" (the first, node+pod; the last, node+peer_id). They move to a
+# table of their own (NAS identity per node); the table keeps the nine queries labelled by node only.
+per_node = panel("Per node")
+table = per_node["spec"]
+tq = queries(per_node)
 if len(tq) != 11 or "by (node, pod)" not in query_spec(tq[0])["query"] or "by (node, peer_id)" not in query_spec(tq[10])["query"]:
-    fail("panel 13 is no longer the 11-query per-node table this script expects")
+    fail("the per-node table is no longer the 11-query table this script expects")
 table["queries"] = tq[1:10]
 # percli names a table's value columns "value #<query number>"; dropping the first query renumbers them.
 settings = []
@@ -87,7 +102,7 @@ table["display"]["description"] = (
     "not answering. NFS requests/s comes from the platform's node-exporter. The reporting pod and the NAS "
     "identity are in the table below.")
 
-panels["16"] = {
+panels["nas_identity"] = {
     "kind": "Panel",
     "spec": {
         "display": {
@@ -120,15 +135,14 @@ panels["16"] = {
     },
 }
 
-# The identity table goes under the per-node table; the two time series move down by its height.
-items = spec["layouts"][0]["spec"]["items"]
-for it in items:
-    if it["y"] >= 35:
-        it["y"] += 5
-below = [i for i, it in enumerate(items) if it["y"] >= 40]
-if not below:
-    fail("no panel below the per-node table: the layout of ipsec-nas.json changed; update this script")
-items.insert(below[0], {"x": 0, "y": 35, "width": 24, "height": 5, "content": {"$ref": "#/spec/panels/16"}})
+# The identity table goes directly under the per-node table, in the same section. Each section is a grid
+# of its own, so no other section moves.
+items = section("Per-node detail")
+table_item = [it for it in items if panels[it["content"]["$ref"].split("/")[-1]] is per_node]
+if len(table_item) != 1 or len(items) != 1:
+    fail("the Per-node detail section no longer holds just the per-node table; update this script")
+items.append({"x": 0, "y": table_item[0]["y"] + table_item[0]["height"], "width": 24, "height": 5,
+              "content": {"$ref": "#/spec/panels/nas_identity"}})
 
 json.dump(spec, sys.stdout, indent=2, sort_keys=True)
 sys.stdout.write("\n")
