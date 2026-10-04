@@ -1,0 +1,49 @@
+# Argo CD Application for the ipsec-nas-option-c-metrics chart: Option C's metrics and, with cert-manager and
+# Kyverno, its certificate and tunnels (docs/53-option-c-cert-manager-kyverno.md). NMState, Kyverno and
+# cert-manager are prerequisites and are NOT part of this Application. Each pool's MachineConfig is not either:
+# build it from the certificate's Secret with scripts/option-c-certificate.sh from-secret, then apply it.
+# The chart's sync waves create Kyverno's roles first (-2), then the Certificate (-1), then the rest, with the
+# tunnel policies last (1). Never together with Option B's ipsec-nas Application.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ipsec-nas-option-c
+  namespace: openshift-gitops
+  # Deleting the Application deletes what it created: the policies and NNCPs (the tunnels stay on the nodes until
+  # an NNCP says absent, docs/50, Step C.7), the Certificate (cert-manager leaves its Secret) and the metrics.
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ephico2real2/openshift-ipsec-nas.git
+    targetRevision: main
+    path: charts/ipsec-nas-option-c-metrics
+    helm:
+      releaseName: ipsec-nas-metrics
+      valuesObject:
+        nodeDomain: ocp.example.com
+        nas:
+          fqdn: nas01.example.com
+          ip: 10.0.0.50
+        clusterIssuer: company-issuer-rnd      # the EXISTING enterprise CA issuer
+        certificate:
+          enabled: true
+        tunnel:
+          enabled: true          # after each pool's MachineConfig is applied (docs/53, Steps K.3 and K.4)
+          variant: c2            # Kyverno: one NNCP per node
+          pools: [worker, master]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kcs-ipsec
+  syncPolicy:
+    # The collector runs privileged, so the namespace needs these labels
+    managedNamespaceMetadata:
+      labels:
+        pod-security.kubernetes.io/enforce: privileged
+        pod-security.kubernetes.io/audit: privileged
+        pod-security.kubernetes.io/warn: privileged
+        security.openshift.io/scc.podSecurityLabelSync: "false"
+    syncOptions:
+    - CreateNamespace=true
+    automated: {}

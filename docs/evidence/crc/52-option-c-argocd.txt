@@ -1,0 +1,25 @@
+# The Option C chart through Argo CD (OpenShift GitOps, Argo CD 3.4.7): the certificate and the C2 tunnel, CRC 4.22.7,
+# 2026-10-04 22:27Z. The running Helm release (evidence 51, then revisions 12 and 13) handed to Argo CD without
+# deleting anything: only Helm's release record was removed, and the Application adopted the live objects.
+# The Application: charts/ipsec-nas-option-c-metrics/examples/argocd-application.yaml with CRC's values
+# (excludeNodeLabels [], nodeDomain crc.testing, ipsec tunnel/%defaultroute/192.168.64.8, certificate on, tunnel c2 master).
+
+## 1. Before (22:27:37Z), Helm release ipsec-nas-metrics revision 13
+  GeneratingPolicy ipsec-nncp-wildcard-master generation 2 | NNCP ipsec-nas-crc generation 2, Available
+  Certificate ipsec-nas-wildcard generation 1, Ready | Secret ipsec-nas-wildcard resourceVersion 10820758
+  collector pod ipsec-nas-metrics-tcmr8 | the node's ESP SA add_time=1791150592
+
+## 2. The handover
+  $ oc delete secret -n kcs-ipsec -l owner=helm,name=ipsec-nas-metrics     # Helm's release record only (10 Secrets)
+  helm list -n kcs-ipsec: empty
+  $ oc apply -f argocd-optc-crc.yaml
+  22:27:54Z Synced Healthy Succeeded, revision 89cba292bda297cb5d96e24089ad3ac26d1bfdeb, 15 s after the apply
+  Resources (all Synced): ConfigMap ipsec-metrics-scripts, Service ipsec-nas-metrics (Healthy), ServiceAccount,
+  DaemonSet ipsec-nas-metrics (Healthy), Certificate ipsec-nas-wildcard (Healthy), PrometheusRule, ServiceMonitor,
+  PersesDashboard, PersesDatasource, GeneratingPolicy ipsec-nncp-wildcard-master, ClusterRole kyverno:ipsec-nas-generate,
+  ClusterRole kyverno:ipsec-nas-read-nodes, RoleBinding system:openshift:scc:privileged
+
+## 3. After: nothing changed
+  The same values as section 1: policy generation 2, NNCP generation 2 Available, Certificate generation 1 Ready,
+  Secret resourceVersion 10820758 (not reissued), collector pod ipsec-nas-metrics-tcmr8, ESP SA add_time=1791150592.
+  Left on CRC: the Application ipsec-nas-option-c, Synced and Healthy.

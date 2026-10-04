@@ -93,6 +93,10 @@ oc debug node/<node> -q -- chroot /host bash -c 'ipsec status | grep -o "our id=
 
 On OpenShift Local, which reaches the NAS through NAT, add the lab's overrides `--set ipsec.type=tunnel --set ipsec.left=%defaultroute --set ipsec.right=<NAS IP>` ([doc 40](40-lab-crc-and-nas.md)) and use the master pool only.
 
+### With Argo CD instead of Helm
+
+[`charts/ipsec-nas-option-c-metrics/examples/argocd-application.yaml`](../charts/ipsec-nas-option-c-metrics/examples/argocd-application.yaml) is the same release from Git. Set its values as in K.2 to K.4; enable `tunnel` only once the MachineConfigs of K.3 are applied. To move a running Helm release to it without touching the nodes, delete only Helm's record (`oc delete secret -n kcs-ipsec -l owner=helm,name=ipsec-nas-metrics`) and apply the Application: it adopts the objects as they are (measured, [evidence 52](evidence/crc/52-option-c-argocd.txt)).
+
 ## Step K.5 – Renewal
 
 cert-manager renews the Secret 30 days before expiry (`certificate.renewBefore`). **The nodes keep the old certificate until the MachineConfig is rebuilt and applied**: repeat Step K.3 in new directories before the old certificate expires, one pool at a time. The metrics warn on each node 14 days before expiry (`IpsecNasCertificateExpiringSoon`), and after the reboot `ipsec_nas_certificate_not_after_timestamp_seconds` shows the new date and `ipsec_nas_certificate_import_timestamp_seconds` the boot ([doc 50, Step C.6](50-option-c-wildcard-certificate.md#step-c6--renew-every-two-years)).
@@ -112,7 +116,9 @@ CRC 4.22.7, one node in the master pool, cert-manager with the `enterprise-ca` `
 | K.4 | Kyverno's `ipsec-nas-crc` `Available`; `our id=@crc.crc.testing`; the tunnel back by itself after the reboot, with no NAS restart |
 | Metrics | `tunnel_up` 1; expiry 2028-10-03T21:30:03Z and import 21:48:41Z on the node, as the certificate and the journal say; `mode="C"`; no alert; the demo application writing |
 
-The chart's objects are the ones `render.sh` makes, compared object by object for C1 and C2 and each pool (`tests/test-option-c-chart.sh`). The Argo CD path of these parts was not measured; the chart carries Option B's sync waves (Kyverno's roles −2, the Certificate −1, the policies and NNCPs 1).
+| Argo CD | The running release handed to the Application [`examples/argocd-application.yaml`](../charts/ipsec-nas-option-c-metrics/examples/argocd-application.yaml) by removing only Helm's record: `Synced`, `Healthy` 15 seconds after it was applied; every object unchanged (the policy's and NNCP's generations, the Certificate's, the Secret not reissued, the collector pod, the node's ESP SA) ([evidence 52](evidence/crc/52-option-c-argocd.txt)) |
+
+The chart's objects are the ones `render.sh` makes, compared object by object for C1 and C2 and each pool (`tests/test-option-c-chart.sh`). The chart carries Option B's sync waves: Kyverno's roles −2, the Certificate −1, the policies and NNCPs 1.
 
 ## Gotchas
 
