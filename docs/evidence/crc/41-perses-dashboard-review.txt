@@ -1,0 +1,51 @@
+# CRC 4.22.7, COO 1.5.3. Our Grafana dashboard (charts/ipsec-nas/files/ipsec-nas.json) converted to Perses and
+# reviewed. Recorded 2026-10-04T00:58:27Z.
+
+## Conversion: percli 0.54.0 offline, unpacked plugins, --use-default-datasource
+$ percli migrate -f ipsec-nas.json --format cr --project kcs-ipsec --plugin.path <unpacked plugins> --use-default-datasource
+panels: {'StatChart': 11, 'Table': 1, 'TimeSeriesChart': 3, 'BarChart': 1}
+variables: [('DS_PROMETHEUS', 'DatasourceVariable'), ('node', 'PrometheusLabelValuesVariable')]
+COO's server conversion (POST /api/migrate): the same panel kinds; the table's value columns named 'Value #A'..'Value #K' and its value mappings and units dropped.
+
+## Data: every panel query through COO's Perses (port-forward of svc/perses), datasource proxy
+## reader = ServiceAccount kcs-ipsec/perses-viewer-test: view + persesdashboard-viewer-role + persesdatasource-viewer-role in kcs-ipsec
+## reader@9092: thanos-querier :9092 (tenancy), GET, namespace=kcs-ipsec | admin@9091: kubeadmin, thanos-querier :9091
+node variable (label values) reader@9092: HTTP 200 ['crc']
+panel                                reader@9092 admin@9091  query (series returned)
+Tunnels up                                     1          1  sum(ipsec_nas_tunnel_up{node=~".*"})
+Tunnels down                                   1          1  count(ipsec_nas_tunnel_up{node=~".*"} == 0) or vector(0)
+Workers reporting                              1          1  count(ipsec_nas_collect_timestamp_seconds{node=~".*"})
+Soonest certificate expiry                     1          1  min(ipsec_nas_certificate_not_after_timestamp_seconds{node=~".*"} - ti
+Tunnel state per node                          1          1  ipsec_nas_tunnel_up{node=~".*"}
+Certificate days left per node                 1          1  (ipsec_nas_certificate_not_after_timestamp_seconds{node=~".*"} - time(
+Traffic through the tunnel                     1          1  rate(ipsec_nas_tunnel_out_bytes_total{node=~".*"}[5m])
+Traffic through the tunnel                     1          1  rate(ipsec_nas_tunnel_in_bytes_total{node=~".*"}[5m])
+Tunnel age per node                            1          1  time() - ipsec_nas_tunnel_established_timestamp_seconds{node=~".*"}
+Metrics age per node                           1          1  time() - ipsec_nas_collect_timestamp_seconds{node=~".*"}
+libreswan version per node                     1          1  ipsec_nas_libreswan_info{node=~".*"}
+Nodes reported twice                           1          1  count(count by (node) (ipsec_nas_collect_timestamp_seconds{node=~".*"}
+Pods reporting the wrong node                  1          1  count(ipsec_nas_collect_timestamp_seconds{node=~".*",exporter_node!=""
+Kernel IPsec errors, last hour                 1          1  sum(increase(ipsec_nas_xfrm_errors_total{node=~".*"}[1h])) or vector(0
+Per node                                       1          1  time() - max by (node, pod) (ipsec_nas_collect_timestamp_seconds{node=
+Per node                                       1          1  max by (node) (ipsec_nas_tunnel_up{node=~".*"})
+Per node                                       1          1  max by (node) (ipsec_nas_ike_sa_established{node=~".*"})
+Per node                                       1          1  max by (node) (ipsec_nas_certificate_present{node=~".*"})
+Per node                                       1          1  max by (node) (ipsec_nas_connection_configured{node=~".*"})
+Per node                                       1          1  max by (node) (ipsec_nas_collect_success{node=~".*"})
+Per node                                       1          1  sum by (node) (ipsec_nas_nfs_mounts{node=~".*"}) or 0 * max by (node) 
+Per node                                       0          1  sum by (node) (label_replace(rate(node_nfs_requests_total{instance=~".  <-- differs
+Per node                                       1          1  sum by (node) (increase(ipsec_nas_xfrm_errors_total{node=~".*"}[1h]))
+Per node                                       1          1  time() - max by (node) (ipsec_nas_certificate_import_timestamp_seconds
+Per node                                       1          1  max by (node, peer_id) (ipsec_nas_tunnel_info{node=~".*"})
+Tunnel re-establishments in the last           1          1  sum by (node) (changes(ipsec_nas_tunnel_established_timestamp_seconds{
+Kernel IPsec errors per node                   0          0  sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total{node=~".*"}[5
+
+## The Perses web UI's own requests (upstream Perses 0.54.0 run locally in podman; its datasource on the same
+## :9092 with queryParams namespace=kcs-ipsec and the reader's token). COO's Perses has no web UI of its own:
+## its index page reads 'This is the default index, looks like you forget to generate the react app ...'.
+requests with namespace=kcs-ipsec added by the UI: 63 of 63
+GET  /api/v1/label/node/values  -> 200
+POST /api/v1/query_range         -> 403  Forbidden (user=system:serviceaccount:kcs-ipsec:perses-viewer-test, verb=create, resource=pods)
+  (11 of 11: the tenancy port authorises the HTTP method as the RBAC verb; POST = create, which view does not grant)
+The prometheus datasource schema of Perses 0.54.0 / plugin 0.58.0 has no HTTP-method setting (schemas/datasource/prometheus.cue:
+  HTTPDatasourceSpec, scrapeInterval, queryParams only).
