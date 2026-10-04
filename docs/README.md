@@ -31,7 +31,7 @@ Side by side:
 | Certificate renewal | **Automatic** (cert-manager), short tunnel restart per node | **Manual**: same as above, on a deadline |
 | Revoke a single node | Yes | **Not possible**: one key everywhere |
 | Several workers against one NAS | Works with the NAS defaults (measured in the lab) | The NAS keeps only one tunnel unless duplicate IDs are allowed (measured in the lab) |
-| Monitoring | Per-node metrics, alerts and a dashboard ([20, Step B.12](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard)) | None |
+| Monitoring | Per-node metrics, alerts ([60](60-monitoring-per-node.md)) and a dashboard in the console ([61](61-perses-dashboard-review.md)) | None |
 | Extra components | Kyverno, cert-manager, one privileged DaemonSet | None |
 
 > [!CAUTION]
@@ -44,6 +44,8 @@ Side by side:
 | [00-prepare-the-cluster.md](00-prepare-the-cluster.md) | **Every option starts here.** How it works, requirements and variables, cluster preparation (`routingViaHost`, IPsec `External` mode, NMState, Kyverno and its permissions), the NAS side for the storage team, verification and troubleshooting |
 | [20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md) | **Option B, step by step:** which nodes get a tunnel, the three Kyverno policies, the cert-sync DaemonSet, metrics and alerts, node removal, teardown; then the run on CRC with captures |
 | [30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md) | **Option B from Git:** the Helm chart's prerequisites, install with Helm and with Argo CD in sync waves, removal both ways, Kyverno's CEL policies or the legacy ones |
+| [60-monitoring-per-node.md](60-monitoring-per-node.md) | **Monitoring:** what every node reports, the alerts, how each node's data stays its own on a multi-node cluster, and what was measured |
+| [61-perses-dashboard-review.md](61-perses-dashboard-review.md) | **The dashboard in the console (Perses):** what it shows, how it works, how to turn it on and open it, who can see it, how to change it, troubleshooting |
 | [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md) | Option A: the documented procedure, its risks, its run on CRC, and what it costs |
 | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) | Option C: one wildcard certificate in a MachineConfig, two variants (C1 with Red Hat components only, C2 with per-node identities), what the NAS team must configure, the renewal tool, and its measured run on CRC |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
@@ -57,6 +59,7 @@ Which to read:
 | On the storage team | 00, Part 3.1: the NAS certificate and IPsec settings |
 | Weighing the shared certificate | 10, especially its cost table; 50 for the wildcard variant |
 | On the storage team, for Option C | 50, "For the NAS team" |
+| Watching the tunnels, or on call | 61 (the dashboard: Observe → Dashboards (Perses)), then 60 (every metric and alert) |
 | Trying it on a laptop | 40, with the supporting guides below |
 
 Supporting guides, in [`lab/`](lab/):

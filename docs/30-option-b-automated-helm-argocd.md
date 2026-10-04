@@ -49,6 +49,7 @@ The chart treats these as **prerequisites**. It checks for them and stops with a
 | NMState Operator with an instance | [Step D.2](40-lab-crc-and-nas.md#step-d2--nmstate-operator-and-instance-cluster-preparation-step-15) | The API is served |
 | libreswan on the nodes | [Part E](40-lab-crc-and-nas.md#part-e--libreswan-on-the-crc-node-crc-only) (a production cluster: `ipsecConfig.mode: External`) | Not checked |
 | The namespace, with the privileged pod-security labels | `kcs-ipsec` ([20-option-b-per-node-certificates.md](20-option-b-per-node-certificates.md), Step B.2) | Not checked |
+| Cluster Observability Operator 1.5 or later, with Perses: for the dashboard in the console, **on by default**. Not needed with `metrics.persesDashboard.enabled: false` | COO 1.5.3 ([openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm)) | The API `perses.dev/v1alpha2` is served ([doc 61](61-perses-dashboard-review.md)) |
 
 ```bash
 tests/test-chart.sh

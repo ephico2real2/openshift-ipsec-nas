@@ -16,7 +16,7 @@ automated per node with **Kyverno**.
 | [`docs/51-option-c-summary.md`](docs/51-option-c-summary.md) | Option C summary: what works, and the NAS settings for the three setups that work (`uniqueids=no`) |
 | [`docs/52-option-c-nas-team.md`](docs/52-option-c-nas-team.md) | Option C: the NAS team's handout, what they must do in one table |
 | [`docs/60-monitoring-per-node.md`](docs/60-monitoring-per-node.md) | Monitoring: each node reports its own IPsec state, the metrics and alerts, and what was measured on kind (3 nodes) and CRC |
-| [`docs/61-perses-dashboard-review.md`](docs/61-perses-dashboard-review.md) | Our Grafana dashboard converted to Perses (COO) and reviewed panel by panel, with captures; why a namespace-only reader is refused today |
+| [`docs/61-perses-dashboard-review.md`](docs/61-perses-dashboard-review.md) | **The dashboard in the OpenShift console (Perses, on by default):** what it shows, how it works, how to turn it on and open it, who can see it, how to change it, troubleshooting |
 | [`docs/40-lab-crc-and-nas.md`](docs/40-lab-crc-and-nas.md) | The lab: OpenShift Local (CRC) and a NAS VM on one Mac, testing with an application, gotchas |
 | [`docs/lab/`](docs/lab/) | A test NAS on RHEL 10, the Lima lab, and an application that uses the NAS |
 | [`charts/ipsec-nas/README.md`](charts/ipsec-nas/README.md) | The Helm chart: every value, the prerequisites it checks, cleanup on node deletion and uninstall |
@@ -52,7 +52,7 @@ docs/50-option-c-wildcard-certificate.md  Option C (wildcard certificate in a Ma
 docs/51-option-c-summary.md          Option C summary: what works
 docs/52-option-c-nas-team.md         Option C: the NAS team's handout
 docs/60-monitoring-per-node.md       monitoring: per-node metrics, alerts, dashboard; measured on kind and CRC
-docs/61-perses-dashboard-review.md   Perses: our dashboard converted and reviewed; the reader-access finding
+docs/61-perses-dashboard-review.md   the dashboard in the console (Perses): use it, change it, troubleshoot it
 docs/20-option-b-per-node-certificates.md  Option B, our standard, measured on CRC
 docs/30-option-b-automated-helm-argocd.md  Option B with Helm and Argo CD; CEL or legacy Kyverno policies
 docs/40-lab-crc-and-nas.md           the CRC lab, testing with an application, gotchas

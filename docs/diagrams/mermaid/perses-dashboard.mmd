@@ -1,0 +1,18 @@
+%% How the IPsec dashboard reaches its viewers in the OpenShift console (Perses, Cluster Observability Operator).
+%% Text source only. The figure shown in the docs is docs/diagrams/ipsec-nas/perses-dashboard.*.png.
+flowchart LR
+    subgraph COLLECT["1. Collecting: always on"]
+        POD["ipsec-cert-sync pods<br/>one per worker, in kcs-ipsec<br/>:9754/metrics, node=itself"]
+        PROM["User workload Prometheus<br/>scrapes every pod (ServiceMonitor)<br/>every 30 seconds"]
+        THANOS["Thanos Querier, port 9091<br/>all namespaces, platform metrics too<br/>checks the caller's token"]
+        POD -- scrape --> PROM -- store --> THANOS
+    end
+    subgraph VIEW["2. Viewing: with your own login"]
+        YOU["You, in the OpenShift console<br/>Observe → Dashboards (Perses)<br/>project kcs-ipsec"]
+        PERSES["Perses (COO)<br/>passes on your own token<br/>stores no credentials"]
+        CHART["From the ipsec chart, in kcs-ipsec<br/>PersesDashboard ipsec-nas<br/>PersesDatasource ipsec-nas-thanos"]
+        YOU -- your login --> PERSES
+        PERSES -- reads --> CHART
+    end
+    PERSES -- "query, with your token" --> THANOS
+    NEEDS["A viewer needs<br/>view in kcs-ipsec: open the dashboard<br/>cluster-monitoring-view: see its data"]

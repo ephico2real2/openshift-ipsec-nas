@@ -73,7 +73,9 @@ Two of the waits are measured, not chosen:
 
 ## The dashboard
 
-The ConfigMap `ipsec-nas-grafana-dashboard` (Step B.12) now has, beside the first ten panels:
+**Where you see it:** in the OpenShift console, **Observe → Dashboards (Perses)**, project `kcs-ipsec`. The ipsec chart installs it there by default; how it works, who can see it and how to change it: [doc 61](61-perses-dashboard-review.md). The same dashboard ships to Grafana only if asked (`metrics.grafanaDashboard: true`). Both come from one source, `charts/ipsec-nas/files/ipsec-nas.json`; the captures below are from Grafana, taken before Perses was adopted.
+
+Beside the first ten panels, it has:
 
 - **Nodes reported twice** and **Pods reporting the wrong node**: both must be 0.
 - **Kernel IPsec errors, last hour**, and per node and counter over time.
@@ -90,7 +92,7 @@ The ConfigMap `ipsec-nas-grafana-dashboard` (Step B.12) now has, beside the firs
 
 *Capture 1. The dashboard on kind with a duplicate pod (`dup-on-worker`) and a pod naming the wrong node (`ghost-on-worker2`), the same two faults as in [`evidence/kind/01-per-node-metrics-faults.txt`](evidence/kind/01-per-node-metrics-faults.txt), applied again at 18:27Z after the tests of [evidence kind/02](evidence/kind/02-exporter-missing.txt) (hence other pod names). kind nodes have no libreswan, NSS database or NNCP, so the IPsec columns are DOWN or MISSING by design; what the capture shows is that each pod's data lands in its own row, and that unknown (the IKE SA) shows as –.*
 
-With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a stand-in and reading CRC's Thanos Querier (CRC has no Grafana of ours; issue #36 plans the central one), while a bounded Job in `ipsec-nas-demo` wrote and read back 8 MiB on the NAS volume every 2 seconds:
+With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a stand-in and reading CRC's Thanos Querier (CRC has no Grafana of ours; the console's Perses now shows the same dashboard, doc 61), while a bounded Job in `ipsec-nas-demo` wrote and read back 8 MiB on the NAS volume every 2 seconds:
 
 <!-- markdownlint-disable MD033 -->
 <picture>
@@ -121,5 +123,6 @@ What the tests showed, beyond pass or fail:
 
 ## Not covered here
 
+- **The dashboard in the console (Perses)**: [doc 61](61-perses-dashboard-review.md).
 - **Option C** has no DaemonSet, so no metrics. Whether a metrics-only DaemonSet is wanted is open.
 - **Per-flow encryption** (was this NFS packet encrypted?) is out of reach of a collector that reads counters. Issue #35 evaluates the Network Observability Operator's eBPF agent and its IPsec feature, as a read-only probe that must run beside OVN-Kubernetes without touching its datapath.

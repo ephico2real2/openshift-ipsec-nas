@@ -369,22 +369,9 @@ done
 
 ## Step B.12 – Metrics in Observe, alerts and a dashboard
 
-The `collector` and `metrics` containers from Step B.8 already produce the numbers. This step makes OpenShift collect them, adds alerts, and ships a Grafana dashboard.
+The `collector` and `metrics` containers from Step B.8 already produce the numbers. This step makes OpenShift collect them, adds alerts, and puts the dashboard in the console.
 
-What every node reports:
-
-| Metric | Meaning |
-|---|---|
-| `ipsec_nas_tunnel_up` | `1` if the node has an established tunnel to the NAS, `0` if not |
-| `ipsec_nas_tunnel_out_bytes_total`, `ipsec_nas_tunnel_in_bytes_total` | Traffic through the tunnel. NFS shows up here. |
-| `ipsec_nas_tunnel_established_timestamp_seconds` | When the current tunnel came up |
-| `ipsec_nas_tunnel_info` | The identity the NAS presented (label `peer_id`) |
-| `ipsec_nas_certificate_not_after_timestamp_seconds` | When the certificate in the node's NSS database expires |
-| `ipsec_nas_certificate_import_timestamp_seconds` | When cert-sync last imported a certificate |
-| `ipsec_nas_collect_success`, `ipsec_nas_collect_timestamp_seconds` | Whether libreswan answered, and when the collector last ran |
-| `ipsec_nas_libreswan_info` | The libreswan version (label `version`) |
-
-Every metric carries a `node` label with the node's name.
+Every node reports its own metrics, each with a `node` label: whether its tunnel is up, the traffic through it, its certificate's expiry, and **why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering). The alerts fire on the node concerned. The full lists, 15 metrics and 12 alerts, are in [doc 60](60-monitoring-per-node.md#what-is-collected) (*What is collected*, *Alerts*).
 
 **1. Check that user workload monitoring is on.** It is what scrapes metrics outside the `openshift-*` namespaces.
 
@@ -394,12 +381,11 @@ oc get pods -n openshift-user-workload-monitoring
 
 ✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
 
-**2. Apply the Service and ServiceMonitor, the alert rules and the dashboard**, from the repository root:
+**2. Apply the Service and ServiceMonitor, and the alert rules**, from the repository root:
 
 ```bash
 oc apply -f manifests/option-b-per-node-certs/28-metrics-servicemonitor.yaml
 oc apply -f manifests/option-b-per-node-certs/29-prometheus-rule.yaml
-oc apply -f manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 
 oc get servicemonitor,prometheusrule -n kcs-ipsec
 ```
@@ -408,18 +394,15 @@ oc get servicemonitor,prometheusrule -n kcs-ipsec
 
 ✅ **Expected:** value `1` for every worker, with labels `node` and `connection="ipsec-nas"`.
 
-The alerts:
+**4. The dashboard in the console (Perses).** On a cluster with the Cluster Observability Operator 1.5 or later ([openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm)):
 
-| Alert | Fires when | Severity |
-|---|---|---|
-| `IpsecNasTunnelDown` | A node has had no tunnel for 5 minutes | critical |
-| `IpsecNasLibreswanNotAnswering` | libreswan on a node has not answered the collector for 5 minutes | warning |
-| `IpsecNasCertificateExpiringSoon` | A node's certificate has less than 14 days left. cert-manager renews at 30 days, so this means a renewal did not reach the node. | warning |
-| `IpsecNasCertificateExpired` | A node's certificate has expired | critical |
-| `IpsecNasMetricsStale` | A node's metrics are more than 5 minutes old (the collector stopped) | warning |
-| `IpsecNasExporterMissing` | A worker reports no metrics at all for 15 minutes | warning |
+```bash
+oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml
+```
 
-**4. Grafana (optional).** The dashboard is a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
+It appears under **Observe → Dashboards (Perses)**, project `kcs-ipsec`. Viewers need `view` in `kcs-ipsec` and `cluster-monitoring-view`. Everything about it, from how it works to troubleshooting: [doc 61](61-perses-dashboard-review.md). The Helm chart installs it by default.
+
+**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
 
 ```bash
 cat <<'EOF' > 31-grafana-dashboard-cr.yaml
@@ -454,7 +437,12 @@ oc apply -f 31-grafana-dashboard-cr.yaml
 *The dashboard in the Lima lab on 2026-10-02, fed by two stand-in workers: 2 tunnels up, 0 down, 29.9 days to the soonest certificate expiry (the lab's test certificates last 30 days, hence yellow), and the traffic of a 5 MiB test write on each node.*
 
 > [!NOTE]
-> **What was tested, and where.** The collector and the metrics container were run on the lab workers against live tunnels, including taking a tunnel down and stopping libreswan. The alert rules pass `promtool` unit tests (`tests/test-alert-rules.sh`) and loaded in a real Prometheus. The dashboard was loaded in a real Grafana 13.2.3 and all of its queries returned data. **Not tested yet:** the ServiceMonitor and PrometheusRule on an OpenShift cluster, and the `GrafanaDashboard` object against a central Grafana; no such Grafana exists on our cluster today.
+> **What was tested, and where.**
+> - **The collector and the metrics container** were run on the lab workers against live tunnels, including taking a tunnel down and stopping libreswan.
+> - **The ServiceMonitor, the alert rules and the per-node checks** were measured on CRC (OpenShift 4.22.7) and on a three-node kind cluster: [doc 60](60-monitoring-per-node.md#what-was-tested-and-where).
+> - **The alert rules** pass `promtool` unit tests (`tests/test-alert-rules.sh`).
+> - **The Perses dashboard** was measured on CRC with COO 1.5.3: [doc 61](61-perses-dashboard-review.md).
+> - **The Grafana dashboard** was loaded in a real Grafana 13.2.3 (the Lima lab, and against CRC's Thanos), and all of its queries returned data. The `GrafanaDashboard` object above was not tested against a central Grafana.
 
 ## Step B.13 – Clean up after a deleted node
 
