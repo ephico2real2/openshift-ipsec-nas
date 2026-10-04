@@ -1,0 +1,1354 @@
+{
+  "display": {
+    "name": "IPsec to the NAS"
+  },
+  "duration": "1h",
+  "layouts": [
+    {
+      "kind": "Grid",
+      "spec": {
+        "display": {
+          "title": "Panel Group 1"
+        },
+        "items": [
+          {
+            "content": {
+              "$ref": "#/spec/panels/0"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 0,
+            "y": 0
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/1"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 6,
+            "y": 0
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/2"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 12,
+            "y": 0
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/3"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 18,
+            "y": 0
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/4"
+            },
+            "height": 5,
+            "width": 12,
+            "x": 0,
+            "y": 4
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5"
+            },
+            "height": 5,
+            "width": 12,
+            "x": 12,
+            "y": 4
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/6"
+            },
+            "height": 8,
+            "width": 24,
+            "x": 0,
+            "y": 9
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/7"
+            },
+            "height": 5,
+            "width": 8,
+            "x": 0,
+            "y": 17
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/8"
+            },
+            "height": 5,
+            "width": 8,
+            "x": 8,
+            "y": 17
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/9"
+            },
+            "height": 5,
+            "width": 8,
+            "x": 16,
+            "y": 17
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/10"
+            },
+            "height": 4,
+            "width": 8,
+            "x": 0,
+            "y": 22
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/11"
+            },
+            "height": 4,
+            "width": 8,
+            "x": 8,
+            "y": 22
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/12"
+            },
+            "height": 4,
+            "width": 8,
+            "x": 16,
+            "y": 22
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/13"
+            },
+            "height": 9,
+            "width": 24,
+            "x": 0,
+            "y": 26
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/16"
+            },
+            "height": 5,
+            "width": 24,
+            "x": 0,
+            "y": 35
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/14"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 0,
+            "y": 40
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/15"
+            },
+            "height": 8,
+            "width": 12,
+            "x": 12,
+            "y": 40
+          }
+        ]
+      }
+    }
+  ],
+  "panels": {
+    "0": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Workers that have an established IPsec tunnel to the NAS.",
+          "name": "Tunnels up"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum(ipsec_nas_tunnel_up{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "1": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Workers that report no tunnel. Anything above 0 needs attention.",
+          "name": "Tunnels down"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(ipsec_nas_tunnel_up{node=~\"$node\"} == 0) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "10": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Nodes with more than one ipsec-cert-sync pod reporting (alert IpsecNasDuplicateNode). Must be 0.",
+          "name": "Nodes reported twice"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(count by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"}) > 1) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "11": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Pods whose node label differs from the node Kubernetes placed them on (alert IpsecNasNodeLabelMismatch). Must be 0.",
+          "name": "Pods reporting the wrong node"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(ipsec_nas_collect_timestamp_seconds{node=~\"$node\",exporter_node!=\"\"} unless on (node, pod) label_replace(ipsec_nas_collect_timestamp_seconds, \"node\", \"$1\", \"exporter_node\", \"(.+)\")) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "12": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Packets the kernel IPsec code dropped in the last hour, over every selected node: the sum of the counters in /proc/net/xfrm_stat, each of which counts drops for one reason.",
+          "name": "Kernel IPsec errors, last hour"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum(increase(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[1h])) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "13": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan not answering. NFS requests/s comes from the platform's node-exporter. The reporting pod and the NAS identity are in the table below.",
+          "name": "Per node"
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "header": "Node",
+                "name": "node",
+                "width": 170
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "DOWN"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "UP"
+                  }
+                ],
+                "header": "Tunnel",
+                "name": "value #1",
+                "width": 90
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "NO"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "YES"
+                  }
+                ],
+                "header": "IKE SA",
+                "name": "value #2",
+                "width": 80
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "MISSING"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "PRESENT"
+                  }
+                ],
+                "header": "Certificate",
+                "name": "value #3",
+                "width": 110
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "MISSING"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "YES"
+                  }
+                ],
+                "header": "Connection",
+                "name": "value #4",
+                "width": 110
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "NO"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "YES"
+                  }
+                ],
+                "header": "libreswan",
+                "name": "value #5",
+                "width": 90
+              },
+              {
+                "header": "NFS mounts",
+                "name": "value #6",
+                "width": 110
+              },
+              {
+                "format": {
+                  "unit": "requests/sec"
+                },
+                "header": "NFS requests/s",
+                "name": "value #7",
+                "width": 110
+              },
+              {
+                "header": "IPsec drops (1h)",
+                "name": "value #8",
+                "width": 130
+              },
+              {
+                "format": {
+                  "unit": "seconds"
+                },
+                "header": "Cert imported",
+                "name": "value #9",
+                "width": 110
+              },
+              {
+                "hide": true,
+                "name": "timestamp"
+              }
+            ],
+            "density": "compact",
+            "transforms": [
+              {
+                "kind": "MergeSeries",
+                "spec": {}
+              }
+            ]
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node) (ipsec_nas_tunnel_up{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node) (ipsec_nas_ike_sa_established{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node) (ipsec_nas_certificate_present{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node) (ipsec_nas_connection_configured{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node) (ipsec_nas_collect_success{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum by (node) (ipsec_nas_nfs_mounts{node=~\"$node\"}) or 0 * max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum by (node) (label_replace(rate(node_nfs_requests_total{instance=~\"$node\"}[5m]), \"node\", \"$1\", \"instance\", \"(.*)\")) and on (node) max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum by (node) (increase(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[1h]))",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "time() - max by (node) (ipsec_nas_certificate_import_timestamp_seconds{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "14": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "How often each node's tunnel was set up again. Above 3 fires IpsecNasTunnelFlapping: a tunnel that keeps restarting looks up on the other panels.",
+          "name": "Tunnel re-establishments in the last hour"
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 4
+                }
+              ]
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "display": "line",
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "decimal"
+              },
+              "min": 0
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum by (node) (changes(ipsec_nas_tunnel_established_timestamp_seconds{node=~\"$node\"}[1h]))",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "15": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Rate of the error counters in /proc/net/xfrm_stat, by counter. Lines appear only for counters that moved.",
+          "name": "Kernel IPsec errors per node"
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "display": "line",
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "counts/sec"
+              },
+              "min": 0
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[5m])) > 0",
+                  "seriesNameFormat": "{{node}} {{counter}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "16": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "The identity the NAS presented, from its certificate, and the ipsec-cert-sync pod that reports the node. A node with no tunnel has no row here. A node in two rows is reported by two pods.",
+          "name": "NAS identity per node"
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "header": "Node",
+                "name": "node",
+                "width": 170
+              },
+              {
+                "header": "Reporting pod",
+                "name": "pod",
+                "width": 220
+              },
+              {
+                "header": "NAS identity",
+                "name": "peer_id"
+              },
+              {
+                "hide": true,
+                "name": "value"
+              },
+              {
+                "hide": true,
+                "name": "timestamp"
+              }
+            ],
+            "density": "compact"
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "max by (node, pod, peer_id) (ipsec_nas_tunnel_info{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "2": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Workers whose ipsec-cert-sync pod is being scraped.",
+          "name": "Workers reporting"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "3": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Days until the first node certificate expires. cert-manager renews 30 days before expiry.",
+          "name": "Soonest certificate expiry"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "decimalPlaces": 1,
+              "unit": "days"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#f2495c",
+                  "value": 0
+                },
+                {
+                  "color": "#fade2a",
+                  "value": 14
+                },
+                {
+                  "color": "#73bf69",
+                  "value": 30
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "min(ipsec_nas_certificate_not_after_timestamp_seconds{node=~\"$node\"} - time()) / 86400",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "4": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "UP when the node has an established tunnel to the NAS.",
+          "name": "Tunnel state per node"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "mappings": [
+              {
+                "kind": "Value",
+                "spec": {
+                  "result": {
+                    "color": "#f2495c",
+                    "value": "DOWN"
+                  },
+                  "value": "0"
+                }
+              },
+              {
+                "kind": "Value",
+                "spec": {
+                  "result": {
+                    "color": "#73bf69",
+                    "value": "UP"
+                  },
+                  "value": "1"
+                }
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#f2495c",
+                  "value": 0
+                },
+                {
+                  "color": "#73bf69",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "ipsec_nas_tunnel_up{node=~\"$node\"}",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "From the certificate in each node's NSS database, which is what libreswan actually uses.",
+          "name": "Certificate days left per node"
+        },
+        "plugin": {
+          "kind": "BarChart",
+          "spec": {
+            "calculation": "last-number",
+            "format": {
+              "decimalPlaces": 1,
+              "unit": "days"
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "(ipsec_nas_certificate_not_after_timestamp_seconds{node=~\"$node\"} - time()) / 86400",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "6": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Bytes per second sent to and received from the NAS through IPsec. NFS traffic shows up here.",
+          "name": "Traffic through the tunnel"
+        },
+        "plugin": {
+          "kind": "TimeSeriesChart",
+          "spec": {
+            "legend": {
+              "mode": "list",
+              "position": "bottom"
+            },
+            "visual": {
+              "areaOpacity": 0.1,
+              "lineWidth": 1
+            },
+            "yAxis": {
+              "format": {
+                "unit": "bytes/sec"
+              }
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "rate(ipsec_nas_tunnel_out_bytes_total{node=~\"$node\"}[5m])",
+                  "seriesNameFormat": "{{node}} to NAS"
+                }
+              }
+            }
+          },
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "rate(ipsec_nas_tunnel_in_bytes_total{node=~\"$node\"}[5m])",
+                  "seriesNameFormat": "{{node}} from NAS"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "7": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Time since the current tunnel was established. A small value on one node means it was re-established recently.",
+          "name": "Tunnel age per node"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "seconds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "time() - ipsec_nas_tunnel_established_timestamp_seconds{node=~\"$node\"}",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "8": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Time since the collector last ran. More than 5 minutes means the collector container stopped.",
+          "name": "Metrics age per node"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "value",
+            "format": {
+              "unit": "seconds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#fade2a",
+                  "value": 120
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 300
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "time() - ipsec_nas_collect_timestamp_seconds{node=~\"$node\"}",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "9": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "The libreswan version installed on each node.",
+          "name": "libreswan version per node"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "none",
+            "format": {
+              "unit": "decimal"
+            },
+            "metricLabel": "version",
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "ipsec_nas_libreswan_info{node=~\"$node\"}",
+                  "seriesNameFormat": "{{node}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "variables": [
+    {
+      "kind": "ListVariable",
+      "spec": {
+        "allowAllValue": true,
+        "allowMultiple": true,
+        "customAllValue": ".*",
+        "defaultValue": "$__all",
+        "display": {
+          "hidden": false,
+          "name": "Node"
+        },
+        "name": "node",
+        "plugin": {
+          "kind": "PrometheusLabelValuesVariable",
+          "spec": {
+            "labelName": "node",
+            "matchers": [
+              "ipsec_nas_tunnel_up"
+            ]
+          }
+        },
+        "sort": "alphabetical-asc"
+      }
+    }
+  ]
+}

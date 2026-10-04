@@ -149,8 +149,39 @@ The colours and values are right; the layout is not. Its *NFS requests/s* column
 | `v1alpha1` deprecated | write the resource as `perses.dev/v1alpha2` |
 | Readers refused (section 4) | resolved by the decision: 9091 and `cluster-monitoring-view` |
 
+## 6. In the chart: `metrics.persesDashboard.enabled`
+
+The chart ships the dashboard and its data source, behind one value (default `false`), and refuses to install them where COO's Perses API (`perses.dev/v1alpha2`) is missing:
+
+| Object (`perses.dev/v1alpha2`, in the release's namespace) | What |
+|---|---|
+| `PersesDatasource` `ipsec-nas-thanos` | Thanos Querier, port **9091** (`metrics.persesDashboard.thanosURL`), TLS with the service CA. It names the Perses secret COO derives from its TLS settings. Not the namespace's default: every query names it |
+| `PersesDashboard` `ipsec-nas` | `files/ipsec-nas.perses.json`, **generated** from the Grafana dashboard |
+
+**Generated, not hand-edited.** `scripts/perses-dashboard.sh` runs `percli migrate` (0.54.0, unpacked plugins) on `files/ipsec-nas.json`. It then applies `scripts/perses-dashboard-fix.py`, which carries the fixes of section 5 and refuses placeholder output, and writes both the chart's file and `manifests/option-b-per-node-certs/33-perses-dashboard.yaml`. Rerun it after any change to the Grafana dashboard. `tests/test-chart.sh` keeps the chart and the manifest identical.
+
+| Section 5 gap | In the generated dashboard |
+|---|---|
+| The table split a node into three rows | **fixed**: the table keeps the nine queries labelled by `node`, so one row per node. The reporting pod and the NAS identity moved to a new panel, *NAS identity per node* |
+| libreswan version showed `1` | **fixed**: shows `5.3` |
+| "days" unit lost | **fixed**, with a twist: Perses writes days in the largest fitting unit, so 364 days reads **12.1 months** |
+| NFS requests/s | **fixed** by port 9091: 39.8 requests/sec under load |
+| "No data" where Grafana said "No drops" | as before: the value is right (no drops) |
+| `v1alpha1` deprecated | **fixed**: `v1alpha2` |
+
+**Who sees it.** COO's roles for Perses are aggregated into OpenShift's own: `view` already allows reading `PersesDashboard`s and `PersesDatasource`s in the namespace (measured: the test reader read them with `view` alone), `edit` and `admin` allow changing them. So the chart creates **no RoleBindings**. A viewer who can open the namespace and holds `cluster-monitoring-view` sees every panel.
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/41-perses-chart.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/41-perses-chart.light.png">
+  <img alt="The generated dashboard as the namespace reader holding cluster-monitoring-view: soonest certificate expiry 12.1 months, the certificate bar in months, traffic around 3.8 MiB/s under load, tunnel age 7.5h, libreswan version 5.3, the per-node table with one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, imported 7.5h), and a new NAS identity per node table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal." src="images/crc/41-perses-chart.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 5. The dashboard the chart ships, as the namespace reader holding `cluster-monitoring-view`, in the upstream Perses 0.54.0 UI on CRC's data: one row per node, the NAS identity in its own panel, `5.3`, the NFS column. The same objects applied on CRC are `Available`, and queries through COO's Perses with the chart's data source answer with `GET` and `POST` (HTTP 200).*
+
 ## Not covered here
 
 - How the console renders this dashboard: [#36](https://github.com/ephico2real2/openshift-ipsec-nas/issues/36), step 2.
-- The chart change that ships the `PersesDashboard` and its data source: [#36](https://github.com/ephico2real2/openshift-ipsec-nas/issues/36), step 3.
 - COO itself: [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).

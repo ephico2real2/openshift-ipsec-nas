@@ -48,7 +48,12 @@
       "properties": {
         "serviceMonitor": { "type": "boolean" },
         "prometheusRule": { "type": "boolean" },
-        "grafanaDashboard": { "type": "boolean" }
+        "grafanaDashboard": { "type": "boolean" },
+        "persesDashboard": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "enabled": { "type": "boolean" }, "thanosURL": { "type": "string", "pattern": "^https://" } }
+        }
       }
     },
     "nodeCleanup": { "type": "object", "properties": { "deleteCertificate": { "type": "boolean" }, "deleteOrphanedSecrets": { "type": "boolean" }, "schedule": { "type": "string" } } },

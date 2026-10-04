@@ -80,6 +80,16 @@ metrics:
   prometheusRule: true
   # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1").
   grafanaDashboard: false
+  # The same dashboard for Perses, the dashboards in the OpenShift console that the Cluster Observability
+  # Operator (COO 1.5 or later) brings: a PersesDashboard and the PersesDatasource it queries, in this
+  # namespace. COO is installed by https://github.com/ephico2real2/openshift-coo-helm, not by this chart.
+  # Viewers need cluster-monitoring-view: docs/61-perses-dashboard-review.md, "Decision".
+  persesDashboard:
+    # -- Render the PersesDashboard and PersesDatasource (needs the API perses.dev/v1alpha2).
+    enabled: false
+    # -- Thanos Querier's cluster-wide port. The per-namespace port (9092) refuses the Perses UI's POST
+    # queries for readers (it checks them as "create pods").
+    thanosURL: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
 
 nodeCleanup:
   # -- When a Node is DELETED, Kyverno deletes that node's Certificate. false keeps it.

@@ -19,7 +19,7 @@ compare() {  # $1 = cel|legacy, $2 = label; the rest = helm --set arguments. The
   local mode="$1" label="$2 ($1 policies)"; shift 2
   ./render.sh >/dev/null
   helm template ipsec-nas "${CHART}" -n kcs-ipsec --set prerequisites.skipCheck=true \
-    --set-file trustCA.pem="${tmp}/root.pem" --set metrics.grafanaDashboard=true \
+    --set-file trustCA.pem="${tmp}/root.pem" --set metrics.grafanaDashboard=true --set metrics.persesDashboard.enabled=true \
     --set kyverno.legacyPolicies="$([[ "${mode}" == legacy ]] && echo true || echo false)" "$@" > "${tmp}/chart.yaml"
   cat rendered/common/03-kyverno-rbac.yaml > "${tmp}/manifests.yaml"
   # the legacy set is the same directory with the files of kyverno-legacy/ in place of their namesakes
@@ -125,19 +125,23 @@ expect_fail() {  # $1 = label, $2 = text the error must contain; the rest = helm
     echo "FAIL  ${label}: wrong message"; echo "${out}" | tail -2; return 1
   fi
 }
+# values-crc.yaml enables the Perses dashboard: the cases below also serve perses.dev/v1alpha2, so that each fails on its own prerequisite.
 expect_fail "no values at all is refused" "nas.fqdn is required"
 expect_fail "a missing issuer name is refused" "clusterIssuer is required" --set nas.fqdn=x --set nas.ip=1.2.3.4
 expect_fail "a cluster without Kyverno is refused" "prerequisite missing: Kyverno" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
 expect_fail "a Kyverno without the CEL policies is refused, naming the legacy switch" "kyverno.legacyPolicies=true" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
 expect_fail "legacy policies on a cluster without kyverno.io/v1 are refused" "prerequisite missing: Kyverno" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --set kyverno.legacyPolicies=true \
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --set kyverno.legacyPolicies=true \
   --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
 expect_fail "a cluster without cert-manager is refused" "prerequisite missing: cert-manager" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions policies.kyverno.io/v1 --api-versions nmstate.io/v1
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions policies.kyverno.io/v1 --api-versions nmstate.io/v1
 expect_fail "a cluster without NMState is refused" "prerequisite missing: the NMState Operator" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1
+expect_fail "the Perses dashboard without COO's Perses API is refused" "prerequisite missing: the Cluster Observability Operator" \
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --set metrics.persesDashboard.enabled=true \
+  --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
 
 # Argo CD order: what the DaemonSet depends on must be in an earlier wave than the DaemonSet
 ruby -ryaml -e '
