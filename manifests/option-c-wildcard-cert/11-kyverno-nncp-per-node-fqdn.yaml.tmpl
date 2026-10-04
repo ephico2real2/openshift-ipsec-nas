@@ -3,10 +3,13 @@
 # Measured against a libreswan NAS, the NAS did not enforce the name and still saw one identity for
 # every node, so it must allow duplicate peer IDs as for C1
 # (docs/evidence/crc/34-option-c-lab-identities.txt, cases 3 to 7).
+# One per pool (worker, master), as the MachineConfig. The worker pool's leaves out control-plane and master
+# nodes, so it never takes a master that also has the worker label; render.sh drops that exclusion for
+# MCP_ROLE=master. A node is in one pool, so its NNCP (ipsec-nas-<node>) comes from one policy only.
 apiVersion: policies.kyverno.io/v1
 kind: GeneratingPolicy
 metadata:
-  name: ipsec-nncp-wildcard-per-node
+  name: ipsec-nncp-wildcard-${MCP_ROLE}
 spec:
   evaluation:
     generateExisting:

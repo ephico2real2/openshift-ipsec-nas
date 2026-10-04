@@ -3,10 +3,11 @@
 # duplicate peer IDs (measured: docs/evidence/crc/34-option-c-lab-identities.txt, cases 1 and 2).
 # left: %defaultroute uses the address of the node's default-route interface: the NAS must be
 # reached through that interface. Otherwise use C2, which sets left per node.
+# One per pool (worker, master), as the MachineConfig: render with MCP_ROLE=worker and MCP_ROLE=master.
 apiVersion: nmstate.io/v1
 kind: NodeNetworkConfigurationPolicy
 metadata:
-  name: ipsec-nas-wildcard
+  name: ipsec-nas-wildcard-${MCP_ROLE}
 spec:
   nodeSelector:
     node-role.kubernetes.io/${MCP_ROLE}: ""        # the pool the MachineConfig was applied to

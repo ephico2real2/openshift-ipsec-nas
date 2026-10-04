@@ -30,6 +30,7 @@ export NODE_LEFT NODE_LEFT_LEGACY
 # Which nodes are left out is written in the manifests between "# exclude-nodes:begin" and
 # "# exclude-nodes:end" (control-plane, master and ingress nodes). EXCLUDE_NODES=none takes those
 # blocks out, for a cluster whose only node is control plane and worker at once (CRC).
+# Option C's master pool (MCP_ROLE=master) selects control-plane nodes, so its files never keep them.
 EXCLUDE_NODES="${EXCLUDE_NODES:-default}"
 command -v perl >/dev/null || { echo "perl not found"; exit 1; }
 
@@ -42,7 +43,7 @@ while IFS= read -r f; do
   else
     cp "$f" "$out"
   fi
-  if [[ "${EXCLUDE_NODES}" == "none" ]]; then
+  if [[ "${EXCLUDE_NODES}" == "none" || ( "${MCP_ROLE}" == "master" && "$f" == manifests/option-c-wildcard-cert/* ) ]]; then
     perl -0pi -e 's/^[ \t]*# exclude-nodes:begin\n.*?^[ \t]*# exclude-nodes:end\n//msg' "${out%.tmpl}"
   fi
 done < <(find manifests -type f | sort)

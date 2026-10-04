@@ -1,0 +1,36 @@
+# One MachineConfig and one NNCP (or C2 policy) per pool, worker and master. CRC 4.22.7, Option C (C1), 2026-10-04
+# 20:22-20:31Z. Templates: manifests/option-c-wildcard-cert/*.tmpl; render.sh.
+
+## 1. The renders (NODE_DOMAIN=crc.testing, NAS_IP=192.168.64.8, ...)
+  MCP_ROLE=worker: NNCP ipsec-nas-wildcard-worker, nodeSelector node-role.kubernetes.io/worker;
+                   policy ipsec-nncp-wildcard-worker, selects the worker label, keeps the not-excluded condition
+                   (control-plane, master, ingress)
+  MCP_ROLE=master: NNCP ipsec-nas-wildcard-master, nodeSelector node-role.kubernetes.io/master;
+                   policy ipsec-nncp-wildcard-master, selects the master label, no exclusion (render.sh drops it
+                   for Option C's files when MCP_ROLE=master)
+  Option B's rendered manifests keep their exclusion blocks with MCP_ROLE=master.
+  The MachineConfig was already per pool: 99-<pool>-ipsec-wildcard-cert (CRC: 99-master-ipsec-wildcard-cert).
+
+## 2. On CRC (its only node is in the master pool), C1 renamed
+  20:22:50Z oc delete nncp ipsec-nas-wildcard; oc apply of the master render ->
+    ipsec-nas-wildcard-master Degraded FailedToConfigure; nnce crc.ipsec-nas-wildcard-master Failing:
+    "NmstateError: VerificationError: Failed to find desired interface ipsec-nas Ipsec", rolled back.
+  Cause: my test render used the guide's defaults (type: transport, right: crc-nas.lab.internal). CRC reaches the NAS
+  through NAT and needs the lab's overrides IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 (doc 40); the working NNCP had
+  type: tunnel, right: 192.168.64.8. Not a fault of the per-pool change.
+  20:30:04Z re-rendered: MCP_ROLE=master IPSEC_TYPE=tunnel NAS_RIGHT=192.168.64.8 ./render.sh; desiredState identical
+  to the working NNCP; applied: 20:30:15Z ipsec-nas-wildcard-master Available SuccessfullyConfigured.
+  20:30:21Z node: our id=CN=ocp-ipsec-workers, O=KCS; IKE SAs authenticated(1); IPsec SAs authenticated(1);
+            ESP SA add_time 1791145810 (20:30:10Z). Demo application writing (line 713, 20:30:30Z).
+
+## 3. The outage, as the monitoring saw it (unplanned)
+  The tunnel was down from about 20:23Z to 20:30:10Z. The demo application's writes stopped for exactly that time:
+  gap 20:23:00 -> 20:30:30 = 450 s (the NAS refuses NFS that does not arrive through IPsec).
+  20:30:21Z ALERTS{namespace="kcs-ipsec"}, both firing:
+    IpsecNasTunnelDown        connection=ipsec-nas node=crc severity=critical
+    IpsecNasNfsWithoutTunnel  namespace=kcs-ipsec node=crc severity=critical
+  The first firing of IpsecNasNfsWithoutTunnel on a cluster. Its rate(node_nfs_requests_total[5m]) also counts requests
+  made in the 5 minutes before the tunnel dropped, so the alert says NFS was in use around the outage, not which
+  request went without IPsec; the writes themselves stalled for the whole outage.
+  20:31:07Z ALERTS{namespace="kcs-ipsec"}: none; ipsec_nas_tunnel_up 1. The user workload Alertmanager held only other
+  projects' alerts by then.

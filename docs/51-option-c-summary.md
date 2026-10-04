@@ -19,8 +19,8 @@ In every combination that held both peers' tunnels, the NAS had `uniqueids=no` (
 
 | Part | What it is | Required |
 |---|---|---|
-| The certificate | One wildcard certificate in a MachineConfig, imported at every boot (doc 50, Steps C.1 to C.4) | Yes |
-| The tunnel | C1: one NNCP for the pool. C2: a Kyverno policy that makes one NNCP per node (doc 50, Step C.5) | Yes, one of the two |
+| The certificate | One wildcard certificate in a MachineConfig per pool (`99-worker-…`, `99-master-…`), imported at every boot (doc 50, Steps C.1 to C.4) | Yes |
+| The tunnel | Per pool: C1, one NNCP (`ipsec-nas-wildcard-<pool>`); C2, a Kyverno policy (`ipsec-nncp-wildcard-<pool>`) that makes one NNCP per node (doc 50, Step C.5) | Yes, one of the two |
 | Metrics, alerts, dashboard | **Additional setup:** a new DaemonSet (the collector, no cert-sync) with its ServiceMonitor, alert rules and dashboard, from the chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) (doc 50, [Monitoring, optional](50-option-c-wildcard-certificate.md#monitoring-optional)) | No. Never together with Option B's chart |
 
 ## What the NAS team must do for the three setups that work

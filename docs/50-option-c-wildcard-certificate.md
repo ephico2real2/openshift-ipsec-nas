@@ -214,7 +214,7 @@ Option B remains the standard. Option C is the alternative where no component be
 
 ## Step C.1 – A key and a certificate request
 
-Set the variables of [00-prepare-the-cluster.md, Part 0.3](00-prepare-the-cluster.md#03-open-a-shell-and-set-variables), and `MCP_ROLE` to the pool that reaches the NAS (`worker` on most clusters). The script needs `openssl` and `butane`, and an `oc` login: it reads the cluster's version for Butane's MachineConfig format (or set `OCP_VERSION`, for example `4.19.0`). Work in a directory outside Git:
+Set the variables of [00-prepare-the-cluster.md, Part 0.3](00-prepare-the-cluster.md#03-open-a-shell-and-set-variables), and `MCP_ROLE` to the pool that reaches the NAS: `worker`, or `master` for the control plane. **Each pool gets its own MachineConfig and its own NNCP or policy**: for both pools, do Steps C.3 to C.5 once with `MCP_ROLE=worker` and once with `MCP_ROLE=master` (one certificate request serves both, since the wildcard covers every node's name). The script needs `openssl` and `butane`, and an `oc` login: it reads the cluster's version for Butane's MachineConfig format (or set `OCP_VERSION`, for example `4.19.0`). Work in a directory outside Git:
 
 ```bash
 export MCP_ROLE=worker
@@ -260,12 +260,13 @@ The key is now in the MachineConfig, and anyone who can read `machineconfigs` ca
 > [!IMPORTANT]
 > **Stop here until the NAS side is ready**, including duplicate peer IDs ([above](#what-the-nas-must-allow-measured)).
 
-From the repository root, render the manifests with the variables of Part 0.3 (`NODE_DOMAIN`, `NAS_FQDN`, `NAS_IP`) and `MCP_ROLE`. `IPSEC_TYPE` defaults to `transport`; use `tunnel` only with NAT between the nodes and the NAS. C2's policy leaves out nodes labelled control-plane, master or ingress. On a compact cluster, whose nodes are masters and workers at once, and on OpenShift Local, render with `EXCLUDE_NODES=none`, or C2 makes no NNCP. C1's NNCP selects the pool by its role and has no exclusion.
+From the repository root, render the manifests with the variables of Part 0.3 (`NODE_DOMAIN`, `NAS_FQDN`, `NAS_IP`) and `MCP_ROLE`. `IPSEC_TYPE` defaults to `transport`; use `tunnel` only with NAT between the nodes and the NAS. On a compact cluster, whose nodes are masters and workers at once, and on OpenShift Local, use the master pool (`MCP_ROLE=master`). C1's NNCP selects the pool by its role label and has no exclusion, so on a compact cluster render C1 for the master pool only.
 
 ```bash
-MCP_ROLE=worker ./render.sh          # compact cluster or OpenShift Local: EXCLUDE_NODES=none MCP_ROLE=... ./render.sh
+MCP_ROLE=worker ./render.sh          # the worker pool; the control-plane pool: MCP_ROLE=master ./render.sh
 ```
 
+The objects are named after the pool, so both can be applied: `99-<pool>-ipsec-wildcard-cert`, C1's NNCP `ipsec-nas-wildcard-<pool>`, C2's policy `ipsec-nncp-wildcard-<pool>`. The worker pool's C2 policy leaves out control-plane and master nodes, so it never takes a master that also has the worker label; for `MCP_ROLE=master`, `render.sh` drops that exclusion. On OpenShift Local the only node is in the master pool: `MCP_ROLE=master`, plus the lab's overrides `IPSEC_TYPE=tunnel NAS_RIGHT=<NAS IP>` ([doc 40](40-lab-crc-and-nas.md)); without them NMState failed (`Failed to find desired interface ipsec-nas`) and the tunnel was down for 7.5 minutes ([evidence 50](evidence/crc/50-option-c-per-pool.txt)).
 
 ```bash
 # C1: one NNCP for the pool, no Kyverno
@@ -280,12 +281,12 @@ oc apply -f rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml
 > **After an NNCP change on a running node, restart the node's connection.** Switching a node from C1 to C2 changed its connection in place; NetworkManager then reported it `activated` while libreswan had no SA, and nothing restarted it (measured on CRC). Option B's cert-sync pod does this restart by itself; Option C has no such pod. On each node: `nmcli connection down ipsec-nas; nmcli connection up ipsec-nas`. On a new node or after a reboot the connection starts fresh, so this applies only to changes of a running tunnel.
 
 ```bash
-oc get nncp                                   # C1: ipsec-nas-wildcard; C2: ipsec-nas-<node> for each node
+oc get nncp                                   # C1: ipsec-nas-wildcard-<pool>; C2: ipsec-nas-<node> for each node
 oc get nnce | grep ipsec-nas                  # one per node
 oc debug node/${NODE} -q -- chroot /host bash -c 'ipsec status | grep -o "our id=[^;]*"; ipsec trafficstatus'
 ```
 
-✅ **Expected** (measured on CRC, C1): `ipsec-nas-wildcard   Available   SuccessfullyConfigured`; `crc.ipsec-nas-wildcard   Available ... SuccessfullyConfigured`; `our id=CN=ocp-ipsec-workers, O=KCS` (C2: `our id=@<node>.<NODE_DOMAIN>`), and one `type=ESP` line whose `id=` is the NAS's certificate.
+✅ **Expected** (measured on CRC, C1, master pool): `ipsec-nas-wildcard-master   Available   SuccessfullyConfigured`; `crc.ipsec-nas-wildcard-master   Available ... SuccessfullyConfigured`; `our id=CN=ocp-ipsec-workers, O=KCS` (C2: `our id=@<node>.<NODE_DOMAIN>`), and one `type=ESP` line whose `id=` is the NAS's certificate.
 
 C1's NNCP selects the nodes by the pool's role label, so a new node of the pool gets it with no other step. Its `left: '%defaultroute'` uses the address of the node's default-route interface: if the NAS is reached through another interface, use C2. Then verify as in [00-prepare-the-cluster.md, 3.2](00-prepare-the-cluster.md#32-verify-end-to-end).
 
@@ -361,7 +362,7 @@ Remove it before Option C: `helm uninstall ipsec-nas-metrics -n kcs-ipsec`.
 The order matters: the tunnel definition first, then the tunnel, then the MachineConfig, then what the MachineConfig leaves behind.
 
 ```bash
-# 1. C1: oc delete nncp ipsec-nas-wildcard      C2: oc delete generatingpolicy ipsec-nncp-wildcard-per-node
+# 1. For each pool: C1: oc delete nncp ipsec-nas-wildcard-${MCP_ROLE}   C2: oc delete generatingpolicy ipsec-nncp-wildcard-${MCP_ROLE}
 # 2. Remove the tunnel from every node with an NNCP that says absent (as in Option A, Step A.12)
 # 3. Delete the MachineConfig: every node of the pool reboots
 oc delete mc 99-${MCP_ROLE}-ipsec-wildcard-cert
