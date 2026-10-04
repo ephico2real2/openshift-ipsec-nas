@@ -125,7 +125,7 @@ expect_fail() {  # $1 = label, $2 = text the error must contain; the rest = helm
     echo "FAIL  ${label}: wrong message"; echo "${out}" | tail -2; return 1
   fi
 }
-# values-crc.yaml enables the Perses dashboard: the cases below also serve perses.dev/v1alpha2, so that each fails on its own prerequisite.
+# The Perses dashboard is on by default: the cases below also serve perses.dev/v1alpha2, so that each fails on its own prerequisite.
 expect_fail "no values at all is refused" "nas.fqdn is required"
 expect_fail "a missing issuer name is refused" "clusterIssuer is required" --set nas.fqdn=x --set nas.ip=1.2.3.4
 expect_fail "a cluster without Kyverno is refused" "prerequisite missing: Kyverno" \
@@ -139,9 +139,14 @@ expect_fail "a cluster without cert-manager is refused" "prerequisite missing: c
   -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions policies.kyverno.io/v1 --api-versions nmstate.io/v1
 expect_fail "a cluster without NMState is refused" "prerequisite missing: the NMState Operator" \
   -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --api-versions perses.dev/v1alpha2 --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1
-expect_fail "the Perses dashboard without COO's Perses API is refused" "prerequisite missing: the Cluster Observability Operator" \
-  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --set metrics.persesDashboard.enabled=true \
+expect_fail "the Perses dashboard (on by default) without COO's Perses API is refused" "prerequisite missing: the Cluster Observability Operator" \
+  -f "${CHART}/values-crc.yaml" --set trustCA.pem=x \
   --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1
+helm template ipsec-nas "${CHART}" -n kcs-ipsec -f "${CHART}/values-crc.yaml" --set trustCA.pem=x --set metrics.persesDashboard.enabled=false \
+  --api-versions policies.kyverno.io/v1 --api-versions cert-manager.io/v1 --api-versions nmstate.io/v1 > "${tmp}/no-perses.yaml" \
+  && ! grep -q 'perses.dev' "${tmp}/no-perses.yaml" \
+  && echo "ok    metrics.persesDashboard.enabled=false installs without COO, and renders no Perses objects" \
+  || { echo "FAIL  metrics.persesDashboard.enabled=false"; exit 1; }
 
 # Argo CD order: what the DaemonSet depends on must be in an earlier wave than the DaemonSet
 ruby -ryaml -e '

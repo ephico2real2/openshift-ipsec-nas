@@ -13,8 +13,3 @@ ipsec:
   type: tunnel
   left: "%defaultroute"
   right: 192.168.64.8
-# COO 1.5.3 with Perses is installed on this CRC (https://github.com/ephico2real2/openshift-coo-helm):
-# ship the Perses dashboard beside the Grafana one.
-metrics:
-  persesDashboard:
-    enabled: true
