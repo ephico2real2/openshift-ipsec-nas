@@ -200,7 +200,7 @@ A NAS product other than libreswan may treat identities differently; the cases a
 | Revoke one node | No | No | Yes |
 | Private key | One, on every node and in the MachineConfig | One, on every node and in the MachineConfig | One per node, in a Secret |
 | NAS must allow duplicate peer IDs | Yes | Yes | No |
-| Components beyond OpenShift | Kyverno (or one NNCP per node by hand) | **C1: none.** C2: Kyverno | Kyverno, cert-manager |
+| Components beyond OpenShift | Kyverno (or one NNCP per node by hand) | **C1: none.** C2: Kyverno. The optional metrics add our own DaemonSet | Kyverno, cert-manager |
 | Monitoring | None | **Optional**, the separate chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md): Option B's per-node metrics, alerts and dashboard (Perses; Grafana optional), our own privileged DaemonSet ([Monitoring, optional](#monitoring-optional)). C1 runs without it | Per-node metrics, alerts and dashboard |
 
 **What the measurements show about viability:**
@@ -311,7 +311,7 @@ Every node of the pool reboots once, one at a time. Each node imports the new ce
 
 ## Monitoring, optional
 
-Option C itself installs no pod, so without more it has no metrics. The chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) adds Option B's collector without cert-sync. Each node then reports the same metrics as on Option B, the twelve alerts apply, and the same dashboard opens in the console (Perses) or in Grafana.
+**This is additional setup, not part of Option C:** a new DaemonSet, from its own Helm chart, installed after Steps C.1 to C.5. Option C itself installs no pod, so without it there are no metrics. The chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) adds Option B's collector without cert-sync. Each node then reports the same metrics as on Option B, the twelve alerts apply, and the same dashboard opens in the console (Perses) or in Grafana.
 
 **What it adds beyond OpenShift**, so C1 is no longer "Red Hat components only" once it is installed:
 

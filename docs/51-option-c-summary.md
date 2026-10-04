@@ -15,6 +15,14 @@ In every combination that held both peers' tunnels, the NAS had `uniqueids=no` (
 | C2 | own FQDN / `@*.internal` | case 5: one tunnel at a time | **case 6: works** |
 | C2 | own FQDN / `%any` | case 4: refused | – |
 
+## What is deployed
+
+| Part | What it is | Required |
+|---|---|---|
+| The certificate | One wildcard certificate in a MachineConfig, imported at every boot (doc 50, Steps C.1 to C.4) | Yes |
+| The tunnel | C1: one NNCP for the pool. C2: a Kyverno policy that makes one NNCP per node (doc 50, Step C.5) | Yes, one of the two |
+| Metrics, alerts, dashboard | **Additional setup:** a new DaemonSet (the collector, no cert-sync) with its ServiceMonitor, alert rules and dashboard, from the chart [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md) (doc 50, [Monitoring, optional](50-option-c-wildcard-certificate.md#monitoring-optional)) | No. Never together with Option B's chart |
+
 ## What the NAS team must do for the three setups that work
 
 | Setup | Nodes send | NAS `rightid` | NAS `uniqueids` | Result |
