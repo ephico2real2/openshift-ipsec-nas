@@ -74,11 +74,7 @@ Every node presents the same certificate. Whether the NAS can hold all their tun
 | 7 | each its own FQDN | `%fromcert` | `no` | **2** | both pass |
 | – | a name outside the wildcard (`@…example.org`) | `@*.internal` | `no` | **accepted** | – |
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="images/crc/34-option-c-lab-identities.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="images/crc/34-option-c-lab-identities.light.png">
-  <img alt="Terminal capture of lab/lab.sh option-c: two stand-in workers with one wildcard certificate *.internal. Case 1, certificate identity with uniqueids yes: one NAS tunnel at a time, connection instance 444. Case 2, uniqueids no: two tunnels and both 5 MiB NFS writes pass. Case 3, FQDN identities with rightid fromcert and uniqueids yes: one tunnel, recorded under the certificate subject. Case 4, rightid any: no tunnel. Case 5, rightid wildcard with uniqueids yes: one tunnel recorded as the wildcard. Case 7, FQDN identities with rightid fromcert and uniqueids no: two tunnels, both writes pass. Case 6, rightid wildcard with uniqueids no: two tunnels, both writes pass. Negative: a worker claiming an identity outside the wildcard still has a tunnel. Then the lab restored, and the NAS debug lines for case 4." src="images/crc/34-option-c-lab-identities.light.png">
-</picture>
+<img alt="Terminal capture of lab/lab.sh option-c: two stand-in workers with one wildcard certificate *.internal. Case 1, certificate identity with uniqueids yes: one NAS tunnel at a time, connection instance 444. Case 2, uniqueids no: two tunnels and both 5 MiB NFS writes pass. Case 3, FQDN identities with rightid fromcert and uniqueids yes: one tunnel, recorded under the certificate subject. Case 4, rightid any: no tunnel. Case 5, rightid wildcard with uniqueids yes: one tunnel recorded as the wildcard. Case 7, FQDN identities with rightid fromcert and uniqueids no: two tunnels, both writes pass. Case 6, rightid wildcard with uniqueids no: two tunnels, both writes pass. Negative: a worker claiming an identity outside the wildcard still has a tunnel. Then the lab restored, and the NAS debug lines for case 4." src="images/crc/34-option-c-lab-identities.light.png">
 
 *Capture 34. The wildcard-certificate cases in the Lima lab. Text: [`evidence/crc/34-option-c-lab-identities.txt`](evidence/crc/34-option-c-lab-identities.txt).*
 
@@ -331,11 +327,7 @@ Everything below was run on OpenShift Local (CRC) 2.63.0 with OpenShift 4.22.7, 
 | C.7, removal | The policy deleted (Kyverno removed its NNCP), the tunnel removed with an `absent` NNCP, the MachineConfig deleted 02:55:16 and one reboot. Afterwards the unit and the files were gone, the empty directory `/etc/pki/ipsec-nas` stayed, and **the certificate and its key were still in the node's NSS database** until step 4 removed them | [37](evidence/crc/37-option-c-crc-removal-and-b-restored.txt) |
 | Option B back | The same Argo CD Application from Git: `Synced` and `Healthy` after 14 seconds, the first pod with its node's secret, the tunnel after 23 seconds; the NAS authenticated `CN=crc.crc.testing` with no restart (it held no old instance, since the tunnel had been removed first); the demo application wrote again | 37 |
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="images/crc/35-option-c-crc-install.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="images/crc/35-option-c-crc-install.light.png">
-  <img alt="Terminal capture of Option C on CRC: Option B running, then removed with the Argo CD procedure; a wildcard key and CSR for *.crc.testing signed by enterprise-ca for two years and checked by option-c-certificate.sh; the MachineConfig applied, the node rebooting, crc stop timing out and the forced restart; after the boot one left_server certificate with the signed serial in the node's NSS database; then the C1 NNCP Available in 8 seconds, the tunnel with identity CN=ocp-ipsec-workers, the NAS authenticating it, and the demo application writing again." src="images/crc/35-option-c-crc-install.light.png">
-</picture>
+<img alt="Terminal capture of Option C on CRC: Option B running, then removed with the Argo CD procedure; a wildcard key and CSR for *.crc.testing signed by enterprise-ca for two years and checked by option-c-certificate.sh; the MachineConfig applied, the node rebooting, crc stop timing out and the forced restart; after the boot one left_server certificate with the signed serial in the node's NSS database; then the C1 NNCP Available in 8 seconds, the tunnel with identity CN=ocp-ipsec-workers, the NAS authenticating it, and the demo application writing again." src="images/crc/35-option-c-crc-install.light.png">
 
 *Capture 35. Option C installed on CRC with C1. Captures of the renewal and C2 switch, and of the removal: [`evidence/crc/36-option-c-crc-renewal-and-c2.txt`](evidence/crc/36-option-c-crc-renewal-and-c2.txt), [`evidence/crc/37-option-c-crc-removal-and-b-restored.txt`](evidence/crc/37-option-c-crc-removal-and-b-restored.txt). Text: [`evidence/crc/35-option-c-crc-install.txt`](evidence/crc/35-option-c-crc-install.txt).*
 
