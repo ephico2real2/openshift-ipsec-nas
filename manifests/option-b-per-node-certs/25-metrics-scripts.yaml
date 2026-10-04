@@ -12,7 +12,8 @@ data:
     # *** Change the shared file first, then run scripts/sync-shared-collector.sh: it copies it to BOTH charts.
     # *** tests/test-shared-collector.sh fails when a copy differs.
     # ************************************************************************************************
-    # ipsec-nas metrics collector: runs on every worker, beside the cert-sync container.
+    # ipsec-nas metrics collector: runs on every IPsec node, beside the cert-sync container (Option B) or
+    # alone (the ipsec-nas-option-c-metrics chart).
     # Every COLLECT_EVERY seconds it asks the HOST's libreswan about the ipsec-nas connection, the
     # HOST's NSS database about the node certificate, and the HOST's kernel about IPsec errors and
     # NFS mounts, and writes the answers as Prometheus metrics into a file. The unprivileged
@@ -23,8 +24,15 @@ data:
     NSS_DB=/var/lib/ipsec/nss
     CERT_NICK=left_server
     CONN_NAME=ipsec-nas
-    # written by sync.sh after each successful certificate import
+    # Each option leaves its own marker on the node; the first one found names the option (certificate_mode).
+    # B: written by cert-sync's sync.sh after each successful certificate import
     STAMP=/host/etc/pki/certs/kcs-ipsec/.installed-sha256
+    # C: the bundle of MachineConfig 99-<pool>-ipsec-wildcard-cert, imported at every boot by ipsec-nas-import.service
+    OPTION_C_BUNDLE=/host/etc/pki/ipsec-nas/left_server.p12
+    # A: the bundle of MachineConfig 99-ipsec-worker-endpoint-config, imported at boot by ipsec-import.service
+    OPTION_A_BUNDLE=/host/etc/pki/certs/left_server.p12
+    # systemd's "unit finished" journal record; with JOB_RESULT=done the unit ran successfully
+    UNIT_DONE_ID=39f53479d3a045ac8e11786248231fbf
     OUT_FILE=/metrics/ipsec_nas.prom
     COLLECT_EVERY=30
     # The pod has its own network and mount namespaces; the node's are those of the host's PID 1
@@ -80,8 +88,23 @@ data:
     # Prometheus label values: backslash, double quote and newline must be escaped
     label_escape() { sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' <<<"$1"; }
 
+    # Which option put the certificate on the node: B, C or A, from the markers above; nothing if none.
+    certificate_mode() {
+      if [[ -e "${STAMP}" ]]; then echo B
+      elif [[ -e "${OPTION_C_BUNDLE}" ]]; then echo C
+      elif [[ -e "${OPTION_A_BUNDLE}" ]]; then echo A
+      fi
+    }
+
+    # When the boot-time import unit $1 last succeeded in the current boot, in Unix seconds; nothing if it did
+    # not. Read from the journal: the collector cannot reach systemd's bus (it has its own PID namespace).
+    boot_import_time() {
+      chroot /host journalctl -b -u "$1" MESSAGE_ID="${UNIT_DONE_ID}" JOB_RESULT=done -o short-unix -r -n 1 --no-pager -q 2>/dev/null \
+        | cut -d. -f1
+    }
+
     collect() {
-      local now status rc fields up=0 add_time="" in_bytes="" out_bytes="" peer="" end not_after="" imported="" version node
+      local now status rc fields up=0 add_time="" in_bytes="" out_bytes="" peer="" end not_after="" imported="" mode version node
       local uuid conn configured cert_present ike="" xfrm="" mounts=""
       now=$(date +%s)
       node=$(label_escape "${NODE_NAME}")
@@ -106,7 +129,13 @@ data:
       [[ -r "${HOST_MOUNTS}" ]] && mounts=$(nfs_mount_servers < "${HOST_MOUNTS}")
       end=$(chroot /host bash -c "certutil -L -n ${CERT_NICK} -d ${NSS_DB} -a 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null" | cut -d= -f2)
       [[ -n "${end}" ]] && not_after=$(date -u -d "${end}" +%s 2>/dev/null)
-      [[ -e "${STAMP}" ]] && imported=$(stat -c %Y "${STAMP}" 2>/dev/null)
+      mode=$(certificate_mode)
+      case "${mode}" in
+        B) imported=$(stat -c %Y "${STAMP}" 2>/dev/null) ;;
+        C) imported=$(boot_import_time ipsec-nas-import.service) ;;
+        A) imported=$(boot_import_time ipsec-import.service) ;;
+      esac
+      [[ "${imported}" =~ ^[0-9]+$ ]] || imported=""
       version=$(chroot /host ipsec --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
 
       {
@@ -139,9 +168,14 @@ data:
           echo "ipsec_nas_certificate_not_after_timestamp_seconds{node=\"${node}\",nickname=\"${CERT_NICK}\"} ${not_after}"
         fi
         if [[ -n "${imported}" ]]; then
-          echo "# HELP ipsec_nas_certificate_import_timestamp_seconds When cert-sync last imported a certificate into the NSS database."
+          echo "# HELP ipsec_nas_certificate_import_timestamp_seconds When the node certificate was last imported into the NSS database: by cert-sync (Option B), or at the current boot (Options C and A)."
           echo "# TYPE ipsec_nas_certificate_import_timestamp_seconds gauge"
           echo "ipsec_nas_certificate_import_timestamp_seconds{node=\"${node}\"} ${imported}"
+        fi
+        if [[ -n "${mode}" ]]; then
+          echo "# HELP ipsec_nas_certificate_source_info Which option put the node certificate on the node: B (cert-sync), C (wildcard MachineConfig) or A (shared MachineConfig)."
+          echo "# TYPE ipsec_nas_certificate_source_info gauge"
+          echo "ipsec_nas_certificate_source_info{node=\"${node}\",mode=\"${mode}\"} 1"
         fi
         echo "# HELP ipsec_nas_connection_configured 1 if NetworkManager on the node has the ipsec-nas connection (the NNCP was applied), 0 if not."
         echo "# TYPE ipsec_nas_connection_configured gauge"

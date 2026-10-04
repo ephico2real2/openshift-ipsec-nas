@@ -95,6 +95,9 @@ chroot() {
     "ipsec status") echo "${crc_status}" ;;
     "certutil -L -n left_server -d /var/lib/ipsec/nss") [[ "${FAKE_CERT}" == present ]] ;;
     "ipsec --version") echo "Libreswan 5.3" ;;
+    # the journal's last successful run of an import unit in this boot, as recorded on the Option C node
+    "journalctl -b -u ipsec-nas-import.service "*) [[ -n "${FAKE_JOURNAL_C:-}" ]] && echo "${FAKE_JOURNAL_C}" ;;
+    "journalctl -b -u ipsec-import.service "*) [[ -n "${FAKE_JOURNAL_A:-}" ]] && echo "${FAKE_JOURNAL_A}" ;;
     *) return 1 ;;
   esac
 }
@@ -103,6 +106,7 @@ trap 'rm -f "${script}"; rm -rf "${host}"' EXIT
 printf '%s\n' "${xfrm}" > "${host}/xfrm_stat"
 printf '%s\n' "${mounts}" > "${host}/mounts"
 XFRM_STAT="${host}/xfrm_stat" HOST_MOUNTS="${host}/mounts" OUT_FILE="${host}/ipsec_nas.prom" STAMP="${host}/none"
+OPTION_C_BUNDLE="${host}/c-none" OPTION_A_BUNDLE="${host}/a-none"
 metric() { grep "^$1{" "${OUT_FILE}" || true; }
 set +e   # as in the collector (set -uo pipefail): a failed host command must not stop collect()
 
@@ -129,6 +133,33 @@ FAKE_LIBRESWAN=down
 collect
 check "libreswan not answering: collect_success is 0" 'ipsec_nas_collect_success{node="test-node"} 0' "$(metric ipsec_nas_collect_success)"
 check "libreswan not answering: the IKE SA state is unknown, so not written" "" "$(metric ipsec_nas_ike_sa_established)"
+
+# Which option put the certificate on the node (#40). The markers are files; the import time of C and A
+# comes from the journal (the stub above). B's import time is the stamp's mtime (GNU stat): not checked.
+FAKE_LIBRESWAN=up FAKE_CERT=present
+collect
+check "no option's marker: no source series" "" "$(metric ipsec_nas_certificate_source_info)"
+check "no option's marker: no import time" "" "$(metric ipsec_nas_certificate_import_timestamp_seconds)"
+
+touch "${host}/c.p12"; OPTION_C_BUNDLE="${host}/c.p12"
+FAKE_JOURNAL_C="1791125558.022110 crc systemd[1]: Finished Import the IPsec certificate for the NAS into libreswan's NSS database."
+collect
+check "Option C: the mode" 'ipsec_nas_certificate_source_info{node="test-node",mode="C"} 1' "$(metric ipsec_nas_certificate_source_info)"
+check "Option C: the import time is the unit's last success in this boot" 'ipsec_nas_certificate_import_timestamp_seconds{node="test-node"} 1791125558' "$(metric ipsec_nas_certificate_import_timestamp_seconds)"
+FAKE_JOURNAL_C=""
+collect
+check "Option C, no successful import in this boot: the mode, but no import time" 'ipsec_nas_certificate_source_info{node="test-node",mode="C"} 1' "$(metric ipsec_nas_certificate_source_info)"
+check "Option C, no successful import in this boot: no import time, never a guess" "" "$(metric ipsec_nas_certificate_import_timestamp_seconds)"
+
+OPTION_C_BUNDLE="${host}/c-none"; touch "${host}/a.p12"; OPTION_A_BUNDLE="${host}/a.p12"
+FAKE_JOURNAL_A="1790000000.5 crc systemd[1]: Finished ipsec-import.service."
+collect
+check "Option A: the mode" 'ipsec_nas_certificate_source_info{node="test-node",mode="A"} 1' "$(metric ipsec_nas_certificate_source_info)"
+check "Option A: the import time from ipsec-import.service" 'ipsec_nas_certificate_import_timestamp_seconds{node="test-node"} 1790000000' "$(metric ipsec_nas_certificate_import_timestamp_seconds)"
+
+touch "${host}/stamp"; STAMP="${host}/stamp"; OPTION_C_BUNDLE="${host}/c.p12"
+collect
+check "Option B: its stamp wins over any other marker" 'ipsec_nas_certificate_source_info{node="test-node",mode="B"} 1' "$(metric ipsec_nas_certificate_source_info)"
 unset -f chroot
 
 [[ ${fail} -eq 0 ]] && echo "all parser tests passed" || exit 1

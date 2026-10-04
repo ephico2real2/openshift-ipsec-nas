@@ -40,7 +40,8 @@ Every metric carries `node`. All are read-only: the collector changes nothing on
 | `ipsec_nas_connection_configured` | 1 if NetworkManager has the `ipsec-nas` connection, that is, the NNCP reached the node | `nmcli` |
 | `ipsec_nas_certificate_present` | 1 if the node certificate is in the NSS database | `certutil -L` |
 | `ipsec_nas_certificate_not_after_timestamp_seconds` | When that certificate expires | `certutil` + `openssl` |
-| `ipsec_nas_certificate_import_timestamp_seconds` | When cert-sync last imported a certificate | cert-sync's stamp file |
+| `ipsec_nas_certificate_import_timestamp_seconds` | When the certificate was last imported. Option B: cert-sync's last import. Options C and A: the import at the **current boot** (they import at every boot); absent if it did not succeed in this boot | B: cert-sync's stamp file. C, A: the journal's last successful run of `ipsec-nas-import.service` (C) or `ipsec-import.service` (A) in this boot |
+| `ipsec_nas_certificate_source_info{mode}` | Which option put the certificate on the node: `B`, `C` or `A`; absent if no option's marker is there | the first marker found: cert-sync's stamp (B), `/etc/pki/ipsec-nas/left_server.p12` (C), `/etc/pki/certs/left_server.p12` (A) |
 | `ipsec_nas_tunnel_established_timestamp_seconds` | When the current tunnel was set up | `ipsec trafficstatus` |
 | `ipsec_nas_tunnel_in_bytes_total`, `…_out_bytes_total` | Bytes through the current tunnel | `ipsec trafficstatus` |
 | `ipsec_nas_tunnel_info{peer_id}` | The identity the NAS presented | `ipsec trafficstatus` |
@@ -219,7 +220,7 @@ With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a 
 | `tests/test-alert-rules.sh` (promtool) | Six nodes, one fault each: every new alert fires for its node and only that node | All pass; a swapped node makes it fail |
 | **kind, 3 nodes** (1 control plane, 2 workers), kube-prometheus-stack, the chart's real collector, ServiceMonitor, rules and dashboard | 2 targets, each `node == exporter_node`, the control plane excluded; a duplicate pod and a pod naming `ghost-node` each caught on its node only; one pod deleted changes only its node; a worker without a pod raises `IpsecNasExporterMissing` for that worker only | [evidence kind/01](evidence/kind/01-per-node-metrics-faults.txt), [kind/02](evidence/kind/02-exporter-missing.txt) |
 | **CRC** (OpenShift 4.22.7, real IPsec), deployed from Git by Argo CD | Every new series with real values; every dashboard query answers; the certificate deleted from NSS and put back by cert-sync | [evidence 38](evidence/crc/38-metrics-certificate-removed.txt), [39](evidence/crc/39-metrics-dashboard-queries.txt) |
-| **CRC**, Option C with the `ipsec-nas-option-c-metrics` chart | The same 41 series without cert-sync; with `namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`, `IpsecNasExporterMissing` fires for a node without a collector, labelled `namespace=kcs-ipsec`, and resolves when it is back | [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) |
+| **CRC**, Option C with the `ipsec-nas-option-c-metrics` chart | The same series without cert-sync (41 before #40; the import time and the mode since); with `namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`, `IpsecNasExporterMissing` fires for a node without a collector, labelled `namespace=kcs-ipsec`, and resolves when it is back | [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) |
 | A real multi-node OpenShift cluster | — | **Not tested yet**: tracked in issue #20 |
 
 What the tests showed, beyond pass or fail:
@@ -233,5 +234,5 @@ What the tests showed, beyond pass or fail:
 ## Not covered here
 
 - **The dashboard in the console (Perses)**: [doc 61](61-perses-dashboard-review.md).
-- **Option C** gets the same collector and alerts from a separate chart, [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md), without cert-sync and without `ipsec_nas_certificate_import_timestamp_seconds` ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Its dashboards: issue #43.
+- **Option C** gets the same collector and alerts from a separate chart, [`ipsec-nas-option-c-metrics`](../charts/ipsec-nas-option-c-metrics/README.md), without cert-sync ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Its import time is the boot's import, and `ipsec_nas_certificate_source_info` reports `mode="C"` ([evidence 47](evidence/crc/47-certificate-mode.txt)). Its dashboards: issue #43.
 - **Per-flow encryption** (was this NFS packet encrypted?) is out of reach of a collector that reads counters. Issue #35 evaluates the Network Observability Operator's eBPF agent and its IPsec feature, as a read-only probe that must run beside OVN-Kubernetes without touching its datapath.

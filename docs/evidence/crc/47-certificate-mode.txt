@@ -1,0 +1,35 @@
+# #40: which option put the certificate on the node, and its import time. CRC 4.22.7, Option C (C1), chart
+# ipsec-nas-option-c-metrics, 2026-10-04 18:05-18:26Z. The collector is shared/collector/collect.sh.
+
+## 1. The sources, measured from inside the collector pod (privileged, chroot /host; no hostPID)
+  chroot /host systemctl show -P Result ipsec-nas-import   -> "Failed to connect to bus: No data available"
+    (the same for any unit): systemctl cannot reach systemd from the pod, so ExecMainExitTimestamp, measured
+    earlier through oc debug node (which can), is not usable by the collector.
+  The journal is: chroot /host journalctl -b -u ipsec-nas-import.service \
+      MESSAGE_ID=39f53479d3a045ac8e11786248231fbf JOB_RESULT=done -o short-unix -r -n 1 --no-pager -q
+    -> 1791125558.022110 crc systemd[1]: Finished Import the IPsec certificate for the NAS into libreswan's NSS database.
+    The record's fields: MESSAGE_ID 39f53479d3a045ac8e11786248231fbf (systemd's unit-finished message), JOB_RESULT done,
+    UNIT ipsec-nas-import.service, _BOOT_ID 885c68bf3bbc4858a68bca994dd38ddf (the boot of evidence 45),
+    __REALTIME_TIMESTAMP 1791125558022125 = the ExecMainExitTimestamp @1791125558 measured through oc debug.
+    A unit that does not exist (no-such-unit-xyz): no output.
+  Markers on the node: /etc/pki/ipsec-nas/left_server.p12 exists; /etc/pki/certs/kcs-ipsec/.installed-sha256 and
+    /etc/pki/certs/left_server.p12 absent.
+
+## 2. The collector (chart revision 7, pod ipsec-nas-metrics-tcmr8), 18:20:48Z, boot 885c68bf
+  ipsec_nas_certificate_not_after_timestamp_seconds{node="crc",nickname="left_server"} 1854194096
+  ipsec_nas_certificate_import_timestamp_seconds{node="crc"} 1791125558          (= 2026-10-04T14:52:38Z, the journal's record)
+  ipsec_nas_certificate_source_info{node="crc",mode="C"} 1
+
+## 3. After a reboot (crc stop 18:22:05Z, crc start, Running 18:25:13Z)
+  boot d6a17ad7-9d2b-4b81-9c62-dcdb2f16a4b3 (before: 885c68bf-3bbc-4858-a68b-ca994dd38ddf)
+  journal, this boot: 1791138139.499811 crc systemd[1]: Finished Import the IPsec ...   (= 2026-10-04T18:22:19Z)
+  18:25:23Z the collector:
+    ipsec_nas_tunnel_up{node="crc",connection="ipsec-nas"} 1
+    ipsec_nas_certificate_import_timestamp_seconds{node="crc"} 1791138139
+    ipsec_nas_certificate_source_info{node="crc",mode="C"} 1
+
+## 4. Not measured here
+  A renewal: it is a new MachineConfig and a reboot (evidence 36), and the import at that boot is the same unit's
+  record as in section 3; not repeated. Option B on a cluster (not installed: never two options): its import time
+  is still the stamp's mtime, unchanged code; tests/test-metrics-collector.sh covers the mode B order, and
+  tests/test-chart.sh keeps the chart equal to the manifests. Option A: not installed; fixtures only.

@@ -24,7 +24,7 @@ Per-node **IPsec metrics and alerts for Option C** ([`docs/50-option-c-wildcard-
 
 ## What differs from Option B
 
-The same series, the same names, under the same `node` label. One series is missing: `ipsec_nas_certificate_import_timestamp_seconds`. Option B's collector reads cert-sync's stamp `/etc/pki/certs/kcs-ipsec/.installed-sha256`, which Option C does not have. Measured on CRC with C1: 41 samples against Option B's 42, all the others present ([evidence 45](../../docs/evidence/crc/45-option-c-collector.txt)). Issue #40 reads Option C's import time instead.
+The same series, the same names, under the same `node` label. Measured on CRC with C1 before #40: 41 samples against Option B's 42; the one missing, `ipsec_nas_certificate_import_timestamp_seconds`, came only from cert-sync's stamp ([evidence 45](../../docs/evidence/crc/45-option-c-collector.txt)). Since #40 the collector reads it on Option C too: the journal's last successful run of `ipsec-nas-import.service` in the current boot, since Option C imports at every boot. `ipsec_nas_certificate_source_info{mode="C"}` names the option ([evidence 47](../../docs/evidence/crc/47-certificate-mode.txt)).
 
 ## Prerequisites
 

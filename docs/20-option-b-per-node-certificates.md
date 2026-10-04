@@ -371,7 +371,7 @@ done
 
 The `collector` and `metrics` containers from Step B.8 already produce the numbers. This step makes OpenShift collect them, adds alerts, and puts the dashboard in the console.
 
-Every node reports its own metrics, each with a `node` label: whether its tunnel is up, the traffic through it, its certificate's expiry, and **why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering). The alerts fire on the node concerned. The full lists, 15 metrics and 12 alerts, are in [doc 60](60-monitoring-per-node.md#what-is-collected) (*What is collected*, *Alerts*).
+Every node reports its own metrics, each with a `node` label: whether its tunnel is up, the traffic through it, its certificate's expiry, and **why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering). The alerts fire on the node concerned. The full lists, 16 metrics and 12 alerts, are in [doc 60](60-monitoring-per-node.md#what-is-collected) (*What is collected*, *Alerts*).
 
 **1. Check that user workload monitoring is on.** It is what scrapes metrics outside the `openshift-*` namespaces.
 
