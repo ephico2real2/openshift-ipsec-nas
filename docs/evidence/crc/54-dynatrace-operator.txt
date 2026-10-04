@@ -1,0 +1,30 @@
+# #45 (first step): the Dynatrace Operator on CRC 4.22.7 with the trial tenant, 2026-10-04 22:37-23:02Z.
+# Tokens are not recorded: the platform token was passed by environment variable and stored only in the Secret.
+
+## 1. dtwiz v1.10.0 (dynatrace-oss/dtwiz, release binary, sha256 checked against checksums.txt)
+  dtwiz install kubernetes --dry-run: helm install dynatrace-operator (oci://public.ecr.aws/dynatrace/dynatrace-operator)
+  into namespace dynatrace, then a Secret and DynaKube CRs. It detected the distribution as "kubernetes", not OpenShift.
+  The install: Helm chart dynatrace-operator 1.11.0 deployed; the second DynaKube refused:
+    DynaKube in version "v1beta6" cannot be handled as a DynaKube: strict decoding error: unknown field "spec.extensions.prometheus"
+  dtwiz's source (pkg/installer/kubernetes/install.go): the platform token goes into both apiToken and dataIngestToken.
+  Removed: the DynaKube, the Helm release, the namespace, and dtwiz's ClusterRole/ClusterRoleBinding
+  dynatrace-kubernetes-monitoring-sensitive (label dynatrace.com/created-by=dynatrace.kubernetes).
+
+## 2. OLM (operator's request): the catalog's dynatrace-operator is v1.10.2 (certified-operators and community-operators,
+  channel alpha, AllNamespaces only). Installed (CSV Succeeded after 7 minutes), then removed: older than the version
+  Dynatrace documents for OpenShift.
+
+## 3. Dynatrace's documented OpenShift install (docs.dynatrace.com, full-stack observability; OpenShift configuration)
+  oc create namespace dynatrace
+  oc apply -f https://github.com/Dynatrace/dynatrace-operator/releases/download/v1.11.0/openshift-csi.yaml   (59 objects)
+  SCCs as the OpenShift configuration page lists: CSI driver privileged; operator and webhook nonroot-v2.
+  Secret dynakube: apiToken and dataIngestToken = the platform token (as dtwiz does).
+  DynaKube: the v1.11.0 sample assets/samples/dynakube/v1beta5/cloudNativeFullStack.yaml, apiUrl https://lzn13525.live.dynatrace.com/api
+  (the API server warns that v1beta5 is deprecated; it is what the docs' example and the release's samples use).
+  First result: phase Error. Tokens=True; MonitoredEntity=True ("kubernetesClusterMEID is up to date",
+  KUBERNETES_CLUSTER-64F82EA2AFC7919E, name crc). ActiveGate: "image discovery failed for "activegate": no matching image in
+  DT API response"; OneAgent waiting on secret "dynakube-activegate-tls-secret" (made only with the ActiveGate).
+  Fix: spec.activeGate.image public.ecr.aws/dynatrace/dynatrace-activegate:1.337.36.20260526-135434 (the image dtwiz names).
+  23:02:07Z phase Running (122 s after the fix); no condition False.
+    dynakube-activegate-0 1/1 Running; dynakube-oneagent-5949m 1/1 Running; CSI driver 4/4; operator; 2 webhooks
+  Reading the entity back through the API: 403 "OAuth token is missing required scope. Use one of: [environment-api:entities:read]".

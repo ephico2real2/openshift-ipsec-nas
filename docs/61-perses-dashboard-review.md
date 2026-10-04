@@ -184,6 +184,23 @@ The same dashboard is still available for Grafana: `metrics.grafanaDashboard: tr
 
 The chart **does not check** this: nothing on the cluster tells it a Grafana sidecar is there, and without a Grafana the ConfigMap is simply unused. Its install notes say so when the flag is on.
 
+**On OpenShift**, measured on CRC with the Grafana Helm chart 10.5.15 (Grafana 12.3.1) in `kcs-ipsec` ([evidence 53](evidence/crc/53-grafana-on-openshift.txt)): the sidecar loaded the ConfigMap, and Grafana listed the dashboard. The chart's fixed IDs (`runAsUser`, `runAsGroup`, `fsGroup` 472) are refused by the `restricted-v2` SCC (`472 is not an allowed group`). Set them to `null`, not `{}`: Helm merges maps, so an empty map removes nothing.
+
+```yaml
+securityContext: {runAsUser: null, runAsGroup: null, fsGroup: null, runAsNonRoot: true}
+containerSecurityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+initChownData: {enabled: false}
+sidecar:
+  securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+  dashboards: {enabled: true, label: grafana_dashboard, labelValue: "1"}
+```
+
+<!-- markdownlint-disable MD033 -->
+<img alt="The IPsec to the NAS dashboard in Grafana 12.3.1 running on OpenShift (CRC), kiosk mode, light theme, last 30 minutes, reading Thanos Querier. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 730.0 days. Tunnel state UP, certificate 730.0 days, traffic through the tunnel around 1 kB/s to the NAS, tunnel age 46.6 mins, metrics age 40.4 s, libreswan crc: 5.3, certificate source crc: C. Checks: nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 1.01. Per-node row: crc, reporting pod ipsec-nas-metrics-tcmr8, UP, YES, PRESENT, YES, YES, 1 NFS mount, 2.01 req/s, 1 drop, certificate imported 47.7 mins ago, NAS identity O=KCS OpenShift lab, CN=crc-nas.lab. History: tunnel re-establishments falling from 2 to 1, and kernel IPsec errors per node showing No drops." src="images/crc/53-grafana-openshift-option-c.light.png">
+<!-- markdownlint-enable MD033 -->
+
+*Capture 7. Option C's dashboard in Grafana running on OpenShift, loaded by its sidecar from the chart's ConfigMap. "Certificate source: crc: C" is the panel added with #40's mode detector. The one kernel IPsec error of the last hour came with the tunnel restarts of that afternoon (evidence 50, 51).*
+
 ## Appendix A — How we got here
 
 The review that led to the setup above, kept for its measurements. Captures 1 to 4 show the dashboard **before** the fixes of A.5.

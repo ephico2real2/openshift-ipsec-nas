@@ -1,0 +1,24 @@
+# #22: the Grafana dashboard loaded on an OpenShift cluster. CRC 4.22.7, kcs-ipsec, Grafana Helm chart 10.5.15
+# (Grafana 12.3.1, k8s-sidecar 2.5.0), the Option C chart's ConfigMap (metrics.grafanaDashboard=true through the Argo CD
+# Application), 2026-10-04 22:29-23:02Z. The Grafana was temporary and removed afterwards.
+
+## 1. The ConfigMap: ipsec-nas-grafana-dashboard, labels {"app":"ipsec-nas-metrics","grafana_dashboard":"1"}, key ipsec-nas-option-c.json
+
+## 2. The Grafana chart as is: refused by OpenShift
+  ReplicaSet event: pods "grafana-ipsec-..." is forbidden: unable to validate against any security context constraint:
+  [provider "anyuid": Forbidden: not usable by user or serviceaccount, provider restricted-v2: .spec.securityContext.fsGroup:
+  Invalid value: [472]: 472 is not an allowed group, ...]
+  securityContext: {} did not help: Helm merges maps, so the chart's runAsUser/runAsGroup/fsGroup 472 stayed.
+
+## 3. With the fixed IDs set to null (docs/61, Grafana section): admitted
+  pod grafana-ipsec-68d6899468-qntkx ready true,true, SCC restricted-v2
+  sidecar: {"time": "2026-10-04T22:34:48.019922+00:00", "level": "INFO", "msg": "Writing /tmp/dashboards/ipsec-nas-option-c.json (ascii)"}
+  GET /api/search?query=IPsec (inside the Grafana container): [{'uid': 'ipsec-nas-option-c', 'title': 'IPsec to the NAS (Option C)'}]
+
+## 4. The capture (docs/images/crc/53-grafana-openshift-option-c.light.png), 22:36Z
+  Grafana reinstalled with a datasource on https://thanos-querier.openshift-monitoring.svc:9091 (a short-lived kubeadmin
+  token, removed with the Grafana), reached through a port-forward of svc/grafana-ipsec in kcs-ipsec; Playwright, kiosk,
+  light, last 30 minutes. Every section present, no "No data", HTTP errors: none.
+
+## 5. Cleanup (23:02Z): helm uninstall grafana-ipsec; the Application's metrics.grafanaDashboard removed; the ConfigMap
+  deleted; Grafana objects left in kcs-ipsec: 0; the Application Synced and Healthy.
