@@ -2,19 +2,19 @@
 
 The *IPsec to the NAS* dashboard lives in the **OpenShift console**: **Observe → Dashboards (Perses)**. It runs on Perses, the dashboard tool Red Hat ships with the Cluster Observability Operator (COO). The ipsec chart installs it **by default**. The Grafana version is **off** by default and kept for clusters that run Grafana.
 
-Everything below was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 ([evidence 41](evidence/crc/41-perses-dashboard-review.txt)). The metrics, the alerts and the collector are described in [doc 60](60-monitoring-per-node.md). COO itself is installed by its own chart, [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
+Everything below was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 and 2026-10-04 ([evidence 41](evidence/crc/41-perses-dashboard-review.txt), [42](evidence/crc/42-console-perses-capture.txt)). The metrics, the alerts and the collector are described in [doc 60](60-monitoring-per-node.md). COO itself is installed by its own chart, [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
 
 ## At a glance
 
 <!-- markdownlint-disable MD033 -->
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="images/crc/41-perses-chart.dark.png">
-  <source media="(prefers-color-scheme: light)" srcset="images/crc/41-perses-chart.light.png">
-  <img alt="The IPsec to the NAS dashboard as a namespace reader holding cluster-monitoring-view: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months, tunnel state UP in green, traffic around 3.8 MiB/s under load, tunnel age 7.5h, metrics age 50s, libreswan version 5.3, nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors 0, a per-node table with one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, imported 7.5h), a NAS identity per node table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal, tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node with no data." src="images/crc/41-perses-chart.light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/42-console-perses-ipsec-nas.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/42-console-perses-ipsec-nas.light.png">
+  <img alt="The OpenShift console, Observe, Dashboards, project kcs-ipsec, dashboard IPsec to the NAS, node filter All, last 30 minutes: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months, tunnel state UP in green, certificate days left per node 12.1 months as a bar, traffic through the tunnel rising to about 3.8 MiB/s when the load starts, tunnel age 1.68h, metrics age 50s, libreswan version 5.3, nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0, a per-node table with one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, certificate imported 9.4h ago), a NAS identity table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal, tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/42-console-perses-ipsec-nas.light.png">
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Capture 5. The dashboard the chart ships, on CRC's data, as a namespace reader holding `cluster-monitoring-view`. It was taken in the upstream Perses 0.54.0 UI (the version COO builds on; COO's Perses has no UI of its own, its UI is the console).*
+*Capture 6. **Observe → Dashboards (Perses)**, project `kcs-ipsec`: the dashboard the chart ships, on CRC's data. "No data" on the last panel means no kernel IPsec errors: it shows only error counters above 0. The console shell here is the community (OKD) build of the same console, `quay.io/openshift/origin-console:4.22`, run on a laptop against CRC with sign-in turned off (hence the `okd` logo and "Auth disabled"). The Perses plugin, the Perses server, the dashboard and the data are CRC's own ([evidence 42](evidence/crc/42-console-perses-capture.txt)).*
 
 What you can read off it, top to bottom:
 
@@ -94,7 +94,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 
 ## Open it
 
-**Observe → Dashboards (Perses)**, project **`kcs-ipsec`**, dashboard **IPsec to the NAS**. The **Node** filter at the top narrows every panel to the nodes you pick (default: all).
+**Observe → Dashboards (Perses)**, project **`kcs-ipsec`**, dashboard **IPsec to the NAS** (Capture 6). The **Node** filter at the top narrows every panel to the nodes you pick (default: all).
 
 ## Who can see it
 
@@ -125,6 +125,16 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 <!-- markdownlint-enable MD033 -->
 
 *Capture 4. The same reader as in Capture 3, now also holding `cluster-monitoring-view`, on port 9091: every panel answers (this capture predates the panel fixes of Appendix A.5).*
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/41-perses-chart.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/41-perses-chart.light.png">
+  <img alt="The IPsec to the NAS dashboard as a namespace reader holding cluster-monitoring-view: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months, tunnel state UP in green, traffic around 3.8 MiB/s under load, tunnel age 7.5h, metrics age 50s, libreswan version 5.3, nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors 0, a per-node table with one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, imported 7.5h), a NAS identity per node table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal, tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node with no data." src="images/crc/41-perses-chart.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 5. The finished dashboard (after Appendix A.5) as the same reader. Taken in the upstream Perses 0.54.0 UI, the version COO builds on, signed in as that reader.*
 
 A namespace-only data source becomes possible only if Perses learns to query with `GET`.
 

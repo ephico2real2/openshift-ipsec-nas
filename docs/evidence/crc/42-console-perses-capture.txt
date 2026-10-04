@@ -1,0 +1,41 @@
+# The ipsec Perses dashboard in an OpenShift console, captured 2026-10-04 ~03:36Z, CRC 4.22.7 with COO 1.5.3.
+# The console: a local, throw-away instance of the console server (bridge), image quay.io/openshift/origin-console:4.22
+# (the public OKD build of github.com/openshift/console, hence the 'okd' logo; the cluster's own image is in Red Hat's
+# release registry and needs the pull secret). Run off-cluster with authentication disabled and the operator's existing
+# oc session as its static token (passed through a mode-600 env file, not shown), listening on 127.0.0.1:9000 only.
+# Everything inside the page comes from CRC: COO's monitoring-console-plugin (served by svc/monitoring in
+# openshift-cluster-observability-operator), the Perses server, the PersesDashboard and PersesDatasource in kcs-ipsec, Thanos.
+
+$ podman run -d --name local-console --arch amd64 -p 127.0.0.1:9000:9000 --env-file <mode-600 file: BRIDGE_K8S_AUTH_BEARER_TOKEN> \
+    --entrypoint /opt/bridge/bin/bridge quay.io/openshift/origin-console:4.22 \
+    --listen=http://0.0.0.0:9000 --base-address=http://localhost:9000 --public-dir=/opt/bridge/static \
+    --user-auth=disabled --k8s-auth=bearer-token \
+    --k8s-mode=off-cluster --k8s-mode-off-cluster-endpoint=https://host.containers.internal:6443 --k8s-mode-off-cluster-skip-verify-tls=true \
+    --k8s-mode-off-cluster-thanos=https://host.containers.internal:19091 \
+    --plugins monitoring-console-plugin=http://host.containers.internal:9001/ \
+    --plugin-proxy '{"services":[{"consoleAPIPath":"/api/proxy/plugin/monitoring-console-plugin/perses/","endpoint":"http://host.containers.internal:9002","authorize":true},{"consoleAPIPath":"/api/proxy/plugin/monitoring-console-plugin/backend/","endpoint":"http://host.containers.internal:9001","authorize":true}]}'
+#   :9001 / :9002 = local HTTP->HTTPS relays to port-forwards of svc/monitoring:9443 and svc/perses:8080; :19091 = svc/thanos-querier:9091
+
+bridge log:
+  W1004 03:29:15.679112       1 authoptions.go:265] running with AUTHENTICATION DISABLED -- for development use only!
+  I1004 03:29:15.709158       1 server.go:585] The following console endpoints are now proxied to these services:
+  I1004 03:29:15.709483       1 server.go:588]  - /api/proxy/plugin/monitoring-console-plugin/perses/ -> http://host.containers.internal:9002
+  I1004 03:29:15.710206       1 server.go:588]  - /api/proxy/plugin/monitoring-console-plugin/backend/ -> http://host.containers.internal:9001
+  I1004 03:29:15.719893       1 main.go:787] Binding to 0.0.0.0:9000...
+
+Observe -> Dashboards (Perses), project kcs-ipsec: the list showed 'IPsec to the NAS  kcs-ipsec' (1 of 1).
+(capture list.png, 1600x1000: "1 - 1 of 1", Dashboard "IPsec to the NAS", Project kcs-ipsec)
+
+/monitoring/v2/dashboards/view?dashboard=ipsec-nas&project=kcs-ipsec&start=30m, light and dark, 1600 px wide at 1.5x:
+  17 panels on the page; 16 show values. "Kernel IPsec errors per node" shows "No data": its query is
+  sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total{node=~"$node"}[5m])) > 0, which keeps only counters above 0,
+  and "Kernel IPsec errors, last hour" beside it reads 0.
+  Values seen: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months, tunnel state UP,
+  traffic to ~3.8 MiB/s after the load Job started (~22:29 local), tunnel age 1.68h, metrics age 50s, libreswan 5.3,
+  per-node table one row (crc: UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, cert imported 9.4h),
+  NAS identity crc / ipsec-cert-sync-5mvdc / O=KCS OpenShift lab, CN=crc-nas.lab.internal.
+  The grid's header reads "Panel Group 1": the title percli gives a Grafana dashboard that has no rows.
+HTTP responses >= 400, excluding the console's per-user settings store (not served off-cluster), light and dark alike:
+  404 /api/kubernetes/apis/metal3.io/v1alpha1/provisionings/provisioning-configuration (the console shell, not the dashboard)
+
+Teardown: podman rm -f local-console; the token file deleted; relays and port-forwards stopped.
