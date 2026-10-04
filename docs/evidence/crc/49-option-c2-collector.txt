@@ -1,0 +1,43 @@
+# #38: the collector on a C2 node (per-node identity), and back to C1. CRC 4.22.7, chart ipsec-nas-option-c-metrics,
+# the lab NAS crc-nas (libreswan), 2026-10-04 19:25-19:30Z. The NAS settings are doc 50's row 7 (C2) and row 2 (C1):
+# rightid=%fromcert and uniqueids=no.
+
+## 1. Before (C1), 19:25:28Z
+  NNCP ipsec-nas-wildcard Available; tunnel_up 1, ike_sa_established 1
+  NAS: uniqueids=yes, rightid=%fromcert
+
+## 2. The NAS: uniqueids=no (lab/rhel/setup-nas.sh's own edit, ALLOW_DUPLICATE_IDS=yes), libreswan restarted
+  /etc/ipsec.conf:  config setup / uniqueids=no;  ipsec: active
+
+## 3. C1 -> C2 (doc 50, Step C.5), 19:25:40Z
+  $ oc delete nncp ipsec-nas-wildcard
+  $ oc apply -f manifests/common/03-kyverno-rbac.yaml -f rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml
+  NNCP ipsec-nas-crc Available after 8 s; leftid @crc.crc.testing; generate.kyverno.io/policy-name ipsec-nncp-wildcard-per-node
+  The node's connection restarted (doc 50, Gotcha 18): nmcli connection down/up ipsec-nas
+  node: our idtype: FQDN; our id=@crc.crc.testing; their id=O=KCS OpenShift lab, CN=crc-nas.lab.internal
+        IKE SAs: total(1) authenticated(1); IPsec SAs: total(1) authenticated(1)
+  NAS:  responder established IKE SA; authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS'
+        (rightid=%fromcert: the NAS takes the identity from the certificate, not the name C2 presents; doc 50 rows 3 and 7)
+  The earlier C2 attempt (evidence 36) failed with uniqueids=yes and an old instance on the NAS; with the restart and
+  uniqueids=no it came up at once.
+
+## 4. The collector on C2, 19:28:55Z
+  43 samples. Against the C1 snapshot of evidence 45, the only new families are the two #40 added
+  (certificate_import_timestamp_seconds, certificate_source_info); nothing differs because of C2.
+  ipsec_nas_tunnel_up{node="crc",connection="ipsec-nas"} 1
+  ipsec_nas_tunnel_info{node="crc",connection="ipsec-nas",peer_id="O=KCS OpenShift lab, CN=crc-nas.lab.internal"} 1
+  ipsec_nas_ike_sa_established 1, connection_configured 1, certificate_present 1, collect_success 1
+  ipsec_nas_certificate_source_info{node="crc",mode="C"} 1;  import 1791138139 (the 18:22:19Z boot); not_after 1854194096
+  ALERTS{namespace="kcs-ipsec"}: none; up 1
+  NFS through the C2 tunnel: the demo application wrote line 388 at 19:28:55Z
+  tunnel_info reports the NAS's identity, so C2's own name for the node does not appear in it.
+
+## 5. C2 -> C1, 19:29:17Z (the state left on CRC)
+  $ oc delete generatingpolicy ipsec-nncp-wildcard-per-node      (its NNCP went with it)
+  $ oc apply -f rendered/option-c-wildcard-cert/10-nncp-all-workers.yaml
+  NNCP ipsec-nas-wildcard Available after 9 s; leftid %fromcert; the node's connection restarted
+  node: our id=CN=ocp-ipsec-workers, O=KCS; IKE SAs authenticated(1); IPsec SAs authenticated(1)
+  NAS:  authenticated peer certificate 'CN=ocp-ipsec-workers, O=KCS'
+  19:30:19Z the collector: 43 samples, the same families as on C2; tunnel_up 1; established 1791142172; ike_sa 1
+  ALERTS{namespace="kcs-ipsec"}: none; NFS: line 396 at 19:30:15Z
+  The NAS keeps uniqueids=no (doc 50: required for Option C).

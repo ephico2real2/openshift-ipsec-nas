@@ -276,16 +276,38 @@ C1's NNCP selects the nodes by the pool's role label, so a new node of the pool 
 
 ## Step C.6 – Renew, every two years
 
-Steps C.1 to C.4 again, in a **new** directory, well before the old certificate expires. The new MachineConfig content reboots every node of the pool once; each node imports the new certificate at boot and comes back with it. The NNCP does not change.
+The wildcard certificate is valid for two years, and nothing renews it: a new certificate and a new MachineConfig replace it. Start well before it expires.
+
+**1. Know when.** The expiry date is in `notAfter` of the signed certificate (Step C.3 prints it). With the metrics chart ([Monitoring, optional](#monitoring-optional)) each node also reports it, and warns:
+
+- `IpsecNasCertificateExpiringSoon` fires when fewer than **14 days** are left (warning). `IpsecNasCertificateExpired` fires once the date has passed (critical). An expired certificate is expected to fail the NAS's certificate check at the next IKE negotiation, and NFS with it (not measured: no certificate was let expire).
+- The dashboard's "Soonest certificate expiry" and "Certificate days left per node" show the time left.
+
+Without the chart nothing warns: put the date in the team calendar.
+
+**2. Make the new certificate.** Run Steps C.1 to C.3 again, in a **new** directory: a new key and CSR for the same wildcard name, signed by the enterprise CA, then checked and rendered into a new MachineConfig.
 
 ```bash
 scripts/option-c-certificate.sh csr ~/ipsec-option-c/2028
 # ... the CA signs it ...
 scripts/option-c-certificate.sh machineconfig ~/ipsec-option-c/2028 signed.pem enterprise-root.pem
-oc apply -f ~/ipsec-option-c/2028/99-${MCP_ROLE}-ipsec-wildcard-cert.yaml
 ```
 
-Then ask the CA team to revoke the old certificate. Put the new expiry date in the team calendar: nothing renews it, and nothing warns before it expires.
+**3. Apply it.** The MachineConfig has the same name, with new content:
+
+```bash
+oc apply -f ~/ipsec-option-c/2028/99-${MCP_ROLE}-ipsec-wildcard-cert.yaml
+oc get mcp ${MCP_ROLE} -w
+```
+
+Every node of the pool reboots once, one at a time. Each node imports the new certificate at boot and its tunnel comes back by itself; the NNCP and the NAS do not change (measured on CRC: one copy of the certificate, new serial, [evidence 36](evidence/crc/36-option-c-crc-renewal-and-c2.txt)). On OpenShift Local, `crc stop` and `crc start` after the reboot (Gotcha 17).
+
+**4. Check every node.** Without the chart, check each node's NSS database (`certutil -L -n left_server -d /var/lib/ipsec/nss -a | openssl x509 -noout -enddate`). With the chart, check the metrics:
+
+- `ipsec_nas_certificate_not_after_timestamp_seconds` moves to the new date on each node, and the expiry alerts clear;
+- `ipsec_nas_certificate_import_timestamp_seconds` becomes that node's reboot, since Option C imports at every boot ([evidence 47](evidence/crc/47-certificate-mode.txt)).
+
+**5. Close the old one.** Ask the CA team to revoke the old certificate, delete the old directory's private key, and note the new expiry date.
 
 ## Monitoring, optional
 
