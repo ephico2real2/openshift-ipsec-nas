@@ -76,7 +76,7 @@ Two of the waits are measured, not chosen:
 Two settings, both in the ConfigMap `user-workload-monitoring-config` in `openshift-user-workload-monitoring`. Nothing in `openshift-monitoring` is changed.
 
 - **`namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`**: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` fire on OpenShift only with it (OpenShift 4.18 or later).
-- **`alertmanager: {enabled: true, enableAlertmanagerConfig: true}`**: the alerts are delivered to a dedicated Alertmanager in `openshift-user-workload-monitoring`, not to the platform's in `openshift-monitoring`, and a project may route its own alerts with an `AlertmanagerConfig`. This one applies to **every** user project's alerts, not only ours.
+- **`alertmanager: {enabled: true, enableAlertmanagerConfig: true}`**: the alerts are delivered to a dedicated Alertmanager in `openshift-user-workload-monitoring`, not to the platform's in `openshift-monitoring`, and a project may route its own alerts with an `AlertmanagerConfig`. As Red Hat designed it, that Alertmanager serves all user projects.
 
 No Helm chart manages that ConfigMap yet (planned: [openshift-coo-helm#5](https://github.com/ephico2real2/openshift-coo-helm/issues/5)): a cluster administrator sets it once, by hand.
 
@@ -149,7 +149,7 @@ The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-moni
 - **With `enabled: true`.** Red Hat: *"a dedicated instance of the Alertmanager for user-defined projects"*. On CRC `alertmanager-user-workload-0` was running 10 seconds after the change, and both user workload Prometheus and Thanos Ruler, which evaluates our rules, send to it.
 - **With `enableAlertmanagerConfig: true`.** Red Hat: it lets *"users to define their own alert routing configurations with `AlertmanagerConfig` objects"*. A team routes the IPsec alerts to its receiver with an `AlertmanagerConfig` in `kcs-ipsec`; the charts create none.
 - **Measured.** With the collector kept off `crc`, `IpsecNasExporterMissing` arrived in the user workload Alertmanager at 17:03:09Z as `namespace=kcs-ipsec node=crc role=worker severity=warning`, and `alertmanager-main` had nothing; it resolved there at 17:03:56Z once the collector was back ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5c).
-- **It applies to every user project.** All user-defined alerts move to this Alertmanager, not only ours: on CRC also those of `group-sync-dashboard`, `modernize-demo` and `mongodb-poc`. A team that was notified through the platform Alertmanager needs its own `AlertmanagerConfig`. Agree the switch with the cluster's monitoring owners; openshift-coo-helm#5 puts the ConfigMap under a chart.
+- **One Alertmanager for all user projects, by Red Hat's design.** Red Hat: *"you can optionally enable a separate instance of Alertmanager to send alerts for user-defined projects only"* (same page). Every user project's alerts go there, each project routing its own with an `AlertmanagerConfig` in its namespace; on CRC that includes `group-sync-dashboard`, `modernize-demo` and `mongodb-poc`. openshift-coo-helm#5 puts the ConfigMap under a chart.
 
 ### What the exemption changes, and the care it needs
 
