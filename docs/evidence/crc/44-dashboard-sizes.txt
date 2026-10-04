@@ -1,0 +1,13 @@
+# The objects and size the two dashboards add to the chart (doc 61, "Grafana, if you need it"): the tree of 4361d2c with the
+# 2026-10-04 review patch applied (the per-node panel's description reworded), 2026-10-04T07:49:39Z. No cluster: helm template.
+# helm template ... = helm template ipsec-nas charts/ipsec-nas -n kcs-ipsec -f charts/ipsec-nas/values-crc.yaml --set clusterIssuer=x \
+#   --set trustCA.pem=x --set prerequisites.skipCheck=true --kube-version 1.35.6; kinds = the rendered kind/name list.
+$ diff <(helm template ... --set metrics.grafanaDashboard=false --set metrics.persesDashboard.enabled=false | kinds) <(helm template ... --set metrics.grafanaDashboard=true | kinds)
+  >   ConfigMap/ipsec-nas-grafana-dashboard
+  >   PersesDashboard/ipsec-nas
+  >   PersesDatasource/ipsec-nas-thanos
+$ helm template ... --set metrics.grafanaDashboard=true | <bytes per object>
+  ConfigMap         ipsec-nas-grafana-dashboard   49692 bytes  48.5 KiB
+  PersesDashboard   ipsec-nas                     45056 bytes  44.0 KiB
+  PersesDatasource  ipsec-nas-thanos               1088 bytes  1.1 KiB
+  the two Perses objects together: 46144 bytes  45.1 KiB

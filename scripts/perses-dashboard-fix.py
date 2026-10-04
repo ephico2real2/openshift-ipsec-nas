@@ -100,7 +100,7 @@ table["plugin"]["spec"]["columnSettings"] = settings
 table["display"]["description"] = (
     "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan "
     "not answering. NFS requests/s comes from the platform's node-exporter. The reporting pod and the NAS "
-    "identity are in the table below.")
+    "identity of each node whose tunnel is up are in the table below.")
 
 panels["nas_identity"] = {
     "kind": "Panel",

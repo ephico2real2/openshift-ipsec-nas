@@ -655,7 +655,7 @@ curl -sk -H "Authorization: Bearer $(oc whoami -t)" --data-urlencode 'query=ipse
   https://thanos-querier-openshift-monitoring.apps-crc.testing/api/v1/query
 ```
 
-✅ **Expected** (measured, less than a minute after the ServiceMonitor was applied): OpenShift's own monitoring has the metrics, with the node's name on each. The tunnel is up, the certificate has 365 days left, the scrape target is up, and no alert is firing. The rule group had six alerts when this was captured; it has twelve now (`files/prometheus-rule-groups.yaml`).
+✅ **Expected** (measured, less than a minute after the ServiceMonitor was applied): OpenShift's own monitoring has the metrics, with the node's name on each. The tunnel is up, the certificate has 365 days left, the scrape target is up, and no alert is firing. The rule group had six alerts when this was captured; it has twelve now (`manifests/option-b-per-node-certs/29-prometheus-rule.yaml`, the same rules as the chart's `files/prometheus-rule-groups.yaml`).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="images/crc/19-option-b-observe.dark.png">

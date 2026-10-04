@@ -99,7 +99,7 @@ oc -n kcs-ipsec get persesdashboard ipsec-nas -o jsonpath='{.status.conditions[?
 
 | To | You need | Who usually has it |
 |---|---|---|
-| Open the dashboard | **`view`** in `kcs-ipsec` (or `edit` / `admin`) | The namespace's team. OLM aggregates the per-kind roles of COO's Perses CRDs into OpenShift's `view`, `edit` and `admin` (for example `persesdashboards.perses.dev-v1alpha2-view`), so no extra role is needed (measured: `view` alone reads the dashboard, and cannot change it) |
+| Open the dashboard | **`view`** in `kcs-ipsec` (or `edit` / `admin`) | The namespace's team. OLM aggregates the per-kind roles of COO's Perses CRDs into OpenShift's `view`, `edit` and `admin` (for example `persesdashboards.perses.dev-v1alpha2-view`: [openshift-coo-helm evidence 12](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/evidence/crc/12-review-reads.txt)), so no extra role is needed (measured: `view` alone reads the dashboard, and cannot change it) |
 | See its data | **`cluster-monitoring-view`** | Granted by the platform: the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) binds it to the groups in `metricsAccess.groups`, for example `system:authenticated` (everyone who logs in) |
 | Change the dashboard | Edit the Grafana JSON in Git and regenerate: [Change the dashboard](#change-the-dashboard) | — |
 
@@ -175,7 +175,7 @@ The generator finds panels by their **title** and sections by theirs: `percli` n
 
 ## Grafana, if you need it
 
-The same dashboard is still available for Grafana: `metrics.grafanaDashboard: true` ships it as a ConfigMap labelled `grafana_dashboard: "1"`. Both flags may be on at once: they add data only (rendered at 8b9c06a: 48.5 KiB for the ConfigMap, 45.0 KiB for the two Perses objects; no pods), and both dashboards come from the same JSON.
+The same dashboard is still available for Grafana: `metrics.grafanaDashboard: true` ships it as a ConfigMap labelled `grafana_dashboard: "1"`. Both flags may be on at once: they add data only (rendered: 48.5 KiB for the ConfigMap, 45.1 KiB for the two Perses objects, and no workload: [evidence 44](evidence/crc/44-dashboard-sizes.txt)), and both dashboards come from the same JSON.
 
 **Prerequisite for the Grafana integration: a Grafana that loads the ConfigMap.** Measured on kind with the Grafana Helm chart and its dashboard sidecar ([evidence kind/03](evidence/kind/03-grafana-dashboard-prerequisite.txt)):
 
