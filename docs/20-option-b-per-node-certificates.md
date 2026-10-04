@@ -402,7 +402,7 @@ oc apply -f manifests/option-b-per-node-certs/33-perses-dashboard.yaml
 
 It appears under **Observe → Dashboards (Perses)**, project `kcs-ipsec`. Viewers need `view` in `kcs-ipsec` and `cluster-monitoring-view`. Everything about it, from how it works to troubleshooting: [doc 61](61-perses-dashboard-review.md). The Helm chart installs it by default.
 
-**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
+**5. Grafana (optional, instead of or beside Perses).** Apply `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`: the same dashboard as a ConfigMap, `ipsec-nas-grafana-dashboard`, with the label `grafana_dashboard: "1"`. This guide does not install Grafana, and the ConfigMap needs one: a Grafana in `kcs-ipsec` with a dashboard sidecar on that label, or a central Grafana that watches this namespace. If the platform has a central Grafana run by the Grafana Operator (for example in `ocp-platform-grafana` or `ocp-grafana`), this object tells it to load the dashboard:
 
 ```bash
 cat <<'EOF' > 31-grafana-dashboard-cr.yaml

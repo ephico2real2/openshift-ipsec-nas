@@ -78,8 +78,12 @@ metrics:
   serviceMonitor: true
   # -- The six alert rules.
   prometheusRule: true
-  # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1"), for a cluster that runs Grafana.
-  # Off: the dashboard is shipped for Perses instead (below).
+  # -- ConfigMap with the Grafana dashboard (label grafana_dashboard: "1"): the Grafana integration.
+  # REQUIRES a Grafana that loads it: one in this namespace, or a central Grafana that watches this
+  # namespace (a dashboard sidecar on the label grafana_dashboard: "1", or grafana-operator with a
+  # GrafanaDashboard: docs/20-option-b-per-node-certificates.md, Step B.12). Not checked by the chart:
+  # without a Grafana the ConfigMap is simply unused. Off by default: the dashboard ships for Perses (below);
+  # both may be on.
   grafanaDashboard: false
   # The dashboard in the OpenShift console (Observe → Dashboards (Perses)), brought by the Cluster
   # Observability Operator (COO 1.5 or later): a PersesDashboard and the PersesDatasource it queries, in this

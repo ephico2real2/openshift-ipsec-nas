@@ -11,5 +11,18 @@ Check it:
   oc get nncp,nnce | grep ipsec-nas
   oc debug node/<node> -q -- chroot /host ipsec trafficstatus
 
+{{- if .Values.metrics.persesDashboard.enabled }}
+
+Dashboard, in the OpenShift console: Observe → Dashboards (Perses), project {{ .Release.Namespace }}, "IPsec to the NAS".
+  Viewers need view in {{ .Release.Namespace }} and cluster-monitoring-view (docs/61-perses-dashboard-review.md).
+{{- end }}
+{{- if .Values.metrics.grafanaDashboard }}
+
+Grafana integration: ConfigMap ipsec-nas-grafana-dashboard (label grafana_dashboard: "1").
+  It needs a Grafana that loads it: one in {{ .Release.Namespace }}, or a central Grafana that watches this
+  namespace (a sidecar on that label, or grafana-operator with a GrafanaDashboard; docs/20, Step B.12).
+  This chart does not install or check Grafana: without one, the ConfigMap is unused.
+{{- end }}
+
 Kyverno creates the policies' objects a moment after the DaemonSet's pods. A pod that was created
 first notices it has no certificate secret, logs it, and is created again within about a minute.

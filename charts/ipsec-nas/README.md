@@ -17,6 +17,7 @@ These must **already be on the cluster**. They are prerequisites, not dependenci
 | **The namespace**, with the privileged pod-security labels | The cert-sync pod runs privileged | 20, Step B.2 | Not checked: create it before installing |
 | **The NAS side** | Its own certificate from the same CA, and its IPsec settings | 00, Part 3.1 | Not checked |
 | User workload monitoring | Only for `metrics.serviceMonitor` and `metrics.prometheusRule` | 20, Step B.12 | Not checked |
+| Grafana | Only for `metrics.grafanaDashboard: true` (off by default): it loads the dashboard ConfigMap | A Grafana in the release's namespace, or a **central Grafana that watches it**: a dashboard sidecar on the label `grafana_dashboard: "1"`, or grafana-operator with a `GrafanaDashboard` (docs/20, Step B.12) | **Not checked**: no API tells a Grafana sidecar is there, and without a Grafana the ConfigMap is simply unused. The install notes repeat it |
 | **Cluster Observability Operator** 1.5 or later, with Perses | The dashboard in the console. Required by default; not needed with `metrics.persesDashboard.enabled: false` | [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm) | The API `perses.dev/v1alpha2` is served |
 
 ## Install
