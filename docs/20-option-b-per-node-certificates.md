@@ -381,23 +381,30 @@ oc get pods -n openshift-user-workload-monitoring
 
 ✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
 
-**2. Let the alert rules in `kcs-ipsec` read platform metrics** (a cluster administrator, OpenShift 4.18 or later). Two alerts need series that OpenShift's own monitoring collects: `IpsecNasExporterMissing` reads `kube_node_role` (kube-state-metrics) and `IpsecNasNfsWithoutTunnel` reads `node_nfs_requests_total` (node-exporter). Both carry `namespace="openshift-monitoring"`. User workload monitoring adds `namespace="kcs-ipsec"` to every selector of a rule in `kcs-ipsec`, so without this step those two alerts can never fire; on CRC both selectors returned no series ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Red Hat's setting for this, `namespacesWithoutLabelEnforcement`, lifts that rewrite for the rules of the projects it lists, and only those. List `kcs-ipsec` alone.
+**2. Let the alert rules in `kcs-ipsec` read platform metrics** (a cluster administrator, OpenShift 4.18 or later; no chart does this yet). `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` need series that OpenShift's own monitoring collects (`kube_node_role`, `node_nfs_requests_total`). Without this setting, user workload monitoring limits the rules in `kcs-ipsec` to series labelled `kcs-ipsec`, and those two alerts can never fire. The technical justification, the measurements, the alternatives and the care it needs: [doc 60, *The cluster setting two alerts need*](60-monitoring-per-node.md#the-cluster-setting-two-alerts-need-namespaceswithoutlabelenforcement).
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    # keep every key already here; add this one, or add kcs-ipsec to an existing list
+    namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+```
 
 ```bash
-# What is configured already? Keep it: the setting is one key among others in config.yaml.
-oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o jsonpath='{.data.config\.yaml}'
-
-# Empty output: add the key.
-oc -n openshift-user-workload-monitoring patch configmap user-workload-monitoring-config --type merge \
-  -p '{"data":{"config.yaml":"namespacesWithoutLabelEnforcement: [ kcs-ipsec ]\n"}}'
-# Otherwise: oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
-# and add the line namespacesWithoutLabelEnforcement: [ kcs-ipsec ] under config.yaml (or add kcs-ipsec to the list).
+# Read it first: the ConfigMap may already hold other settings. Merge, never replace.
+oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml
+oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
 
 oc get thanosruler,prometheus user-workload -n openshift-user-workload-monitoring \
   -o jsonpath='{range .items[*]}{.kind}: {.spec.excludedFromEnforcement}{"\n"}{end}'
 ```
 
-✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]` and the same for `Prometheus` (on CRC 14 seconds after the change). It works only while `rulesWithoutLabelEnforcementAllowed` is not set to `false` in `cluster-monitoring-config` (the default is `true`). The two alerts carry `namespace="kcs-ipsec"` themselves, so they show in the project like the others; Red Hat: *"To make the resulting alerts and metrics visible to project users, the query expressions should return a `namespace` label with a non-empty value"* ([cluster-monitoring-operator, release-4.18, `namespacesWithoutLabelEnforcement`](https://github.com/openshift/cluster-monitoring-operator/blob/release-4.18/Documentation/api.md); [Managing alerts as a Developer](https://docs.redhat.com/en/documentation/monitoring_stack_for_red_hat_openshift/4.21/html/managing_alerts/managing-alerts-as-a-developer)).
+✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]` and the same for `Prometheus` (on CRC 14 seconds after the change).
 
 **3. Apply the Service and ServiceMonitor, and the alert rules**, from the repository root:
 

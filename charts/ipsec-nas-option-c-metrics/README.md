@@ -73,7 +73,7 @@ data:
     namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
 ```
 
-The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard).
+The ConfigMap may already hold other settings: read it first (`oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml`) and merge, never replace it. Steps and the check: [doc 20, Step B.12, 2](../../docs/20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard). Why it is needed, what it changes and the alternatives: [doc 60](../../docs/60-monitoring-per-node.md#the-cluster-setting-two-alerts-need-namespaceswithoutlabelenforcement).
 
 ## Values
 

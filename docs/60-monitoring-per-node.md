@@ -66,12 +66,79 @@ Every metric carries `node`. All are read-only: the collector changes nothing on
 | `IpsecNasMetricsStale` | The collector has not written for 5 minutes | 5m | warning |
 | `IpsecNasCertificateExpiringSoon`, `…Expired` | Less than 14 days left; expired | 1h; – | warning; critical |
 
-**Two alerts need a cluster setting.** `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` read platform series (`kube_node_role` from kube-state-metrics, `node_nfs_requests_total` from node-exporter), which carry `namespace="openshift-monitoring"`. User workload monitoring adds `namespace="kcs-ipsec"` to every selector of a rule in `kcs-ipsec`, so on OpenShift both found no series and could never fire, until `kcs-ipsec` was listed in `namespacesWithoutLabelEnforcement` (ConfigMap `user-workload-monitoring-config`, OpenShift 4.18 or later; [doc 20, Step B.12, 2](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard)). With it, `IpsecNasExporterMissing` fired on CRC for a node without a collector, 15 minutes after going pending, as `namespace=kcs-ipsec node=crc role=worker`, and reached Alertmanager ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt)). Both rules set `namespace` themselves: the series they read belong to `openshift-monitoring`, and an alert labelled so would not be this project's.
-
 Two of the waits are measured, not chosen:
 
 - **`IpsecNasDuplicateNode`, 10 minutes.** When the ServiceMonitor changed on CRC, the old and the new series of the same pod both existed for one 15-second step (18:08:15Z); the alert went pending and cleared by 18:09:00Z ([evidence 39](evidence/crc/39-metrics-dashboard-queries.txt)). Without the wait, that change alone would have paged.
 - **`IpsecNasCertificateMissing`, 10 minutes.** cert-sync puts a deleted certificate back at its next check (every 5 minutes). On CRC it was missing for 72 seconds and the alert never fired ([evidence 38](evidence/crc/38-metrics-certificate-removed.txt)).
+
+## The cluster setting two alerts need: `namespacesWithoutLabelEnforcement`
+
+`IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` fire on OpenShift only when the namespace of the rules, `kcs-ipsec`, is listed in `namespacesWithoutLabelEnforcement`. No Helm chart manages that ConfigMap yet: a cluster administrator adds it once, by hand, on OpenShift 4.18 or later.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-workload-monitoring-config
+  namespace: openshift-user-workload-monitoring
+data:
+  config.yaml: |
+    # keep every key already here; add this one, or add kcs-ipsec to an existing list
+    namespacesWithoutLabelEnforcement: [ kcs-ipsec ]
+```
+
+```bash
+# Read it first: the ConfigMap may already hold other settings. Merge, never replace.
+oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml
+oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
+
+# The operator applies it to user workload monitoring's Prometheus and Thanos Ruler:
+oc get thanosruler,prometheus user-workload -n openshift-user-workload-monitoring \
+  -o jsonpath='{range .items[*]}{.kind}: {.spec.excludedFromEnforcement}{"\n"}{end}'
+```
+
+✅ **Expected:** `ThanosRuler: [{"group":"monitoring.coreos.com","namespace":"kcs-ipsec","resource":"prometheusrules"}]`, and the same for `Prometheus` (on CRC 14 seconds after the change, [evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5a).
+
+### Why: what OpenShift does to a project's rules
+
+1. **Red Hat:** *"By default, when you create an alerting rule, the `namespace` label is enforced on it"*, and a project's rule *"can include metrics exposed by its own project in addition to the default metrics from core platform monitoring"* ([openshift-docs, enterprise-4.18, *Creating alerting rules for user-defined projects*](https://github.com/openshift/openshift-docs/blob/enterprise-4.18/modules/monitoring-about-creating-alerting-rules-for-user-defined-projects.adoc)).
+2. **What enforcement does, measured:** user workload monitoring loads every rule in `kcs-ipsec` with `namespace="kcs-ipsec"` added to each selector. As loaded on CRC:
+
+   ```text
+   kube_node_role{namespace="kcs-ipsec",role="worker"} unless on (node) ipsec_nas_collect_timestamp_seconds{namespace="kcs-ipsec"}
+   ```
+
+   So the platform metrics a project's rule can read are those carrying that project's namespace label, such as the CPU and memory of its own pods.
+3. **Two alerts need platform series that carry another namespace.** Measured through Thanos Querier on CRC ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5):
+
+   | Alert | Platform series it needs | Why it needs it | The series' namespace | With enforcement |
+   |---|---|---|---|---|
+   | `IpsecNasExporterMissing` | `kube_node_role` (kube-state-metrics) | The list of nodes that should report. Only the platform knows a node that has **no** collector pod at all | `openshift-monitoring` | no series: the alert can never fire |
+   | `IpsecNasNfsWithoutTunnel` | `node_nfs_requests_total` (node-exporter) | NFS traffic per node, to find NFS on a node whose tunnel is down | `openshift-monitoring` | no series: the alert can never fire |
+
+   Both fired in the kind run ([evidence kind/02](evidence/kind/02-exporter-missing.txt)), where kube-prometheus-stack enforces no namespace, so the defect showed only on OpenShift.
+4. **The setting Red Hat provides for this:** *"Defines the list of namespaces for which Prometheus and Thanos Ruler in user-defined monitoring don't enforce the `namespace` label value in `PrometheusRule` objects"* ([cluster-monitoring-operator, release-4.18, `api.md`](https://github.com/openshift/cluster-monitoring-operator/blob/release-4.18/Documentation/api.md); not in release-4.17). Red Hat's own example of such a rule queries a kube-state-metrics series, `kube_namespace_labels` ([openshift-docs, enterprise-4.18, *Creating cross-project alerting rules*](https://github.com/openshift/openshift-docs/blob/enterprise-4.18/modules/monitoring-creating-cross-project-alerting-rules-for-user-defined-projects.adoc)).
+5. **Measured with the setting:** both rules loaded without the added label. The NFS rule's left side returned `node=crc` at 2.011 requests/s. With the collector removed from `crc`, `IpsecNasExporterMissing` went pending at 15:59:12Z, fired at 16:14:14Z (its `for: 15m`), reached Alertmanager as `namespace=kcs-ipsec node=crc role=worker severity=warning`, and resolved when the collector was back ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5b). `IpsecNasNfsWithoutTunnel` was not driven to firing: that needs NFS traffic while the tunnel is down. Its platform input and its labels are covered by §5a and `tests/test-alert-rules.sh`.
+
+### Why the two rules set their own `namespace` label
+
+Red Hat: *"To make the resulting alerts and metrics visible to project users, the query expressions should return a `namespace` label with a non-empty value"* (`api.md`, above). Without it, measured on CRC, `IpsecNasExporterMissing` came out with kube-state-metrics' labels, `namespace=openshift-monitoring` among them ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5b): an alert of `openshift-monitoring`, not of this project. `IpsecNasNfsWithoutTunnel`'s `sum by (node)` keeps no namespace at all. So `IpsecNasExporterMissing` keeps only `node` and `role` (`max by (node, role)`), and both rules set `namespace` themselves; each chart writes its release namespace there.
+
+### The alternatives, and why not
+
+| Alternative | Why not |
+|---|---|
+| Rewrite both rules over series that carry `kcs-ipsec` (kube-state-metrics' `kube_pod_info`, `kube_daemonset_status_*` for our DaemonSet: measured with `namespace="kcs-ipsec"`) | Those series exist only for nodes where the DaemonSet places a pod. A node where it places none (a taint the pod does not tolerate, a wrong selector) is exactly what `IpsecNasExporterMissing` must find. There is no per-node NFS traffic among them either |
+| The label `openshift.io/prometheus-rule-evaluation-scope: leaf-prometheus` | Red Hat: with it, *"your alerting rule can use only those metrics exposed by your user-defined project. Alerting rules you create based on default platform metrics might not trigger alerts"* (*Creating alerting rules for user-defined projects*, above) |
+| A platform `AlertingRule` (`monitoring.openshift.io/v1`) in `openshift-monitoring` | Red Hat: it is for *"new alerting rules based on platform metrics"*, and *"You must create the `AlertingRule` object in the `openshift-monitoring` namespace"* ([openshift-docs, enterprise-4.18, *Creating new alerting rules*](https://github.com/openshift/openshift-docs/blob/enterprise-4.18/modules/monitoring-creating-new-alerting-rules.adoc)). Our series are user-defined (on CRC labelled `prometheus=openshift-user-workload-monitoring/user-workload`), and the rule would leave the project |
+
+### What it changes, and the care it needs
+
+- **Only the rules of the listed namespaces.** The rules of every other project stay enforced, and the setting grants no one access to metrics.
+- **The rules in `kcs-ipsec` can read every project's metrics.** Red Hat: these `PrometheusRule` objects *"are then applicable to all projects"*. Whoever can create or edit a `PrometheusRule` in `kcs-ipsec` gets that reach, so keep that right to the platform team. Red Hat lists the `monitoring-rules-edit` cluster role for the project as the one that creates such rules.
+- **One copy of each rule.** Red Hat: *"If you create the same cross-project alerting rule in multiple projects, it results in repeated alerts."* Install the rules in one namespace only. That is also why Option B and Option C are never deployed together.
+- **Who can set it:** `cluster-admin`, or a user with `user-workload-monitoring-config-edit` in `openshift-user-workload-monitoring`. An administrator can turn the whole feature off with `rulesWithoutLabelEnforcementAllowed: false` in `cluster-monitoring-config` (default `true`); then these two alerts are silent again.
+- **Not managed by a chart yet.** Neither chart writes this ConfigMap: it is one object for the whole cluster's user workload monitoring, and other settings live in it beside ours. Both charts' install notes and READMEs repeat the step.
 
 ## The dashboard
 
