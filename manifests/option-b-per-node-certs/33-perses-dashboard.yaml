@@ -1381,6 +1381,10 @@ spec:
             "plugin": {
               "kind": "PrometheusLabelValuesVariable",
               "spec": {
+                "datasource": {
+                  "kind": "PrometheusDatasource",
+                  "name": "ipsec-nas-thanos"
+                },
                 "labelName": "node",
                 "matchers": [
                   "ipsec_nas_tunnel_up"

@@ -46,6 +46,12 @@ for p in panels.values():
 
 # The Grafana datasource input is not used once the datasource is named.
 spec["variables"] = [v for v in spec.get("variables", []) if v["spec"]["name"] != "DS_PROMETHEUS"]
+# The variables query Prometheus too (the node filter reads the node label values). percli leaves them
+# without a datasource, so they would use the namespace's default one, which a namespace need not have.
+for v in spec["variables"]:
+    plugin = v["spec"].get("plugin", {})
+    if plugin.get("kind", "").startswith("Prometheus"):
+        plugin["spec"]["datasource"] = {"kind": "PrometheusDatasource", "name": DATASOURCE}
 
 # Panels 3 and 5 count days; percli kept the number and lost the unit.
 for key in ("3", "5"):
@@ -119,8 +125,10 @@ items = spec["layouts"][0]["spec"]["items"]
 for it in items:
     if it["y"] >= 35:
         it["y"] += 5
-items.insert(next(i for i, it in enumerate(items) if it["y"] >= 40),
-             {"x": 0, "y": 35, "width": 24, "height": 5, "content": {"$ref": "#/spec/panels/16"}})
+below = [i for i, it in enumerate(items) if it["y"] >= 40]
+if not below:
+    fail("no panel below the per-node table: the layout of ipsec-nas.json changed; update this script")
+items.insert(below[0], {"x": 0, "y": 35, "width": 24, "height": 5, "content": {"$ref": "#/spec/panels/16"}})
 
 json.dump(spec, sys.stdout, indent=2, sort_keys=True)
 sys.stdout.write("\n")

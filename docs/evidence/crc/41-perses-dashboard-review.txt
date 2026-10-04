@@ -60,3 +60,13 @@ Reader with view + Perses viewer roles only, POST query_range on 9091:
  [HTTP 403]
 The same reader with a test ClusterRoleBinding to cluster-monitoring-view (01:21:3x-01:25:57Z, then removed): POST query_range on 9091 -> HTTP 200, data.
 Capture 4 (upstream Perses 0.54.0 UI, datasource on 9091 with only that reader's token): 28 queries, HTTP errors: none; NFS requests/s 30 requests/sec.
+
+## Second pass (2026-10-04T01:47:55Z)
+- The node variable (PrometheusLabelValuesVariable) had no datasource after percli, so it used the namespace default; the chart's
+  datasource is not the default. Local Perses 0.54.0, project with ipsec-nas-thanos only (default: false):
+    dashboard as committed in 49cae14: node-variable requests: NONE
+    after the fix (variables name ipsec-nas-thanos): projects/kcs-ipsec/datasources/ipsec-nas-thanos/api/v1/label/node/values
+- A ServiceAccount with ONLY 'view' in kcs-ipsec: can-i get persesdashboards yes, get persesdatasources yes, create persesdashboards no;
+  Perses API GET /api/v1/projects/kcs-ipsec/dashboards -> HTTP 200 (COO's roles aggregate into view).
+- Test objects removed from kcs-ipsec (thanos-9091-test, thanos-9092-test, ipsec-nas-server-conversion, perses-viewer-test and its bindings);
+  the temporary ClusterRoleBinding was removed after each capture. Left: the chart's PersesDashboard ipsec-nas and PersesDatasource ipsec-nas-thanos, managed by Argo CD.

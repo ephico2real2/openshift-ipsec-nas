@@ -168,8 +168,9 @@ The chart ships the dashboard and its data source, behind one value (default `fa
 | NFS requests/s | **fixed** by port 9091: 39.8 requests/sec under load |
 | "No data" where Grafana said "No drops" | as before: the value is right (no drops) |
 | `v1alpha1` deprecated | **fixed**: `v1alpha2` |
+| *(found in the second pass)* The node filter had no data source: percli leaves the variables without one, so they use the namespace's **default** data source, and the chart's is not the default | **fixed**: the variables name `ipsec-nas-thanos` too. Measured with no default data source: before, the filter sent no request at all; after, it queries `ipsec-nas-thanos` |
 
-**Who sees it.** COO's roles for Perses are aggregated into OpenShift's own: `view` already allows reading `PersesDashboard`s and `PersesDatasource`s in the namespace (measured: the test reader read them with `view` alone), `edit` and `admin` allow changing them. So the chart creates **no RoleBindings**. A viewer who can open the namespace and holds `cluster-monitoring-view` sees every panel.
+**Who sees it.** COO's roles for Perses are aggregated into OpenShift's own: `view` already allows reading `PersesDashboard`s and `PersesDatasource`s in the namespace, and `edit` and `admin` allow changing them. Measured with a ServiceAccount holding **only `view`** in `kcs-ipsec`: `get` on both kinds was allowed, `create` was refused, and the Perses API listed the namespace's dashboards (HTTP 200). So the chart creates **no RoleBindings**. A viewer who can open the namespace and holds `cluster-monitoring-view` sees every panel.
 
 <!-- markdownlint-disable MD033 -->
 <picture>
