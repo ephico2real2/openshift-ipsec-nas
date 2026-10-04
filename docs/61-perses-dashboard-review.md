@@ -68,7 +68,7 @@ It is **on by default** in the ipsec chart (`metrics.persesDashboard.enabled: tr
 
 | Needs | Why | How |
 |---|---|---|
-| COO 1.5 or later, with Perses enabled | It runs Perses and its console page | The [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) installs it, hands-free (on OpenShift 4.18, read its *Known issues*). The ipsec chart refuses to install without the API `perses.dev/v1alpha2`, and says so |
+| COO 1.5 or later, with Perses enabled | It runs Perses and its console page | The [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo) installs it, hands-free, on OpenShift 4.19 or later. The ipsec chart refuses to install without the API `perses.dev/v1alpha2`, and says so |
 | User workload monitoring | It collects the metrics | [doc 20, Step B.12](20-option-b-per-node-certificates.md#step-b12--metrics-in-observe-alerts-and-a-dashboard) |
 
 **What the chart creates**, in its own namespace, `perses.dev/v1alpha2`:
