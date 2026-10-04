@@ -49,3 +49,14 @@ POST /api/v1/query_range         -> 403  Forbidden (user=system:serviceaccount:k
   (11 of 11: the tenancy port authorises the HTTP method as the RBAC verb; POST = create, which view does not grant)
 The prometheus datasource schema of Perses 0.54.0 / plugin 0.58.0 has no HTTP-method setting (schemas/datasource/prometheus.cue:
   HTTPDatasourceSpec, scrapeInterval, queryParams only).
+
+## Decision (2026-10-03): a 9091 datasource; viewers hold cluster-monitoring-view (the metrics carry no PHI or PII).
+$ oc get clusterrole cluster-monitoring-view   # rules
+  [""] ["namespaces"] ["get"]
+  ["monitoring.coreos.com"] ["prometheuses/api"] ["get","create","update"]
+Port 9091 maps the HTTP method to a verb on prometheuses/api (POST -> create), port 9092 to a verb on pods (POST -> create pods).
+Reader with view + Perses viewer roles only, POST query_range on 9091:
+  Forbidden (user=system:serviceaccount:kcs-ipsec:perses-viewer-test, verb=create, resource=prometheuses, subresource=api)
+ [HTTP 403]
+The same reader with a test ClusterRoleBinding to cluster-monitoring-view (01:21:3x-01:25:57Z, then removed): POST query_range on 9091 -> HTTP 200, data.
+Capture 4 (upstream Perses 0.54.0 UI, datasource on 9091 with only that reader's token): 28 queries, HTTP errors: none; NFS requests/s 30 requests/sec.

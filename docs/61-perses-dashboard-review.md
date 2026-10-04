@@ -4,6 +4,33 @@ Red Hat's Cluster Observability Operator (COO) brings **Perses**, a dashboard to
 
 Measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03, with a bounded load Job writing to the NAS for traffic. Text: [evidence 41](evidence/crc/41-perses-dashboard-review.txt). **The Grafana dashboard is not changed by any of this.**
 
+## Decision: one data source on Thanos port 9091; metrics readable by namespace owners
+
+**Decided 2026-10-03.** The metrics contain **no PHI and no PII**. Self-service and metrics accessibility come first: a namespace owner must see their own metrics in their dashboard **without technical gymnastics**. So:
+
+- **The data source.** A `PersesDatasource` on Thanos Querier's cluster-wide port **9091**, and no `namespace` parameter.
+- **The viewers.** People who view dashboards hold **`cluster-monitoring-view`**, so they may read metrics across the cluster.
+
+**The technical reason** (measured on CRC; sections 2 and 4):
+
+1. **Perses sends each viewer's own token** to Thanos, so Thanos's own rules decide what a viewer sees.
+2. **The Perses UI sends its data queries as `POST`**, and Perses has no setting to send them as `GET`.
+3. **Thanos's per-namespace port 9092 checks a `POST` as `create pods` in the namespace.** That is the right to run workloads; it cannot be handed out for viewing a dashboard. A namespace-only reader on 9092 got `Forbidden` on every panel (Capture 3).
+4. **Port 9091 checks a `POST` as `create` on `prometheuses/api`.** `cluster-monitoring-view` grants exactly that (with `get`/`update` on the same, and `get` on namespaces: read access to metrics, nothing else). As a viewer holding it, every panel answered (Capture 4).
+5. **Port 9091 also serves platform metrics.** The *NFS requests/s* column, empty on 9092, shows data (`30 requests/sec` under load).
+
+The alternative, a namespace-only data source, stays unworkable until Perses can query with `GET`. Who receives `cluster-monitoring-view`, and how, is a platform setting. It belongs with COO in [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm), so every application team gets it the same way, without filing a request per namespace.
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/41-perses-reader-9091.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/41-perses-reader-9091.light.png">
+  <img alt="The IPsec to the NAS dashboard as the namespace reader holding cluster-monitoring-view, on Thanos port 9091: every panel answers, with tunnels up 1, down 0, UP in green, traffic around 3.8 MiB/s under load, tunnel age 7.22h, and the per-node table showing NFS requests/s of 30 requests/sec." src="images/crc/41-perses-reader-9091.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 4. The working setup: the namespace reader, now also holding `cluster-monitoring-view`, on a 9091 data source. No errors; the NFS column has data. Text: [evidence 41](evidence/crc/41-perses-dashboard-review.txt).*
+
 ## 1. Converting
 
 ```bash
@@ -21,7 +48,7 @@ percli migrate -f charts/ipsec-nas/files/ipsec-nas.json --format cr --project kc
 
 **The reader.** A ServiceAccount with only `view`, `persesdashboard-viewer-role` and `persesdatasource-viewer-role` in `kcs-ipsec`.
 
-**What Perses does with it.** Perses passes the reader's own token to Thanos ([findings §6](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/manual-install-findings.md#6-how-perses-authenticates-and-reaches-thanos)). The namespace's data source therefore uses Thanos's per-namespace port **9092** with `namespace=kcs-ipsec`.
+**What Perses does with it.** Perses passes the reader's own token to Thanos ([findings §6](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/manual-install-findings.md#6-how-perses-authenticates-and-reaches-thanos)). The review therefore started with a data source on Thanos's per-namespace port **9092** with `namespace=kcs-ipsec`. The *Decision* above replaced it with port 9091.
 
 **Every panel query, sent through COO's Perses as `GET`:**
 
@@ -102,13 +129,13 @@ The colours and values are right; the layout is not. Its *NFS requests/s* column
 - **Perses has no such setting.** Its Prometheus data source accepts only the common HTTP settings, `scrapeInterval` and `queryParams` (plugin 0.58.0 schema).
 - Red Hat's Perses fork and the console's monitoring plugin show nothing that changes this. That is from a code search, not a test.
 
-**So, as measured, a reader with namespace rights only cannot see this dashboard's data.** An identity allowed to `create pods` in the namespace, or one with `cluster-monitoring-view` on port 9091, can.
+**So, as measured, a reader with namespace rights only cannot see this dashboard's data through 9092.** One with `cluster-monitoring-view` on port 9091 can (Capture 4).
 
-**Options:**
-1. **Check the console itself with a non-admin login.** Its Red Hat build is the one teams will use, and the only test not yet done. *(Next step.)*
-2. **Give readers `cluster-monitoring-view`.** That works, but it lets them read every metric on the cluster.
-3. **A shared data source on port 9091 with a ServiceAccount's token.** Every reader would see through that account's rights, which is not the per-user model. Not recommended.
-4. **Ask upstream and Red Hat** for a `GET` option in the Perses Prometheus data source, as Grafana has.
+**Options considered:**
+1. **The console with a non-admin login.** Its Red Hat build might query differently. Not needed after the decision; still worth knowing.
+2. **Give readers `cluster-monitoring-view` and use port 9091. Chosen** (see *Decision* above).
+3. **A shared data source on 9091 with a ServiceAccount's token.** Every reader would see through one account's rights: rejected.
+4. **Ask upstream and Red Hat for a `GET` option** in the Perses Prometheus data source. It would make namespace-only data sources possible later; not needed for the decision.
 
 ## 5. To fix before Perses replaces anything (in the chart's `PersesDashboard`, not in Grafana)
 
@@ -117,10 +144,10 @@ The colours and values are right; the layout is not. Its *NFS requests/s* column
 | The table splits a node into three rows | build the table from queries labelled `node` only; show the reporting pod and the NAS identity in a panel of their own |
 | libreswan version shows `1` | a table or series-name display that shows the `version` label |
 | The certificate expiry lost "days" | set the unit on the stat panel |
-| NFS requests/s empty for namespace data sources | leave it out of the Perses dashboard, or keep it in Grafana only; the alert `IpsecNasNfsWithoutTunnel` is unaffected |
+| NFS requests/s empty for namespace data sources | resolved by the decision: on 9091 it shows data |
 | "No data" where Grafana said "No drops" | a no-data text on the panel, if Perses supports one |
 | `v1alpha1` deprecated | write the resource as `perses.dev/v1alpha2` |
-| **Readers refused (section 4)** | the decision above, before anything else |
+| Readers refused (section 4) | resolved by the decision: 9091 and `cluster-monitoring-view` |
 
 ## Not covered here
 
