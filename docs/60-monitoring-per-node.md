@@ -78,7 +78,17 @@ Two settings, both in the ConfigMap `user-workload-monitoring-config` in `opensh
 - **`namespacesWithoutLabelEnforcement: [ kcs-ipsec ]`**: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` fire on OpenShift only with it (OpenShift 4.18 or later).
 - **`alertmanager: {enabled: true, enableAlertmanagerConfig: true}`**: the alerts are delivered to a dedicated Alertmanager in `openshift-user-workload-monitoring`, not to the platform's in `openshift-monitoring`, and a project may route its own alerts with an `AlertmanagerConfig`. As Red Hat designed it, that Alertmanager serves all user projects.
 
-No Helm chart manages that ConfigMap yet (planned: [openshift-coo-helm#5](https://github.com/ephico2real2/openshift-coo-helm/issues/5)): a cluster administrator sets it once, by hand.
+A cluster administrator sets it with the chart [`openshift-user-workload-monitoring`](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-user-workload-monitoring) (Helm or Argo CD; it owns the whole ConfigMap):
+
+```bash
+# The chart openshift-user-workload-monitoring (openshift-coo-helm, release openshift-user-workload-monitoring-0.1.0),
+# with its example values for this project. Both flags once: the operator created the ConfigMap already.
+helm install uwm <openshift-coo-helm>/charts/openshift-user-workload-monitoring -n openshift-user-workload-monitoring \
+  -f <openshift-coo-helm>/charts/openshift-user-workload-monitoring/examples/values-ipsec-nas.yaml \
+  --take-ownership --force-conflicts
+```
+
+The ConfigMap it writes:
 
 ```yaml
 apiVersion: v1
@@ -96,7 +106,7 @@ data:
 ```
 
 ```bash
-# Read it first: the ConfigMap may already hold other settings. Merge, never replace.
+# Without the chart, by hand: read it first, it may already hold other settings. Merge, never replace.
 oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml
 oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
 
@@ -149,7 +159,7 @@ The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-moni
 - **With `enabled: true`.** Red Hat: *"a dedicated instance of the Alertmanager for user-defined projects"*. On CRC `alertmanager-user-workload-0` was running 10 seconds after the change, and both user workload Prometheus and Thanos Ruler, which evaluates our rules, send to it.
 - **With `enableAlertmanagerConfig: true`.** Red Hat: it lets *"users to define their own alert routing configurations with `AlertmanagerConfig` objects"*. A team routes the IPsec alerts to its receiver with an `AlertmanagerConfig` in `kcs-ipsec`; the charts create none.
 - **Measured.** With the collector kept off `crc`, `IpsecNasExporterMissing` arrived in the user workload Alertmanager at 17:03:09Z as `namespace=kcs-ipsec node=crc role=worker severity=warning`, and `alertmanager-main` had nothing; it resolved there at 17:03:56Z once the collector was back ([evidence 46](evidence/crc/46-option-c-metrics-chart.txt) §5c).
-- **One Alertmanager for all user projects, by Red Hat's design.** Red Hat: *"you can optionally enable a separate instance of Alertmanager to send alerts for user-defined projects only"* (same page). Every user project's alerts go there, each project routing its own with an `AlertmanagerConfig` in its namespace; on CRC that includes `group-sync-dashboard`, `modernize-demo` and `mongodb-poc`. openshift-coo-helm#5 puts the ConfigMap under a chart.
+- **One Alertmanager for all user projects, by Red Hat's design.** Red Hat: *"you can optionally enable a separate instance of Alertmanager to send alerts for user-defined projects only"* (same page). Every user project's alerts go there, each project routing its own with an `AlertmanagerConfig` in its namespace; on CRC that includes `group-sync-dashboard`, `modernize-demo` and `mongodb-poc`. The chart above sets it.
 
 ### What the exemption changes, and the care it needs
 
@@ -157,7 +167,7 @@ The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-moni
 - **The rules in `kcs-ipsec` can read every project's metrics.** Red Hat: these `PrometheusRule` objects *"are then applicable to all projects"*. Whoever can create or edit a `PrometheusRule` in `kcs-ipsec` gets that reach, so keep that right to the platform team. Red Hat lists the `monitoring-rules-edit` cluster role for the project as the one that creates such rules.
 - **One copy of each rule.** Red Hat: *"If you create the same cross-project alerting rule in multiple projects, it results in repeated alerts."* Install the rules in one namespace only. That is also why Option B and Option C are never deployed together.
 - **Who can set it:** `cluster-admin`, or a user with `user-workload-monitoring-config-edit` in `openshift-user-workload-monitoring`. An administrator can turn the whole feature off with `rulesWithoutLabelEnforcementAllowed: false` in `cluster-monitoring-config` (default `true`); then these two alerts are silent again.
-- **Not managed by a chart yet.** Neither chart writes this ConfigMap: it is one object for the whole cluster's user workload monitoring, and other settings live in it beside ours. Both charts' install notes and READMEs repeat the step.
+- **Its own chart.** It is one object for the whole cluster's user workload monitoring, so neither IPsec chart writes it; the chart [`openshift-user-workload-monitoring`](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-user-workload-monitoring) owns it, and every setting of the cluster, other teams' included, goes through that chart's values (measured on CRC with Helm and Argo CD: [openshift-coo-helm evidence 14](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/evidence/crc/14-user-workload-monitoring-chart.txt)).
 
 ## The dashboard
 

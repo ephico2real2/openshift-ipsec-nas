@@ -381,7 +381,17 @@ oc get pods -n openshift-user-workload-monitoring
 
 ✅ **Expected:** `prometheus-user-workload-0` is `Running`. If the namespace is empty, user workload monitoring is off: enable it first (Red Hat: *Enabling monitoring for user-defined projects*).
 
-**2. The user workload monitoring settings** (`openshift-user-workload-monitoring`; a cluster administrator, OpenShift 4.18 or later; no chart does this yet; nothing in `openshift-monitoring` changes). The `alertmanager` lines deliver user workload alerts to a dedicated Alertmanager in `openshift-user-workload-monitoring`, which by Red Hat's design serves all user projects. The exemption lets the rules in `kcs-ipsec` read platform metrics: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` need series that OpenShift's own monitoring collects (`kube_node_role`, `node_nfs_requests_total`). Without this setting, user workload monitoring limits the rules in `kcs-ipsec` to series labelled `kcs-ipsec`, and those two alerts can never fire. The technical justification, the measurements, the alternatives and the care it needs: [doc 60, *The cluster settings*](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
+**2. The user workload monitoring settings** (`openshift-user-workload-monitoring`; a cluster administrator, OpenShift 4.18 or later, with the chart [`openshift-user-workload-monitoring`](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-user-workload-monitoring) or by hand; nothing in `openshift-monitoring` changes). The `alertmanager` lines deliver user workload alerts to a dedicated Alertmanager in `openshift-user-workload-monitoring`, which by Red Hat's design serves all user projects. The exemption lets the rules in `kcs-ipsec` read platform metrics: `IpsecNasExporterMissing` and `IpsecNasNfsWithoutTunnel` need series that OpenShift's own monitoring collects (`kube_node_role`, `node_nfs_requests_total`). Without this setting, user workload monitoring limits the rules in `kcs-ipsec` to series labelled `kcs-ipsec`, and those two alerts can never fire. The technical justification, the measurements, the alternatives and the care it needs: [doc 60, *The cluster settings*](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config).
+
+```bash
+# The chart openshift-user-workload-monitoring (openshift-coo-helm, release openshift-user-workload-monitoring-0.1.0),
+# with its example values for this project. Both flags once: the operator created the ConfigMap already.
+helm install uwm <openshift-coo-helm>/charts/openshift-user-workload-monitoring -n openshift-user-workload-monitoring \
+  -f <openshift-coo-helm>/charts/openshift-user-workload-monitoring/examples/values-ipsec-nas.yaml \
+  --take-ownership --force-conflicts
+```
+
+The ConfigMap it writes:
 
 ```yaml
 apiVersion: v1
@@ -399,7 +409,7 @@ data:
 ```
 
 ```bash
-# Read it first: the ConfigMap may already hold other settings. Merge, never replace.
+# Without the chart, by hand: read it first, it may already hold other settings. Merge, never replace.
 oc -n openshift-user-workload-monitoring get configmap user-workload-monitoring-config -o yaml
 oc -n openshift-user-workload-monitoring edit configmap user-workload-monitoring-config
 
