@@ -32,6 +32,14 @@ scc:
   bind: true
 
 metrics:
+  # Dynatrace: annotate the metrics Service so Dynatrace's in-cluster ActiveGate scrapes each pod
+  # ("Monitor annotated Prometheus exporters", docs/62). Off by default.
+  dynatrace:
+    # -- Add the metrics.dynatrace.com annotations to the metrics Service.
+    scrape: false
+    # -- The metric names Dynatrace keeps (its filter accepts a prefix such as ipsec_nas_*).
+    filter:
+    - ipsec_nas_*
   # -- Headless Service and ServiceMonitor, for Observe. Needs user workload monitoring.
   serviceMonitor: true
   # -- The twelve alert rules (files/prometheus-rule-groups.yaml, shared with Option B).

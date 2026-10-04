@@ -53,6 +53,14 @@
           "type": "object",
           "additionalProperties": false,
           "properties": { "enabled": { "type": "boolean" }, "thanosURL": { "type": "string", "pattern": "^https://" } }
+        },
+        "dynatrace": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scrape": { "type": "boolean" },
+            "filter": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          }
         }
       }
     },

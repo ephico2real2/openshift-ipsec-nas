@@ -8,6 +8,14 @@ metadata:
   namespace: {{ .Release.Namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
+    {{- if .Values.metrics.dynatrace.scrape }}
+    # Dynatrace's annotated Prometheus exporters: its in-cluster ActiveGate scrapes each pod behind this Service
+    # (docs/62; the cluster needs "Monitor annotated Prometheus exporters" on).
+    metrics.dynatrace.com/scrape: "true"
+    metrics.dynatrace.com/port: "9754"
+    metrics.dynatrace.com/path: /metrics
+    metrics.dynatrace.com/filter: {{ dict "mode" "include" "names" .Values.metrics.dynatrace.filter | toJson | quote }}
+    {{- end }}
   labels:
     app: ipsec-cert-sync
 spec:

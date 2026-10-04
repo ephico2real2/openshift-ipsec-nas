@@ -118,6 +118,16 @@ grep -q 'prerequisite missing: the NMState Operator' <<<"$refused" && ok "the tu
 render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c3 >/dev/null 2>&1 && bad "the schema refuses an unknown variant" || ok "the schema refuses an unknown variant"
 render "${opt[@]}" --set tunnel.enabled=true --set 'tunnel.pools={infra}' >/dev/null 2>&1 && bad "the schema refuses a pool other than worker and master" || ok "the schema refuses a pool other than worker and master"
 
+# Dynatrace's annotated Prometheus exporters (#46): off by default; on, the four annotations with Dynatrace's filter JSON.
+render | grep -q 'metrics.dynatrace.com/' && bad "no Dynatrace annotation by default" || ok "no Dynatrace annotation by default"
+ruby -ryaml -rjson -e '
+  svc = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "Service" } or exit 1
+  a = svc["metadata"]["annotations"]
+  ok = a["metrics.dynatrace.com/scrape"] == "true" && a["metrics.dynatrace.com/port"] == "9754" && a["metrics.dynatrace.com/path"] == "/metrics" &&
+       JSON.parse(a["metrics.dynatrace.com/filter"]) == {"mode" => "include", "names" => ["ipsec_nas_*"]}
+  exit(ok ? 0 : 1)' -- "$(render --set metrics.dynatrace.scrape=true)" \
+  && ok "metrics.dynatrace.scrape=true: scrape, port 9754, path /metrics, filter {mode: include, names: [ipsec_nas_*]}" || bad "Dynatrace annotations"
+
 # The collector script inside the rendered ConfigMap parses.
 tmp="$(mktemp)"; trap 'rm -f "${tmp}"' EXIT
 sed -n '/^  collect\.sh: |$/,/^  serve\.py: |$/p' <<<"$out" | sed '1d;$d' | sed 's/^    //' > "${tmp}"
