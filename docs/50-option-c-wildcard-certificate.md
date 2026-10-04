@@ -251,7 +251,7 @@ oc debug node/${NODE} -q -- chroot /host bash -c 'journalctl -b -u ipsec-nas-imp
 
 ✅ **Expected:** `left_server u,u,u` and `KCS-IPSEC-CA CT,C,C`, and the import's log shows the subject and the new `Not After`.
 
-The key is now in the MachineConfig, and anyone who can read `machineconfigs` can extract it. Delete the working directory once the MachineConfig is applied.
+The key is now in the MachineConfig, and anyone who can read `machineconfigs` can extract it. Delete the working directory once every pool's MachineConfig is applied.
 
 **To keep it in Git (kustomize, Argo CD):** the Butane template and the NNCP are safe to commit. The rendered MachineConfig is not: Butane embeds `left_server.p12`, the private key included, into it. Keep that file in the team's secret store, or produce it at deploy time, and commit only what has no key.
 
@@ -306,14 +306,16 @@ Without the chart nothing warns: put the date in the team calendar.
 ```bash
 scripts/option-c-certificate.sh csr ~/ipsec-option-c/2028
 # ... the CA signs it ...
-scripts/option-c-certificate.sh machineconfig ~/ipsec-option-c/2028 signed.pem enterprise-root.pem
+for MCP_ROLE in worker master; do       # each pool that has Option C
+  MCP_ROLE=${MCP_ROLE} scripts/option-c-certificate.sh machineconfig ~/ipsec-option-c/2028 signed.pem enterprise-root.pem
+done
 ```
 
-**3. Apply it.** The MachineConfig has the same name, with new content:
+**3. Apply it, one pool at a time.** Each pool's MachineConfig keeps its name, with new content:
 
 ```bash
-oc apply -f ~/ipsec-option-c/2028/99-${MCP_ROLE}-ipsec-wildcard-cert.yaml
-oc get mcp ${MCP_ROLE} -w
+oc apply -f ~/ipsec-option-c/2028/99-worker-ipsec-wildcard-cert.yaml && oc get mcp worker -w
+oc apply -f ~/ipsec-option-c/2028/99-master-ipsec-wildcard-cert.yaml && oc get mcp master -w
 ```
 
 Every node of the pool reboots once, one at a time. Each node imports the new certificate at boot and its tunnel comes back by itself; the NNCP and the NAS do not change (measured on CRC: one copy of the certificate, new serial, [evidence 36](evidence/crc/36-option-c-crc-renewal-and-c2.txt)). On OpenShift Local, `crc stop` and `crc start` after the reboot (Gotcha 17).
