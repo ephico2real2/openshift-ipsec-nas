@@ -115,6 +115,14 @@ pod: ipsec-cert-sync-5mvdc Running crc
   ALERTS for ipsec-nas (firing or pending): 0 []
   rules loaded: 12 rules in ['ipsec-nas']
 
+## 4b. Privileges (2026-10-04, after section 4)
+  oc auth can-i use securitycontextconstraints/privileged   --as system:serviceaccount:kcs-ipsec:ipsec-cert-sync -n kcs-ipsec -> yes
+  oc auth can-i use securitycontextconstraints/restricted-v2 --as system:serviceaccount:kcs-ipsec:ipsec-cert-sync -n kcs-ipsec -> yes
+  collector securityContext: {"privileged":true,"runAsUser":0}   (needs the privileged SCC: it reads the host through /host)
+  metrics   securityContext: allowPrivilegeEscalation false, capabilities drop ALL, privileged false, readOnlyRootFilesystem true,
+            runAsNonRoot true, seccompProfile RuntimeDefault
+  The pod was admitted under SCC privileged (section 4). The same as Option B's collector.
+
 ## 5. /metrics, Option C1 vs Option B (samples; HELP/TYPE lines removed)
   Option B:  42 samples   Option C1: 41 samples
   families only in Option B: ipsec_nas_certificate_import_timestamp_seconds (read from cert-sync's stamp /etc/pki/certs/kcs-ipsec/.installed-sha256)
