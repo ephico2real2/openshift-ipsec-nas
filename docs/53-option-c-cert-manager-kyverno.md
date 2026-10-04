@@ -115,7 +115,6 @@ CRC 4.22.7, one node in the master pool, cert-manager with the `enterprise-ca` `
 | K.3 | `from-secret` passed every check and wrote `99-master-ipsec-wildcard-cert.yaml`. After the reboot (and Gotcha 17's stop and start), the node's `left_server` had cert-manager's serial, one entry, imported at 21:48:41; the pool `UPDATED=True`, `DEGRADED=False` |
 | K.4 | Kyverno's `ipsec-nas-crc` `Available`; `our id=@crc.crc.testing`; the tunnel back by itself after the reboot, with no NAS restart |
 | Metrics | `tunnel_up` 1; expiry 2028-10-03T21:30:03Z and import 21:48:41Z on the node, as the certificate and the journal say; `mode="C"`; no alert; the demo application writing |
-
 | Argo CD | The running release handed to the Application [`examples/argocd-application.yaml`](../charts/ipsec-nas-option-c-metrics/examples/argocd-application.yaml) by removing only Helm's record: `Synced`, `Healthy` 15 seconds after it was applied; every object unchanged (the policy's and NNCP's generations, the Certificate's, the Secret not reissued, the collector pod, the node's ESP SA) ([evidence 52](evidence/crc/52-option-c-argocd.txt)) |
 
 The chart's objects are the ones `render.sh` makes, compared object by object for C1 and C2 and each pool (`tests/test-option-c-chart.sh`). The chart carries Option B's sync waves: Kyverno's roles −2, the Certificate −1, the policies and NNCPs 1.
