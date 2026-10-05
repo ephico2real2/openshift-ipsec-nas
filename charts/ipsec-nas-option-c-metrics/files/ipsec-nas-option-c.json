@@ -1708,6 +1708,495 @@
           "sort": "desc"
         }
       }
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "id": 23,
+      "panels": [],
+      "title": "Storage on the NAS (csi-driver-nfs)",
+      "type": "row"
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Namespaces using the NAS",
+      "description": "Namespaces with at least one claim whose volume the NFS CSI driver (nfs.csi.k8s.io) made. The NAS IP of each is in the table below.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(count by (namespace) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\")))) or vector(0)",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 25,
+      "type": "stat",
+      "title": "Claims on the NAS",
+      "description": "Claims whose volume the NFS CSI driver made, in all namespaces.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 49,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) or vector(0)",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 26,
+      "type": "stat",
+      "title": "Claims not Bound",
+      "description": "Claims of a StorageClass of the NFS CSI driver that are not Bound (Pending: the driver could not create the directory, or cannot reach the NAS). Must be 0.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 49,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(max by (namespace, persistentvolumeclaim) (kube_persistentvolumeclaim_status_phase{phase!=\"Bound\"} == 1) and on (namespace, persistentvolumeclaim) (max by (namespace, persistentvolumeclaim, storageclass) (kube_persistentvolumeclaim_info) * on (storageclass) group_left () max by (storageclass) (kube_storageclass_info{provisioner=\"nfs.csi.k8s.io\"}))) or vector(0)",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 27,
+      "type": "stat",
+      "title": "NAS pods without a working tunnel",
+      "description": "Pods that mount a NAS claim on a node whose tunnel is down, or whose node has no collector reporting it. Their NFS cannot reach an IPsec-only NAS. Must be 0.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 49,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "count(((0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) + on (node) group_left () max by (node) (ipsec_nas_tunnel_up)) or (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) - 1)) < 1) or vector(0)",
+          "legendFormat": "",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      }
+    },
+    {
+      "id": 28,
+      "type": "table",
+      "title": "Claims on the NAS",
+      "description": "Each claim whose volume the NFS CSI driver made: where it lives on the NAS (taken from the volume's handle) and what deleting the claim does to the volume (reclaim policy; what happens to the data is the class's onDelete).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 7
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "persistentvolumeclaim": 1,
+              "storageclass": 2,
+              "phase": 3,
+              "nas_ip": 4,
+              "export": 5,
+              "directory": 6,
+              "reclaim_policy": 7,
+              "volumename": 8
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "persistentvolumeclaim": "Claim",
+              "storageclass": "StorageClass",
+              "phase": "Phase",
+              "nas_ip": "NAS IP",
+              "export": "Export",
+              "directory": "Directory",
+              "reclaim_policy": "Reclaim",
+              "volumename": "Volume"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "(max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, persistentvolumeclaim) group_left (phase) max by (namespace, persistentvolumeclaim, phase) (kube_persistentvolumeclaim_status_phase == 1)",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 29,
+      "type": "table",
+      "title": "Pods using NAS claims, and their node's tunnel",
+      "description": "Each pod that mounts a NAS claim, the node it runs on, and that node's IPsec tunnel: UP, DOWN, or NO COLLECTOR (no pod of the collector reports the node, so its tunnel is not watched). The node filter applies here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 60,
+        "w": 24,
+        "h": 7
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "pod": 1,
+              "persistentvolumeclaim": 2,
+              "node": 3,
+              "Value": 4,
+              "nas_ip": 5,
+              "export": 6
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "pod": "Pod",
+              "persistentvolumeclaim": "Claim",
+              "node": "Node",
+              "nas_ip": "NAS IP",
+              "export": "Export",
+              "Value": "Tunnel on the node"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "(0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) + on (node) group_left () max by (node) (ipsec_nas_tunnel_up)) or (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) - 1)",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tunnel on the node"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "-1": {
+                        "text": "NO COLLECTOR",
+                        "color": "orange"
+                      },
+                      "0": {
+                        "text": "DOWN",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "UP",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        }
+      }
     }
   ],
   "refresh": "1m",

@@ -52,8 +52,8 @@ placeholders = [k for k, p in panels.items() if p["spec"]["plugin"]["kind"] == "
 if placeholders:
     fail(f"panels {placeholders} are 'Migration from Grafana not supported' placeholders: "
          "give percli --plugin.path the UNPACKED plugins")
-if len(panels) != 17:
-    fail(f"expected the 17 panels of ipsec-nas.json, got {len(panels)}: update this script with the Grafana dashboard")
+if len(panels) != 23:
+    fail(f"expected the 23 panels of ipsec-nas.json, got {len(panels)}: update this script with the Grafana dashboard")
 
 # Every query names our datasource. A namespace may hold several datasources, and the default one
 # need not be ours.

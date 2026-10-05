@@ -230,6 +230,73 @@
           }
         ]
       }
+    },
+    {
+      "kind": "Grid",
+      "spec": {
+        "display": {
+          "collapse": {
+            "open": true
+          },
+          "title": "Storage on the NAS (csi-driver-nfs)"
+        },
+        "items": [
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_0"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 0,
+            "y": 49
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_1"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 6,
+            "y": 49
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_2"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 12,
+            "y": 49
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_3"
+            },
+            "height": 4,
+            "width": 6,
+            "x": 18,
+            "y": 49
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_4"
+            },
+            "height": 7,
+            "width": 24,
+            "x": 0,
+            "y": 53
+          },
+          {
+            "content": {
+              "$ref": "#/spec/panels/5_5"
+            },
+            "height": 7,
+            "width": 24,
+            "x": 0,
+            "y": 60
+          }
+        ]
+      }
     }
   ],
   "panels": {
@@ -1370,6 +1437,373 @@
                   },
                   "query": "sum by (node, counter) (rate(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[5m])) > 0",
                   "seriesNameFormat": "{{node}} {{counter}}"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_0": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Namespaces with at least one claim whose volume the NFS CSI driver (nfs.csi.k8s.io) made. The NAS IP of each is in the table below.",
+          "name": "Namespaces using the NAS"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#5794f2",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(count by (namespace) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\")))) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_1": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Claims whose volume the NFS CSI driver made, in all namespaces.",
+          "name": "Claims on the NAS"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#5794f2",
+                  "value": 0
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_2": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Claims of a StorageClass of the NFS CSI driver that are not Bound (Pending: the driver could not create the directory, or cannot reach the NAS). Must be 0.",
+          "name": "Claims not Bound"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(max by (namespace, persistentvolumeclaim) (kube_persistentvolumeclaim_status_phase{phase!=\"Bound\"} == 1) and on (namespace, persistentvolumeclaim) (max by (namespace, persistentvolumeclaim, storageclass) (kube_persistentvolumeclaim_info) * on (storageclass) group_left () max by (storageclass) (kube_storageclass_info{provisioner=\"nfs.csi.k8s.io\"}))) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_3": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Pods that mount a NAS claim on a node whose tunnel is down, or whose node has no collector reporting it. Their NFS cannot reach an IPsec-only NAS. Must be 0.",
+          "name": "NAS pods without a working tunnel"
+        },
+        "plugin": {
+          "kind": "StatChart",
+          "spec": {
+            "calculation": "last-number",
+            "colorMode": "background_solid",
+            "format": {
+              "unit": "decimal"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "#73bf69",
+                  "value": 0
+                },
+                {
+                  "color": "#f2495c",
+                  "value": 1
+                }
+              ]
+            }
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "count(((0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) + on (node) group_left () max by (node) (ipsec_nas_tunnel_up)) or (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) - 1)) < 1) or vector(0)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_4": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Each claim whose volume the NFS CSI driver made: where it lives on the NAS (taken from the volume's handle) and what deleting the claim does to the volume (reclaim policy; what happens to the data is the class's onDelete).",
+          "name": "Claims on the NAS"
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "header": "Namespace",
+                "name": "namespace"
+              },
+              {
+                "header": "Claim",
+                "name": "persistentvolumeclaim"
+              },
+              {
+                "header": "StorageClass",
+                "name": "storageclass"
+              },
+              {
+                "header": "Phase",
+                "name": "phase"
+              },
+              {
+                "header": "NAS IP",
+                "name": "nas_ip"
+              },
+              {
+                "header": "Export",
+                "name": "export"
+              },
+              {
+                "header": "Directory",
+                "name": "directory"
+              },
+              {
+                "header": "Reclaim",
+                "name": "reclaim_policy"
+              },
+              {
+                "header": "Volume",
+                "name": "volumename"
+              },
+              {
+                "hide": true,
+                "name": "timestamp"
+              },
+              {
+                "hide": true,
+                "name": "value"
+              }
+            ],
+            "density": "compact"
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "(max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, persistentvolumeclaim) group_left (phase) max by (namespace, persistentvolumeclaim, phase) (kube_persistentvolumeclaim_status_phase == 1)",
+                  "seriesNameFormat": ""
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "5_5": {
+      "kind": "Panel",
+      "spec": {
+        "display": {
+          "description": "Each pod that mounts a NAS claim, the node it runs on, and that node's IPsec tunnel: UP, DOWN, or NO COLLECTOR (no pod of the collector reports the node, so its tunnel is not watched). The node filter applies here.",
+          "name": "Pods using NAS claims, and their node's tunnel"
+        },
+        "plugin": {
+          "kind": "Table",
+          "spec": {
+            "columnSettings": [
+              {
+                "header": "Namespace",
+                "name": "namespace"
+              },
+              {
+                "header": "Pod",
+                "name": "pod"
+              },
+              {
+                "header": "Claim",
+                "name": "persistentvolumeclaim"
+              },
+              {
+                "header": "Node",
+                "name": "node"
+              },
+              {
+                "cellSettings": [
+                  {
+                    "backgroundColor": "#ff9830",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "-1"
+                      }
+                    },
+                    "text": "NO COLLECTOR"
+                  },
+                  {
+                    "backgroundColor": "#f2495c",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "0"
+                      }
+                    },
+                    "text": "DOWN"
+                  },
+                  {
+                    "backgroundColor": "#73bf69",
+                    "condition": {
+                      "kind": "Value",
+                      "spec": {
+                        "value": "1"
+                      }
+                    },
+                    "text": "UP"
+                  }
+                ],
+                "header": "Tunnel on the node",
+                "name": "value",
+                "width": 150
+              },
+              {
+                "header": "NAS IP",
+                "name": "nas_ip"
+              },
+              {
+                "header": "Export",
+                "name": "export"
+              },
+              {
+                "hide": true,
+                "name": "timestamp"
+              }
+            ],
+            "density": "compact"
+          }
+        },
+        "queries": [
+          {
+            "kind": "TimeSeriesQuery",
+            "spec": {
+              "plugin": {
+                "kind": "PrometheusTimeSeriesQuery",
+                "spec": {
+                  "datasource": {
+                    "kind": "PrometheusDatasource",
+                    "name": "ipsec-nas-thanos"
+                  },
+                  "query": "(0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) + on (node) group_left () max by (node) (ipsec_nas_tunnel_up)) or (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver=\"nfs.csi.k8s.io\"}, \"nas_ip\", \"$1\", \"csi_volume_handle\", \"([^#]*)#.*\"), \"export\", \"/$1\", \"csi_volume_handle\", \"[^#]*#([^#]*)#.*\"), \"directory\", \"$1\", \"csi_volume_handle\", \"[^#]*#[^#]*#([^#]*)#.*\"), \"volumename\", \"$1\", \"persistentvolume\", \"(.*)\"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~\"$node\"})) - 1)",
+                  "seriesNameFormat": ""
                 }
               }
             }

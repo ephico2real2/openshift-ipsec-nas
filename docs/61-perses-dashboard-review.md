@@ -213,7 +213,7 @@ percli migrate -f charts/ipsec-nas/files/ipsec-nas.json --format cr --project kc
 ```
 
 - **The tool.** `percli` 0.54.0, the Perses version in COO 1.5.2's and `release-1.5`'s `go.mod` (1.5.0 and 1.5.1: 0.53.1). Its plugins must be **unpacked**; pointed at the packed archives it silently turns every panel into a placeholder.
-- **The result.** 16 panels: 11 stat charts, 1 table, 3 time series and 1 bar chart (since 2026-10-04, 17: a 12th stat chart, *Certificate source per node*). The `node` filter became a Perses variable over the `node` label of `ipsec_nas_tunnel_up`.
+- **The result.** 16 panels: 11 stat charts, 1 table, 3 time series and 1 bar chart (since 2026-10-04, 17: a 12th stat chart, *Certificate source per node*; since 2026-10-05, 23: the section *Storage on the NAS (csi-driver-nfs)*, 4 stat charts and 2 tables). The `node` filter became a Perses variable over the `node` label of `ipsec_nas_tunnel_up`.
 - **COO's own converter** (`POST /api/migrate` on its Perses) produces the same, except the table: it names the value columns `Value #A…` and drops value mappings and units.
 - **The resource version.** `percli` writes `perses.dev/v1alpha1`, which the API server reports as deprecated. `v1alpha2` puts the dashboard under `spec.config`.
 
