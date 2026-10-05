@@ -1,0 +1,26 @@
+# The demo app on a dynamic claim of class ipsec-nas-csi (docs/lab/nas-csi-dynamic-provisioning.md, Part 3), CRC 4.22.7, 2026-10-05T02:01:18Z.
+# The NAS is the Lima VM crc-nas (192.168.64.8); its commands run through limactl shell.
+$ oc get pvc app-data -n ipsec-nas-csi-demo -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,VOLUME:.spec.volumeName,CLASS:.spec.storageClassName
+NAME       STATUS   VOLUME                                     CLASS
+app-data   Bound    pvc-f76d7d9c-d04f-4be2-88cf-5b3e64f4311b   ipsec-nas-csi
+$ oc get pv pvc-f76d7d9c-d04f-4be2-88cf-5b3e64f4311b -o custom-columns=RECLAIM:.spec.persistentVolumeReclaimPolicy,STATUS:.status.phase,SUBDIR:.spec.csi.volumeAttributes.subDir
+RECLAIM   STATUS   SUBDIR
+Retain    Bound    csi/ipsec-nas-csi-demo/app-data
+$ oc get pods -n ipsec-nas-csi-demo -o 'custom-columns=NAME:.metadata.name,PHASE:.status.phase,NODE:.spec.nodeName,SCC:.metadata.annotations.openshift\.io/scc'
+NAME                        PHASE     NODE   SCC
+nas-demo-5f69b4d9d9-2v6b4   Running   crc    restricted-v2
+$ curl -sk https://nas-demo-ipsec-nas-csi-demo.apps-crc.testing/ | grep -E 'Written by|lines in' | sed 's/<[^>]*>//g'
+Written by pod nas-demo-5f69b4d9d9-2v6b4 on node crc to the NFS volume. Page built 2026-10-05T02:01:14Z.
+94 lines in data.log. The newest 20:
+$ oc debug node/crc -q -- chroot /host bash -c 'findmnt -t nfs4 -o SOURCE,FSTYPE | grep csi; ipsec trafficstatus' 2>/dev/null
+192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data nfs4
+#2: "1e3e3074-af2b-4ea5-ad30-b5c6f0998670", type=ESP, add_time=1791150592, inBytes=10390364, outBytes=19561956, maxBytes=2^63B, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+$ limactl shell crc-nas sudo ls -lan /export/csi/ipsec-nas-csi-demo/app-data
+total 12
+drwxrwsr-x. 2      65534 65534   40 Oct  5 02:01 .
+drwxr-xr-x. 3      65534 65534   22 Oct  5 01:49 ..
+-rw-r--r--. 1 1001250000 65534 6383 Oct  5 02:01 data.log
+-rw-r--r--. 1 1001250000 65534 1669 Oct  5 02:01 index.html
+$ limactl shell crc-nas sudo nft list table inet nas_ipsec_only | grep -E 'nfs-'
+		ip saddr 192.168.127.2 tcp dport 2049 meta ipsec exists counter packets 13193067 bytes 36009490334 accept comment "nfs-over-ipsec"
+		tcp dport 2049 counter packets 660 bytes 41280 drop comment "nfs-cleartext-dropped"

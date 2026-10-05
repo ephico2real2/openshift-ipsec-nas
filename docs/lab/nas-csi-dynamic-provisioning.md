@@ -48,7 +48,7 @@
 
 ## Before you start
 
-- [ ] The IPsec setup is finished: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel ([verify end to end](../00-prepare-the-cluster.md#32-verify-end-to-end)).
+- [ ] The IPsec setup is finished: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the tunnel: a `type=ESP` line whose `id=` is the NAS's certificate ([verify end to end](../00-prepare-the-cluster.md#32-verify-end-to-end)).
 - [ ] You are logged in with `oc` as `cluster-admin`, and `helm` is installed (measured with Helm 4.3.0).
 - [ ] From the storage team: the NAS IP, the export path, and these two facts about the export:
 
@@ -198,6 +198,12 @@ curl -sk "${URL}/"
 </pre>
 ```
 
+Open `${URL}` in a browser to watch it refresh every 10 seconds; `${URL}/data.log` is the raw file.
+
+<img alt="Browser screenshot of the demo app's page, titled Data on the NAS: written by pod nas-demo-5f69b4d9d9-2v6b4 on node crc to the NFS volume, page built 2026-10-05T02:00:34Z; 90 lines in data.log, the newest 20 shown, line 71 at 01:57:24Z to line 90 at 02:00:34Z, one every ten seconds." src="../images/lab/csi-demo-app-page.png" width="700">
+
+*The page through the Route (headless Chromium), 15 minutes after the pod started: 90 lines, one every 10 seconds, read from the claim's directory on the NAS.*
+
 ### Step 3.3 – See the data on the NAS, and prove it used the tunnel
 
 On the NAS:
@@ -218,7 +224,15 @@ NODE="$(oc get pod -n ipsec-nas-csi-demo -l app=nas-demo -o jsonpath='{.items[0]
 oc debug node/${NODE} -- chroot /host bash -c 'findmnt -t nfs4 -o SOURCE,OPTIONS | grep csi; ipsec trafficstatus'
 ```
 
-✅ **Expected** (measured): the source `${NAS_IP}:${NAS_EXPORT}/csi/ipsec-nas-csi-demo/app-data` with `vers=4.1,…,hard`, and the `ipsec-nas` line with `outBytes` higher on the second read. On the lab NAS, which accepts NFS only when it arrived through IPsec, the counter of that rule rose (13,187,359 → 13,187,923 packets) and the counter of cleartext NFS it drops stayed at 660.
+✅ **Expected** (measured): the source `${NAS_IP}:${NAS_EXPORT}/csi/ipsec-nas-csi-demo/app-data` with `vers=4.1,…,hard`, and the tunnel's `type=ESP` line with `outBytes` higher on the second read (NMState names the connection by a UUID, not `ipsec-nas`). On the lab NAS, which accepts NFS only when it arrived through IPsec, the counter of that rule rose (13,187,359 → 13,187,923 packets) and the counter of cleartext NFS it drops stayed at 660.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../images/crc/57-csi-demo-app.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="../images/crc/57-csi-demo-app.light.png">
+  <img alt="Terminal capture: the claim app-data Bound to pvc-f76d7d9c of class ipsec-nas-csi; the volume Retain, Bound, subDir csi/ipsec-nas-csi-demo/app-data; the pod Running on crc under restricted-v2; the page reporting 94 lines; on the node the NFS 4.1 mount of 192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data and the tunnel's ESP line with the NAS's certificate; on the NAS the claim's directory with data.log and index.html owned by the pod's user ID, the NFS-over-IPsec rule counting packets and the cleartext drop rule at 660." src="../images/crc/57-csi-demo-app.light.png">
+</picture>
+
+*The demo on its dynamic claim, end to end: the claim and its volume, the pod, the page, the node's mount and tunnel, and on the NAS the files and the IPsec-only rule. Text: [evidence 57](../evidence/crc/57-csi-demo-app.txt).*
 
 ---
 
@@ -299,7 +313,7 @@ The data stays on the NAS under `${NAS_EXPORT}/csi/`; the storage team deletes i
 |---|---|---|
 | Claim `Pending`, event `failed to make subdirectory: mkdir …: permission denied` | The anonymous user cannot create the directory: the parent belongs to someone else, or the export's top directory is not writable for it | `oc describe pvc <claim> -n <namespace>`; keep the `csi/` parent in `subDir`; ask the storage team to make the top directory (or `csi`) writable for the anonymous user |
 | Claim `Pending`, the controller log shows a mount that timed out | The controller's node has no working tunnel, so the NAS drops its NFS | `oc logs -n csi-driver-nfs deploy/csi-nfs-controller -c nfs --tail=30`; `oc get pod -n csi-driver-nfs -l app=csi-nfs-controller -o wide`; on that node `ipsec trafficstatus` |
-| Pod stuck in `ContainerCreating`, `oc describe pod` shows a mount that timed out | The pod's node has no working tunnel | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `ipsec-nas` line means the tunnel is down; go to the setup docs' troubleshooting |
+| Pod stuck in `ContainerCreating`, `oc describe pod` shows a mount that timed out | The pod's node has no working tunnel | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `type=ESP` line with the NAS's `id=` means the tunnel is down; go to the setup docs' troubleshooting |
 | No driver pods, or fewer than expected | The SCC grants of Step 1.2 are missing (not measured: Step 1.2 was always run first) | `oc get events -n csi-driver-nfs`; run Step 1.2, then `oc rollout restart` the controller Deployment and the node DaemonSet in `csi-driver-nfs` |
 | Pod `Running` but writes fail with `Permission denied` | The NAS maps users or groups differently from the lab's `root_squash` (anonymous 65534) | Add `mountPermissions: "0777"` to the class's `parameters` (a new class: parameters cannot be changed). Measured: the claim's directory becomes `2777` and a `restricted-v2` pod writes |
 

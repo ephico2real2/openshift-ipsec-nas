@@ -15,7 +15,7 @@ The setup docs ([`docs/README.md`](../README.md)) build the IPsec tunnel from ev
 
 ## Before you start
 
-- [ ] The setup is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the `ipsec-nas` tunnel ([verify end to end](../00-prepare-the-cluster.md#32-verify-end-to-end)).
+- [ ] The setup is finished on this cluster: every worker's NNCE is `Available` and `ipsec trafficstatus` on a worker shows the tunnel: a `type=ESP` line whose `id=` is the NAS's certificate ([verify end to end](../00-prepare-the-cluster.md#32-verify-end-to-end)).
 - [ ] You know the NAS IP and the path it exports.
 - [ ] You are logged in with `oc` as `cluster-admin`. A PersistentVolume is a cluster-wide object.
 
@@ -164,7 +164,7 @@ NODE="$(oc get pod -n ipsec-nas-demo -l app=nas-demo -o jsonpath='{.items[0].spe
 oc debug node/${NODE} -- chroot /host ipsec trafficstatus
 ```
 
-✅ **Expected:** the `ipsec-nas` line, with `outBytes` higher on the second run. The application's writes are what moved it.
+✅ **Expected:** the tunnel's `type=ESP` line (named by a UUID, not `ipsec-nas`), with `outBytes` higher on the second run. The application's writes are what moved it.
 
 ### Remove the demo
 
@@ -189,7 +189,7 @@ Use this when many applications need their own space on the NAS: install `csi-dr
 |---|---|---|
 | PVC stays `Pending` (Method 1) | The claim and the volume do not match | `oc describe pvc nas-data -n ipsec-nas-demo`; the class name, access mode and `volumeName` must match the PV, and the PV's `claimRef` must name this claim |
 | PVC stays `Pending` (Method 2) | See [its guide's troubleshooting](nas-csi-dynamic-provisioning.md#troubleshooting) | |
-| Pod stuck in `ContainerCreating`; `oc describe pod` shows a mount that timed out | The node has no working tunnel, so the NAS drops its NFS | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `ipsec-nas` line means the tunnel is down; go to the setup docs' troubleshooting |
+| Pod stuck in `ContainerCreating`; `oc describe pod` shows a mount that timed out | The node has no working tunnel, so the NAS drops its NFS | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `type=ESP` line with the NAS's `id=` means the tunnel is down; go to the setup docs' troubleshooting |
 | Pod is `Running` but `writer` logs `Permission denied` | The export directory is not writable for the pod's user ID | The pod runs with a random user ID. The share (or the sub-directory) must allow it to write, for example mode `0777` on a test share |
 | The page shows old data | The `writer` container stopped | `oc logs -n ipsec-nas-demo deploy/nas-demo -c writer --tail=20` |
 
