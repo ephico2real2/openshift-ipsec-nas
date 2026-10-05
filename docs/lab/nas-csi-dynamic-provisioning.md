@@ -284,6 +284,10 @@ What the team gets: a directory `csi/<namespace>/<claim name>` on the NAS, writa
 - **The name is the directory.** A new claim with the same name in the same namespace gets a new volume on the **same** directory, with the old data in it (measured).
 - **Pods write with the pod's user ID**, through the directory's group: the anonymous group, which `root_squash` also gives the pod's group 0 ([Step 3.3](#step-33--see-the-data-on-the-nas-and-prove-it-used-the-tunnel)). If the NAS maps users differently and writes fail, see [Troubleshooting](#troubleshooting).
 
+### See the claims on the dashboard
+
+The IPsec dashboard (Perses in the console, and Grafana) has a section **Storage on the NAS (csi-driver-nfs)**: every namespace and claim on the NAS with its NAS IP, export and directory, the claims not `Bound`, and for each pod that mounts one, whether its node's tunnel is up ([doc 60](../60-monitoring-per-node.md#storage-on-the-nas-the-dashboards-sixth-section)).
+
 ---
 
 ## Part 5 – More exports, more StorageClasses

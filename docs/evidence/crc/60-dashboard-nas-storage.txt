@@ -1,0 +1,43 @@
+# The dashboard section "Storage on the NAS (csi-driver-nfs)": its queries run against CRC's Thanos Querier (platform and
+# user workload metrics, the route of thanos-querier in openshift-monitoring), then rendered in Grafana 13.2.3 and Perses
+# v0.54.0 run locally on podman and reading the same Thanos. CRC 4.22.7, 2026-10-05 03:05-03:35Z.
+
+## 1. What OpenShift's monitoring already has (kube-state-metrics, platform Prometheus)
+  kube_persistentvolume_info{csi_driver="nfs.csi.k8s.io"}: 3 series, e.g. persistentvolume pvc-c98412b4-...,
+    storageclass ipsec-nas-team-a, reclaim_policy Delete,
+    csi_volume_handle 192.168.64.8#export-team-a#csi/ipsec-nas-team-a/app-data#pvc-c98412b4-...#
+  kube_persistentvolumeclaim_info{storageclass=~"ipsec-nas.*"}: 3 series (namespace, persistentvolumeclaim, storageclass, volumename)
+  kube_storageclass_info{provisioner="nfs.csi.k8s.io"}: ipsec-nas-csi, ipsec-nas-team-a, ipsec-nas-team-b, all Delete, Immediate
+  kube_pod_spec_volumes_persistentvolumeclaims_info{namespace=~"ipsec-nas.*"}: 3 series (namespace, pod, persistentvolumeclaim)
+  kubelet_volume_stats_used_bytes{namespace=~"ipsec-nas.*"}: 1972371456 for all three claims: the NAS's file system
+    (df on the NAS: 1.9G used), not each claim; left out of the dashboard.
+  No collector series carries the NAS's IP (ipsec_nas_tunnel_info: connection, node, peer_id, pod): the NAS IP, export
+  and directory are split out of the volume handle with label_replace.
+
+## 2. The queries, as in charts/ipsec-nas/files/ipsec-nas.json ($node = .*), and their results
+  [claims]
+    (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver="nfs.csi.k8s.io"}, "nas_ip", "$1", "csi_volume_handle", "([^#]*)#.*"), "export", "/$1", "csi_volume_handle", "[^#]*#([^#]*)#.*"), "directory", "$1", "csi_volume_handle", "[^#]*#[^#]*#([^#]*)#.*"), "volumename", "$1", "persistentvolume", "(.*)"))) * on (namespace, persistentvolumeclaim) group_left (phase) max by (namespace, persistentvolumeclaim, phase) (kube_persistentvolumeclaim_status_phase == 1)
+  [pods]
+    (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver="nfs.csi.k8s.io"}, "nas_ip", "$1", "csi_volume_handle", "([^#]*)#.*"), "export", "/$1", "csi_volume_handle", "[^#]*#([^#]*)#.*"), "directory", "$1", "csi_volume_handle", "[^#]*#[^#]*#([^#]*)#.*"), "volumename", "$1", "persistentvolume", "(.*)"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~"$node"})) + on (node) group_left () max by (node) (ipsec_nas_tunnel_up)) or (0 * (max by (namespace, pod, persistentvolumeclaim) (kube_pod_spec_volumes_persistentvolumeclaims_info) * on (namespace, persistentvolumeclaim) group_left (nas_ip, export) max by (namespace, persistentvolumeclaim, nas_ip, export) (max by (namespace, persistentvolumeclaim, storageclass, volumename) (kube_persistentvolumeclaim_info) * on (volumename) group_left (nas_ip, export, directory, reclaim_policy) max by (volumename, nas_ip, export, directory, reclaim_policy) (label_replace(label_replace(label_replace(label_replace(kube_persistentvolume_info{csi_driver="nfs.csi.k8s.io"}, "nas_ip", "$1", "csi_volume_handle", "([^#]*)#.*"), "export", "/$1", "csi_volume_handle", "[^#]*#([^#]*)#.*"), "directory", "$1", "csi_volume_handle", "[^#]*#[^#]*#([^#]*)#.*"), "volumename", "$1", "persistentvolume", "(.*)"))) * on (namespace, pod) group_left (node) max by (namespace, pod, node) (kube_pod_info{node=~"$node"})) - 1)
+  [notbound]
+    count(max by (namespace, persistentvolumeclaim) (kube_persistentvolumeclaim_status_phase{phase!="Bound"} == 1) and on (namespace, persistentvolumeclaim) (max by (namespace, persistentvolumeclaim, storageclass) (kube_persistentvolumeclaim_info) * on (storageclass) group_left () max by (storageclass) (kube_storageclass_info{provisioner="nfs.csi.k8s.io"}))) or vector(0)
+  claims: 3 rows, Bound: ipsec-nas-csi-demo/app-data ipsec-nas-csi /export csi/ipsec-nas-csi-demo/app-data Delete;
+          ipsec-nas-team-a/app-data ipsec-nas-team-a /export-team-a csi/ipsec-nas-team-a/app-data Delete; the same for team b
+  pods: 3 rows, pod nas-demo-... on crc, value 1 (tunnel up); namespaces 3; NAS pods without a working tunnel 0
+  Forced cases (the tunnel series swapped in the query):
+    ipsec_nas_tunnel_up{node="none"} (no collector on the node): every row -1; the check counts 3
+    0 * ipsec_nas_tunnel_up (tunnel down): every row 0; the check counts 3
+  Claims not Bound: a class pointing at /export-does-not-exist and a claim of it (namespace ipsec-nas-pending-test):
+    the claim Pending, ProvisioningFailed "failed to mount nfs server"; the check counted 1; the claims table does not
+    list it (no volume yet). Class, claim and namespace removed afterwards.
+
+## 3. Generated and rendered
+  scripts/perses-dashboard.sh (percli 0.54.0): the section converted whole, the UP/DOWN/NO COLLECTOR mappings as
+    cellSettings; the fixer's panel count 17 -> 23. Argo CD synced the Option C chart at 570ed82: the PersesDashboard
+    ipsec-nas in kcs-ipsec has 24 panels (the 23 and the fixer's NAS identity table).
+  Grafana 13.2.3 (anonymous viewer, provisioned datasource with a kubeadmin token, the Option C dashboard file): the
+    section with every panel populated, no "No data" (docs/images/crc/60-grafana-nas-storage.{light,dark}.png).
+  Perses v0.54.0 (project, Secret with the token, datasource ipsec-nas-thanos, the Option C Perses spec): the same
+    values, no "No data", no HTTP error (docs/images/crc/60-perses-nas-storage.{light,dark}.png).
+  Both containers and the files holding the token removed afterwards. The console's own Perses was not captured: it
+  needs a login, which was not typed.

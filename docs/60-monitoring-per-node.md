@@ -172,21 +172,22 @@ The rules live in `kcs-ipsec` and are evaluated in `openshift-user-workload-moni
 
 ## The dashboard
 
-**Where you see it:** in the OpenShift console, **Observe → Dashboards (Perses)**, project `kcs-ipsec`. The ipsec chart installs it there by default; how it works, who can see it and how to change it: [doc 61](61-perses-dashboard-review.md). The same dashboard ships to Grafana only if asked (`metrics.grafanaDashboard: true`). Both come from one source, `charts/ipsec-nas/files/ipsec-nas.json`, and show the same five sections.
+**Where you see it:** in the OpenShift console, **Observe → Dashboards (Perses)**, project `kcs-ipsec`. The ipsec chart installs it there by default; how it works, who can see it and how to change it: [doc 61](61-perses-dashboard-review.md). The same dashboard ships to Grafana only if asked (`metrics.grafanaDashboard: true`). Both come from one source, `charts/ipsec-nas/files/ipsec-nas.json`, and show the same six sections.
 
-It has five sections, each answering one question ([doc 61, *At a glance*](61-perses-dashboard-review.md#at-a-glance)):
+It has six sections, each answering one question ([doc 61, *At a glance*](61-perses-dashboard-review.md#at-a-glance)):
 
 - **Summary**: is anything wrong? Tunnels up and down, workers reporting, the soonest certificate expiry.
 - **Tunnels per node**: tunnel state, certificate time left, traffic, tunnel age, metrics age, libreswan version, and which option put the certificate on the node (`B`, `C` or `A`; the captures below were taken before this panel).
 - **Checks (all should be 0)**: **Nodes reported twice**, **Pods reporting the wrong node**, **Kernel IPsec errors, last hour**.
 - **Per-node detail**: one row per node with tunnel, IKE SA, certificate, connection, libreswan answering, NFS mounts and requests, IPsec drops and last certificate import; under it in Perses, the NAS identity and the reporting pod of each node whose tunnel is up (Grafana's table shows the reporting pod of every node, and the NAS identity of each node whose tunnel is up). A node in two rows there is reported by two pods. In Grafana **"–" means unknown** (no series), never healthy (Capture 1); the Perses table maps only 0 and 1, and how it shows a missing value was not measured.
 - **History**: tunnel re-establishments in the last hour, with the alert's threshold; kernel IPsec errors per node and counter over time.
+- **Storage on the NAS (csi-driver-nfs)**: the namespaces and claims that store data on the NAS, and whether each of their pods runs on a node whose tunnel works ([below](#storage-on-the-nas-the-dashboards-sixth-section); since 2026-10-05, after the captures in this section).
 
 <!-- markdownlint-disable MD033 -->
 <img alt="The OpenShift console, Observe, Dashboards, project kcs-ipsec, dashboard IPsec to the NAS, node filter All, last 30 minutes, in five sections. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 12.1 months. Tunnels per node: tunnel state UP in green, certificate time left 12.1 months as a bar, traffic through the tunnel at about 3.8 MiB/s during two load runs, tunnel age 2.33h, metrics age 39s, libreswan version 5.3. Checks (all should be 0): nodes reported twice 0, pods reporting the wrong node 0, kernel IPsec errors last hour 0. Per-node detail: one row for crc (UP, YES, PRESENT, YES, YES, 2 NFS mounts, 39.8 requests/sec, 0 drops, certificate imported 10.1h ago), and the NAS identity table showing crc, ipsec-cert-sync-5mvdc and O=KCS OpenShift lab, CN=crc-nas.lab.internal. History: tunnel re-establishments 0 under a dashed threshold at 4, and kernel IPsec errors per node showing No data." src="images/crc/42-console-perses-ipsec-nas.light.png">
 <!-- markdownlint-enable MD033 -->
 
-*Capture 3. The dashboard today, in the OpenShift console on CRC, in its five sections. How it was captured: [doc 61, Capture 6](61-perses-dashboard-review.md#at-a-glance) and [evidence 42](evidence/crc/42-console-perses-capture.txt).*
+*Capture 3. The dashboard in the OpenShift console on CRC, in its first five sections (before the storage section). How it was captured: [doc 61, Capture 6](61-perses-dashboard-review.md#at-a-glance) and [evidence 42](evidence/crc/42-console-perses-capture.txt).*
 
 The two Grafana captures below were taken earlier, before the sections and before Perses was adopted. Each shows a test of its own, recorded in its evidence file.
 
@@ -211,6 +212,57 @@ With real IPsec, on CRC: the same dashboard in Grafana 13.2.3, run locally as a 
 <!-- markdownlint-enable MD033 -->
 
 *Capture 2. Every panel populated from CRC (in Grafana, before the sections). Traffic: 4.13 MB/s out and 4.09 MB/s in (five-minute rates), 39.5 NFS requests/s; NFS mounts reads 2 because the load Job mounts the same export as the demo application. Text and the Job: [evidence 40](evidence/crc/40-grafana-dashboard-crc-data.txt).*
+
+### Storage on the NAS: the dashboard's sixth section
+
+Who keeps data on the NAS, and can their pods reach it? The section answers from metrics OpenShift already collects (kube-state-metrics in the platform's Prometheus) about volumes made by the NFS CSI driver ([lab/nas-csi-dynamic-provisioning.md](lab/nas-csi-dynamic-provisioning.md)), joined to the collector's `ipsec_nas_tunnel_up`. No new collector, exporter or chart value.
+
+| Panel | What it shows | Should be |
+|---|---|---|
+| **Namespaces using the NAS** | Namespaces with at least one claim whose volume `nfs.csi.k8s.io` made | — |
+| **Claims on the NAS** | Those claims, in all namespaces | — |
+| **Claims not Bound** | Claims of a StorageClass of `nfs.csi.k8s.io` that are not `Bound` (the driver cannot make the directory, or cannot reach the NAS) | 0 |
+| **NAS pods without a working tunnel** | Pods that mount such a claim on a node whose tunnel is down, or that no collector reports | 0 |
+| **Claims on the NAS** (table) | Namespace, claim, StorageClass, phase, **NAS IP, export, directory**, reclaim policy, volume | — |
+| **Pods using NAS claims, and their node's tunnel** (table) | Namespace, pod, claim, node, **Tunnel on the node**: UP, DOWN, or NO COLLECTOR; NAS IP, export. The node filter applies here | every row UP |
+
+Where the values come from:
+
+| Series | Used for |
+|---|---|
+| `kube_persistentvolume_info{csi_driver="nfs.csi.k8s.io"}` | The volumes of the driver. Its `csi_volume_handle` (`192.168.64.8#export-team-a#csi/ipsec-nas-team-a/app-data#pvc-…#`) is split with `label_replace` into **NAS IP**, **export** and **directory**: no series of the collector carries the NAS's address |
+| `kube_persistentvolumeclaim_info`, `kube_persistentvolumeclaim_status_phase` | Namespace, claim, StorageClass, volume; the phase |
+| `kube_storageclass_info{provisioner="nfs.csi.k8s.io"}` | The driver's classes, so a `Pending` claim (no volume yet) is still counted |
+| `kube_pod_spec_volumes_persistentvolumeclaims_info`, `kube_pod_info` | Which pods mount which claim, and on which node |
+| `ipsec_nas_tunnel_up` | That node's tunnel. A node no collector reports gives -1, shown as NO COLLECTOR |
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/60-perses-nas-storage.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/60-perses-nas-storage.light.png">
+  <img alt="Perses, the section Storage on the NAS (csi-driver-nfs) with CRC's data: namespaces using the NAS 3, claims on the NAS 3, claims not Bound 0 in green, NAS pods without a working tunnel 0 in green. Claims on the NAS: ipsec-nas-csi-demo, ipsec-nas-team-a and ipsec-nas-team-b, each claim app-data, Bound, NAS IP 192.168.64.8, exports /export, /export-team-a and /export-team-b, directories csi/<namespace>/app-data, reclaim Delete, and the volume names. Pods using NAS claims: the three nas-demo pods on node crc, tunnel on the node UP in green, with their NAS IP and export." src="images/crc/60-perses-nas-storage.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 4. The section in Perses v0.54.0, the version the console's dashboards are generated for, with the Option C chart's dashboard spec, reading CRC's Thanos Querier. The Perses (and the Grafana below) ran locally on podman: the console's own Perses needs a sign-in, which was not typed. The PersesDashboard Argo CD deployed on CRC has the same spec ([evidence 60](evidence/crc/60-dashboard-nas-storage.txt)).*
+
+<!-- markdownlint-disable MD033 -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/crc/60-grafana-nas-storage.dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/crc/60-grafana-nas-storage.light.png">
+  <img alt="Grafana 13.2.3, the same section with the same values: 3 namespaces, 3 claims, 0 claims not Bound, 0 NAS pods without a working tunnel, the claims table with NAS IP 192.168.64.8 and the three exports, and the pods table with UP in green for the three nas-demo pods on crc." src="images/crc/60-grafana-nas-storage.light.png">
+</picture>
+<!-- markdownlint-enable MD033 -->
+
+*Capture 5. The same section in Grafana 13.2.3, from the same source file.*
+
+What was checked ([evidence 60](evidence/crc/60-dashboard-nas-storage.txt)): every query against CRC's Thanos before it went into the dashboard; a tunnel down and a node without a collector, forced by swapping the tunnel series in the query (every pod then DOWN or NO COLLECTOR, and the check counts 3); a claim left `Pending` by a class pointing at an export that does not exist (**Claims not Bound** counted 1). Not measured: a pod on a node with no collector, or a tunnel actually down, on a cluster; CRC has one node.
+
+Things to know:
+
+- **No per-claim usage.** `kubelet_volume_stats_used_bytes` exists for these claims, but on NFS it reports the NAS's file system: 1,972,371,456 bytes for each of the three claims, which is what the NAS's whole disk held. It is left out; the storage team's quotas or the NAS's own tools answer how much each directory holds.
+- **Volumes of the NFS CSI driver only.** A hand-written NFS volume (Method 1 of [nas-consumer-app.md](lab/nas-consumer-app.md), an `nfs:` volume with no CSI driver) does not show. Volumes the same driver made for another NFS server do; the NAS IP column tells them apart.
+- **Who can see it:** the dashboard's datasource is Thanos on port 9091, which needs `cluster-monitoring-view` ([doc 61, *Decision*](61-perses-dashboard-review.md)); the kube-state-metrics series are platform metrics, readable there.
 
 ## What was tested, and where
 

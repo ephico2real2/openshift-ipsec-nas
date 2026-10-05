@@ -12,7 +12,7 @@ The dashboard was measured on CRC 4.22.7 with COO 1.5.3 on 2026-10-03 and 2026-1
 
 *Capture 6. **Observe → Dashboards (Perses)**, project `kcs-ipsec`: the dashboard the chart ships, in its five sections, on CRC's data. "No data" on the last panel means no kernel IPsec errors: it shows only error counters above 0. The console shell here is the community (OKD) build of the same console, `quay.io/openshift/origin-console:4.22`, run on a laptop against CRC with sign-in turned off (hence the `okd` logo and "Auth disabled"). The Perses plugin, the Perses server, the dashboard and the data are CRC's own ([evidence 42](evidence/crc/42-console-perses-capture.txt)).*
 
-The dashboard has five sections, top to bottom. Each answers one question:
+The dashboard has six sections, top to bottom (Capture 6 was taken before the sixth). Each answers one question:
 
 | Section | Panels | The question it answers |
 |---|---|---|
@@ -21,6 +21,7 @@ The dashboard has five sections, top to bottom. Each answers one question:
 | **Checks (all should be 0)** | Nodes reported twice, pods reporting the wrong node, kernel IPsec errors in the last hour | Can these numbers be trusted? (doc 60, *How each node's data stays its own*) |
 | **Per-node detail** | **Per node** table: one row per node; NAS identity per node | **Why** a tunnel is down (no certificate, no connection, no IKE SA, libreswan not answering), NFS mounts and requests, IPsec drops, last certificate import; for each node whose tunnel is up, which pod reports it and the identity the NAS presented (both come from `ipsec_nas_tunnel_info`, which the collector writes only while the tunnel is up) |
 | **History** | Tunnel re-establishments in the last hour, kernel IPsec errors per node | Is a tunnel flapping (alert above 3 an hour), and are errors growing? "No data" there means no errors: it shows only counters above 0 |
+| **Storage on the NAS (csi-driver-nfs)** | Namespaces using the NAS, claims on the NAS, claims not Bound, NAS pods without a working tunnel; **Claims on the NAS** table; **Pods using NAS claims, and their node's tunnel** table | Who stores data on the NAS, where (NAS IP, export, directory), and is each of their pods on a node whose tunnel works? ([doc 60](60-monitoring-per-node.md#storage-on-the-nas-the-dashboards-sixth-section)) |
 
 Each section folds with the arrow beside its title; all are open when the dashboard loads.
 

@@ -1685,39 +1685,48 @@ spec:
                 "columnSettings": [
                   {
                     "header": "Namespace",
-                    "name": "namespace"
+                    "name": "namespace",
+                    "width": 170
                   },
                   {
                     "header": "Claim",
-                    "name": "persistentvolumeclaim"
+                    "name": "persistentvolumeclaim",
+                    "width": 130
                   },
                   {
                     "header": "StorageClass",
-                    "name": "storageclass"
+                    "name": "storageclass",
+                    "width": 150
                   },
                   {
                     "header": "Phase",
-                    "name": "phase"
+                    "name": "phase",
+                    "width": 80
                   },
                   {
                     "header": "NAS IP",
-                    "name": "nas_ip"
+                    "name": "nas_ip",
+                    "width": 120
                   },
                   {
                     "header": "Export",
-                    "name": "export"
+                    "name": "export",
+                    "width": 130
                   },
                   {
                     "header": "Directory",
-                    "name": "directory"
+                    "name": "directory",
+                    "width": 280
                   },
                   {
                     "header": "Reclaim",
-                    "name": "reclaim_policy"
+                    "name": "reclaim_policy",
+                    "width": 80
                   },
                   {
                     "header": "Volume",
-                    "name": "volumename"
+                    "name": "volumename",
+                    "width": 330
                   },
                   {
                     "hide": true,
@@ -1764,19 +1773,23 @@ spec:
                 "columnSettings": [
                   {
                     "header": "Namespace",
-                    "name": "namespace"
+                    "name": "namespace",
+                    "width": 170
                   },
                   {
                     "header": "Pod",
-                    "name": "pod"
+                    "name": "pod",
+                    "width": 290
                   },
                   {
                     "header": "Claim",
-                    "name": "persistentvolumeclaim"
+                    "name": "persistentvolumeclaim",
+                    "width": 130
                   },
                   {
                     "header": "Node",
-                    "name": "node"
+                    "name": "node",
+                    "width": 150
                   },
                   {
                     "cellSettings": [
@@ -1817,7 +1830,8 @@ spec:
                   },
                   {
                     "header": "NAS IP",
-                    "name": "nas_ip"
+                    "name": "nas_ip",
+                    "width": 120
                   },
                   {
                     "header": "Export",
