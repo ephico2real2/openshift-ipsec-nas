@@ -48,6 +48,7 @@ Side by side:
 | [61-perses-dashboard-review.md](61-perses-dashboard-review.md) | **The dashboard in the console (Perses):** what it shows, how it works, how to turn it on and open it, who can see it, how to change it, troubleshooting |
 | [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md) | Option A: the documented procedure, its risks, its run on CRC, and what it costs |
 | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) | Option C: one wildcard certificate in a MachineConfig, two variants (C1 with Red Hat components only, C2 with per-node identities), what the NAS team must configure, the renewal tool, and its measured run on CRC |
+| [70-review-enterprise-linux-ipsec-config.md](70-review-enterprise-linux-ipsec-config.md) | **Review:** our enterprise IPsec configuration for regular Linux hosts, setting by setting against the NNCP, and which option (A, B or C) matches it |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
 
 Which to read:
@@ -58,6 +59,7 @@ Which to read:
 | Deploying it on a cluster | 00 (Parts 0, 1 and 3), then 30 |
 | On the storage team | 00, Part 3.1: the NAS certificate and IPsec settings |
 | Weighing the shared certificate | 10, especially its cost table; 50 for the wildcard variant |
+| Comparing with our Linux hosts' IPsec standard | 70 |
 | On the storage team, for Option C | 50, "For the NAS team" |
 | Watching the tunnels, or on call | 61 (the dashboard: Observe → Dashboards (Perses)), then 60 (every metric and alert) |
 | Trying it on a laptop | 40, with the supporting guides below |
