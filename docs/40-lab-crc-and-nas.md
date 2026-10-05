@@ -895,14 +895,17 @@ oc get cm -n kyverno kyverno -o jsonpath='{.data.resourceFilters}' | grep -o '\[
 
 ## State of CRC, and how to undo everything
 
-State now: `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, both Kyverno ClusterRoles, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and **Option B installed and running, deployed by Argo CD from Git** (Application `ipsec-nas` in `openshift-gitops`, chart `charts/ipsec-nas`): the policies, the node's certificate, the cert-sync DaemonSet, the NNCP with its tunnel, the ServiceMonitor and alert rules; plus the demo application in `ipsec-nas-demo`.
+State on 2026-10-05 (read from the cluster): `routingViaHost: true`, `ipsecConfig.mode: Disabled`, the NMState Operator with its instance, the Kyverno ClusterRoles `kyverno:ipsec-nas-generate` and `kyverno:ipsec-nas-read-nodes`, Kyverno no longer ignoring Nodes (Helm revision 2), libreswan 5.3 as a system extension (persistent), and **Option C installed and running, deployed by Argo CD from Git** (Application `ipsec-nas-option-c`, chart `charts/ipsec-nas-option-c-metrics`): cert-manager's wildcard certificate, the MachineConfig `99-master-ipsec-wildcard-cert` that imports it, the tunnel by Kyverno (C2: GeneratingPolicy `ipsec-nncp-wildcard-master`, NNCP `ipsec-nas-crc` `Available`), the collector with its ServiceMonitor, alert rules and Dynatrace annotations ([doc 53](53-option-c-cert-manager-kyverno.md)). Beside it: the Dynatrace Operator in `dynatrace` ([doc 62](62-dynatrace-operator-on-openshift.md)), and csi-driver-nfs in `csi-driver-nfs` with the StorageClasses `ipsec-nas-csi`, `ipsec-nas-team-a`, `ipsec-nas-team-b` and their demo applications in `ipsec-nas-csi-demo`, `ipsec-nas-team-a`, `ipsec-nas-team-b` ([lab/nas-csi-dynamic-provisioning.md](lab/nas-csi-dynamic-provisioning.md)). The static demo of [lab/nas-consumer-app.md](lab/nas-consumer-app.md) (`ipsec-nas-demo`) was removed on 2026-10-05; its data stays on the NAS in `/export/ipsec-nas-demo`.
 
 To undo the rest, in this order:
 
 | What | How | Run for these docs? |
 |---|---|---|
-| The demo application | `oc delete namespace ipsec-nas-demo; oc delete pv ipsec-nas-demo` | No |
-| Option B (the Argo CD application) | The three steps of [Step I.7](30-option-b-automated-helm-argocd.md#step-i7--remove-it-with-argo-cd) | **Yes**, measured (twice: legacy and CEL policies) |
+| The static demo application (`ipsec-nas-demo`) | [Remove the demo](lab/nas-consumer-app.md#remove-the-demo) | **Yes**, 2026-10-05: the namespace and volume gone, the data kept on the NAS |
+| The CSI driver, its StorageClasses and demos | [Remove everything](lab/nas-csi-dynamic-provisioning.md#remove-everything) | No |
+| The Dynatrace Operator | [Removal](62-dynatrace-operator-on-openshift.md#removal) | No (measured with the two failed installs) |
+| Option C (the Argo CD application) | [Step K.6](53-option-c-cert-manager-kyverno.md#step-k6--removal), then [Step C.7](50-option-c-wildcard-certificate.md#step-c7--remove-option-c) for what stays on the node | No |
+| Option B (the Argo CD application), when it is installed | The three steps of [Step I.7](30-option-b-automated-helm-argocd.md#step-i7--remove-it-with-argo-cd) | **Yes**, measured (twice: legacy and CEL policies) |
 | libreswan on the node | `lab/crc/ipsec-sysext.sh remove` | **No**, not run yet |
 | Kyverno's Node filter | `helm rollback kyverno 1 -n kyverno` | No |
 | The Kyverno ClusterRoles | `oc delete -f manifests/common/03-kyverno-rbac.yaml` | No |

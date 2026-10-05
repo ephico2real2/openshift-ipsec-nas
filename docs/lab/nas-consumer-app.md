@@ -175,6 +175,8 @@ oc delete -f rendered/demo-app/41-nfs-pv.yaml -f rendered/demo-app/40-namespace.
 
 Because of `Retain`, the files stay on the NAS in `${NAS_EXPORT}/ipsec-nas-demo/`. Delete them there if you no longer want them.
 
+✅ **Measured** on CRC, 2026-10-05: the route, deployment, service, claim, volume and namespace deleted; the node no longer mounts the share; `/export/ipsec-nas-demo/data.log` still on the NAS with its last line (`line=1817`).
+
 ---
 
 ## Method 2 – Dynamic provisioning with the NFS CSI driver
