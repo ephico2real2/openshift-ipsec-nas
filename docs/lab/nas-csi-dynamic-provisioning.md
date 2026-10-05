@@ -7,12 +7,12 @@
 | | |
 |---|---|
 | Driver | [`csi-driver-nfs`](https://github.com/kubernetes-csi/csi-driver-nfs) 4.13.4 (Kubernetes CSI project, upstream Helm chart), in the namespace `csi-driver-nfs` |
-| StorageClass | `ipsec-nas-csi`: the NAS IP, the export, one directory per claim (`csi/<namespace>/<claim>`), `Retain` |
+| StorageClass | `ipsec-nas-csi`: the NAS IP, the export, one directory per claim (`csi/<namespace>/<claim>`); deleting a claim deletes its PersistentVolume and keeps its data |
 | Demo | The demo app of nas-consumer-app.md on a dynamic claim, in the namespace `ipsec-nas-csi-demo`, with a Route |
 | Files | [`manifests/csi-driver-nfs/values.yaml`](../../manifests/csi-driver-nfs/values.yaml), [`manifests/demo-app-csi/`](../../manifests/demo-app-csi/) |
-| Measured | Every step on OpenShift Local (CRC 4.22.7) against the lab NAS (NFS accepted only through IPsec), 2026-10-05: [evidence 56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt) |
+| Measured | Every step on OpenShift Local (CRC 4.22.7) against the lab NAS (NFS accepted only through IPsec), 2026-10-05: evidence [56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt) (the setup), [57](../evidence/crc/57-csi-demo-app.txt) (the demo), [58](../evidence/crc/58-csi-multiple-exports.txt) (several exports), [59](../evidence/crc/59-csi-reclaim-and-ondelete.txt) (what deleting does) |
 
-**Contents:** [How it works](#how-it-works) · [Before you start](#before-you-start) · [Part 1 – Install the driver](#part-1--install-the-driver) · [Part 2 – The StorageClass](#part-2--the-storageclass) · [Part 3 – Use it: the demo app](#part-3--use-it-the-demo-app) · [Part 4 – Use it for your application](#part-4--use-it-for-your-application) · [More than one StorageClass](#more-than-one-storageclass) · [When a claim is deleted](#when-a-claim-is-deleted) · [Remove everything](#remove-everything) · [Troubleshooting](#troubleshooting) · [References](#references)
+**Contents:** [How it works](#how-it-works) · [Before you start](#before-you-start) · [Part 1 – Install the driver](#part-1--install-the-driver) · [Part 2 – The StorageClass](#part-2--the-storageclass) · [Part 3 – Use it: the demo app](#part-3--use-it-the-demo-app) · [Part 4 – Use it for your application](#part-4--use-it-for-your-application) · [Part 5 – More exports, more StorageClasses](#part-5--more-exports-more-storageclasses) · [Part 6 – What deleting a claim does, and how to change it](#part-6--what-deleting-a-claim-does-and-how-to-change-it) · [Remove everything](#remove-everything) · [Troubleshooting](#troubleshooting) · [References](#references)
 
 ---
 
@@ -104,7 +104,12 @@ helm install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace csi-driver
   -f manifests/csi-driver-nfs/values.yaml --wait
 ```
 
-[`values.yaml`](../../manifests/csi-driver-nfs/values.yaml) changes one thing from the chart's defaults: the controller runs on **worker** nodes only (`nodeSelector: node-role.kubernetes.io/worker: ""`). The chart's default controller tolerates the control-plane taints, and `controller.runOnControlPlane: false` does not keep it off them; the setup builds tunnels on workers, so a controller on a control-plane node could not reach the NAS.
+[`values.yaml`](../../manifests/csi-driver-nfs/values.yaml) changes two things from the chart's defaults:
+
+| Value | Chart default | Here | Why |
+|---|---|---|---|
+| `controller.nodeSelector` | none (`kubernetes.io/os: linux` only) | `node-role.kubernetes.io/worker: ""` | The controller mounts the NAS from its node, and the setup builds tunnels on workers. The chart's controller tolerates the control-plane taints, and `controller.runOnControlPlane: false` does not keep it off them. |
+| `controller.defaultOnDeletePolicy` | `delete` | `retain` | When a volume is deleted, the driver keeps its data on the NAS unless its StorageClass says otherwise ([Part 6](#part-6--what-deleting-a-claim-does-and-how-to-change-it)). A safety net: a class that forgets `onDelete` cannot delete data. |
 
 ### Step 1.4 – Verify
 
@@ -115,6 +120,12 @@ oc get csidriver nfs.csi.k8s.io
 ```
 
 ✅ **Expected** (measured): `csi-nfs-controller-…` `5/5 Running` on a worker, one `csi-nfs-node-…` `3/3 Running` per node, both `scc=privileged`, and the CSIDriver `nfs.csi.k8s.io`.
+
+```bash
+oc -n csi-driver-nfs get deploy csi-nfs-controller -o jsonpath='{.spec.template.spec.containers[?(@.name=="nfs")].args}' | tr ',' '\n' | grep ondelete
+```
+
+✅ **Expected** (measured): `"--default-ondelete-policy=retain"`.
 
 ---
 
@@ -136,7 +147,8 @@ cat rendered/demo-app-csi/51-storageclass.yaml
 | `server: ${NAS_IP}` | The address the tunnel protects. Never the NAS's name |
 | `share: ${NAS_EXPORT}` | The export |
 | `subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}` | One directory per claim, named after it, under a parent of its own (see below) |
-| `reclaimPolicy: Retain` | Deleting a claim never deletes data on the NAS ([details](#when-a-claim-is-deleted)) |
+| `onDelete: retain` | When the volume is deleted, its directory and data **stay** on the NAS ([Part 6](#part-6--what-deleting-a-claim-does-and-how-to-change-it)) |
+| `reclaimPolicy: Delete` | Deleting a claim deletes its PersistentVolume too, so no `Released` volumes are left behind |
 | `volumeBindingMode: Immediate` | The volume is made when the claim is created, not when a pod first uses it |
 | `mountOptions: nfsvers=4.1, hard, noatime` | The same as the static volume of nas-consumer-app.md |
 
@@ -149,7 +161,7 @@ oc apply -f rendered/demo-app-csi/51-storageclass.yaml
 oc get storageclass ipsec-nas-csi
 ```
 
-✅ **Expected:** `ipsec-nas-csi   nfs.csi.k8s.io   Retain   Immediate`. It is not the default class; claims ask for it by name.
+✅ **Expected:** `ipsec-nas-csi   nfs.csi.k8s.io   Delete   Immediate`. It is not the default class; claims ask for it by name.
 
 ---
 
@@ -166,7 +178,7 @@ oc get pv "$(oc get pvc app-data -n ipsec-nas-csi-demo -o jsonpath='{.spec.volum
   -o custom-columns=NAME:.metadata.name,RECLAIM:.spec.persistentVolumeReclaimPolicy,STATUS:.status.phase,SUBDIR:.spec.csi.volumeAttributes.subDir
 ```
 
-✅ **Expected** (measured, about 2 seconds after the apply): `app-data   Bound   pvc-<id>   1Gi   RWX   ipsec-nas-csi`, and the volume `Retain   Bound   csi/ipsec-nas-csi-demo/app-data`.
+✅ **Expected** (measured, about 2 seconds after the apply): `app-data   Bound   pvc-<id>   1Gi   RWX   ipsec-nas-csi`, and the volume `Delete   Bound   csi/ipsec-nas-csi-demo/app-data`.
 
 On the NAS (ask the storage team, or on the test NAS run it yourself), the directory is there:
 
@@ -229,10 +241,10 @@ oc debug node/${NODE} -- chroot /host bash -c 'findmnt -t nfs4 -o SOURCE,OPTIONS
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../images/crc/57-csi-demo-app.dark.png">
   <source media="(prefers-color-scheme: light)" srcset="../images/crc/57-csi-demo-app.light.png">
-  <img alt="Terminal capture: the claim app-data Bound to pvc-f76d7d9c of class ipsec-nas-csi; the volume Retain, Bound, subDir csi/ipsec-nas-csi-demo/app-data; the pod Running on crc under restricted-v2; the page reporting 94 lines; on the node the NFS 4.1 mount of 192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data and the tunnel's ESP line with the NAS's certificate; on the NAS the claim's directory with data.log and index.html owned by the pod's user ID, the NFS-over-IPsec rule counting packets and the cleartext drop rule at 660." src="../images/crc/57-csi-demo-app.light.png">
+  <img alt="Terminal capture: the claim app-data Bound to pvc-f76d7d9c of class ipsec-nas-csi; the volume Delete, Bound, subDir csi/ipsec-nas-csi-demo/app-data; the pod Running on crc under restricted-v2; the page reporting 256 lines; on the node the NFS 4.1 mounts of 192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data and of the two team exports of Part 5, and the tunnel's ESP line with the NAS's certificate; on the NAS the claim's directory with data.log and index.html owned by the pod's user ID, the NFS-over-IPsec rule at 13,208,276 packets and the cleartext drop rule at 660." src="../images/crc/57-csi-demo-app.light.png">
 </picture>
 
-*The demo on its dynamic claim, end to end: the claim and its volume, the pod, the page, the node's mount and tunnel, and on the NAS the files and the IPsec-only rule. Text: [evidence 57](../evidence/crc/57-csi-demo-app.txt).*
+*The demo on its dynamic claim, end to end: the claim and its volume, the pod, the page, the node's mounts (this one, and the team exports of [Part 5](#part-5--more-exports-more-storageclasses)) and tunnel, and on the NAS the files and the IPsec-only rule. Text: [evidence 57](../evidence/crc/57-csi-demo-app.txt).*
 
 ---
 
@@ -267,24 +279,50 @@ and a volume in the pod that names it:
 What the team gets: a directory `csi/<namespace>/<claim name>` on the NAS, writable by its pods under `restricted-v2`, reached only through the tunnel. Things to know:
 
 - **The size is not a quota.** NFS has no per-directory limit here; ask the storage team for quotas if they matter.
-- **The name is the directory.** Deleting a claim (and its volume) and creating one with the same name in the same namespace gives a new volume on the **same** directory, with the old data still in it (`Retain`; measured).
+- **Deleting the claim keeps the data.** The PersistentVolume goes with the claim; the directory and its data stay on the NAS (also when the whole namespace is deleted; measured).
+- **The name is the directory.** A new claim with the same name in the same namespace gets a new volume on the **same** directory, with the old data in it (measured).
 - **Pods write with the pod's user ID**, through the directory's group: the anonymous group, which `root_squash` also gives the pod's group 0 ([Step 3.3](#step-33--see-the-data-on-the-nas-and-prove-it-used-the-tunnel)). If the NAS maps users differently and writes fail, see [Troubleshooting](#troubleshooting).
 
 ---
 
-## More than one StorageClass
+## Part 5 – More exports, more StorageClasses
 
-The driver is installed once; a StorageClass is only a set of parameters for it, and a claim picks one by name. So one driver serves **several classes**: one per NAS export, or per data lifetime, on the same NAS or on several.
+The driver is installed once. A StorageClass is only a set of parameters for it, and a claim picks one by name, so one driver serves **several classes**: one per NAS export, or per way of handling data.
 
 | A class per… | The parameter that differs | Example |
 |---|---|---|
-| Export | `share` | `/export-team-a`, `/export-team-b` |
-| Data lifetime | `reclaimPolicy` | `Retain` for applications, `Delete` for scratch space |
+| Export | `share` | `/export-team-a`, `/export-team-b` (below) |
+| What deleting does to the data | `onDelete` (with `reclaimPolicy`) | keep it for applications, remove it for scratch space ([Part 6](#part-6--what-deleting-a-claim-does-and-how-to-change-it)) |
 | Permissions | `mountPermissions` | `"0777"` for a NAS that maps users differently ([Troubleshooting](#troubleshooting)) |
 | NFS behaviour | `mountOptions` | `nfsvers`, `rsize`/`wsize` |
 | Directory layout | `subDir` | a parent of its own per class |
 
-A class per export, on the same NAS:
+### What a new export needs first
+
+| The export is… | Needed before its class works |
+|---|---|
+| On the same NAS IP | From the storage team: the export, shared to every worker's address, its top directory writable by the anonymous user ([Before you start](#before-you-start)). **Nothing changes on the cluster's IPsec**: the tunnel already covers that IP. |
+| On another IP of the same NAS, or on another NAS | First a tunnel to that IP: the tunnel protects only `rightsubnet: ${NAS_IP}/32`, so it needs its own NNCP and certificate setup ([docs/README.md](../README.md)). Without it, NFS to that IP leaves the node in clear text, and an IPsec-only NAS drops it. |
+
+The steps below add two exports on the same NAS, one per team, as measured on the lab ([evidence 58](../evidence/crc/58-csi-multiple-exports.txt)).
+
+### Step 5.1 – The exports (on the NAS, by the storage team)
+
+On the lab NAS, beside `/export`, in a file of their own so the lab script's file stays untouched:
+
+```bash
+sudo mkdir -p /export-team-a /export-team-b
+sudo chmod 0777 /export-team-a /export-team-b          # as lab/rhel/setup-nas.sh makes /export
+printf '%s\n' \
+  "/export-team-a 192.168.127.2(rw,sync,no_subtree_check)" \
+  "/export-team-b 192.168.127.2(rw,sync,no_subtree_check)" | sudo tee /etc/exports.d/ipsec-nas-teams.exports
+sudo exportfs -ra
+sudo exportfs -v
+```
+
+✅ **Expected** (measured): `/export-team-a` and `/export-team-b` listed beside `/export`, each `192.168.127.2(…,rw,…,root_squash,…)`. The NAS's firewall rule is per port (2049, only over IPsec), so it covers the new exports without a change.
+
+### Step 5.2 – A StorageClass per export
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -293,10 +331,11 @@ metadata:
   name: ipsec-nas-team-a
 provisioner: nfs.csi.k8s.io
 parameters:
-  server: ${NAS_IP}                 # the same NAS IP: the same IPsec tunnel
+  server: ${NAS_IP}                 # the same NAS IP: the same IPsec tunnel. Never the NAS's name
   share: /export-team-a             # this class's export
   subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
-reclaimPolicy: Retain
+  onDelete: retain                  # deleting a volume keeps its data (Part 6)
+reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume
 volumeBindingMode: Immediate
 mountOptions:
 - nfsvers=4.1
@@ -304,44 +343,126 @@ mountOptions:
 - noatime
 ```
 
-A second class is the same file with another `name` and `share` (`ipsec-nas-team-b`, `/export-team-b`). An application team then writes `storageClassName: ipsec-nas-team-a` in its claim ([Part 4](#part-4--use-it-for-your-application)), and its claim's directory is made in that export: `/export-team-a/csi/<namespace>/<claim>`.
+`ipsec-nas-team-b` is the same with `share: /export-team-b`. Fill in `${NAS_IP}`, then `oc apply -f` each.
 
-On the NAS, each export is an ordinary NFS export of its own, shared like the first one. On the lab NAS, beside `/export`:
-
-```text
-# /etc/exports.d/ipsec-nas-teams.exports   (directories mode 0777, as lab/rhel/setup-nas.sh makes /export)
-/export-team-a 192.168.127.2(rw,sync,no_subtree_check)
-/export-team-b 192.168.127.2(rw,sync,no_subtree_check)
+```bash
+oc get storageclass -o custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,SHARE:.parameters.share,ONDELETE:.parameters.onDelete | grep -E 'NAME|ipsec-nas'
 ```
 
-### What each new class needs
+✅ **Expected** (measured):
 
-| The export is… | Needed before the class works |
-|---|---|
-| On the same NAS IP | From the storage team: the export, shared to every worker's address, its top directory writable by the anonymous user ([Before you start](#before-you-start)). Nothing changes on the cluster's IPsec: the tunnel already covers that IP. |
-| On another IP of the same NAS, or on another NAS | First a tunnel to that IP: the tunnel protects only `rightsubnet: ${NAS_IP}/32`, so it needs its own NNCP and certificate setup ([docs/README.md](../README.md)). Without it, NFS to that IP leaves the node in clear text, and an IPsec-only NAS drops it. Use the IP in `server`, never a name. |
+```text
+NAME               RECLAIM   SHARE            ONDELETE
+ipsec-nas-csi      Delete    /export          retain
+ipsec-nas-team-a   Delete    /export-team-a   retain
+ipsec-nas-team-b   Delete    /export-team-b   retain
+```
 
-### Rules
+### Step 5.3 – Each team claims from its class
 
-1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. Measured with a `Retain` class and a `Delete` class both using `csi/…` on `/export`: a `Delete` claim given the name of an earlier, deleted `Retain` claim bound to the kept directory and could read its data, and deleting it removed the directory and the data. Give each class its own parent (`csi-retain/…`, `csi-delete/…`), or its own export.
-2. **Parameters cannot be changed.** To change a class, create a new one; volumes already made keep the parameters they were made with.
+In each team's namespace, a claim as in [Part 4](#part-4--use-it-for-your-application) with `storageClassName: ipsec-nas-team-a` (or `-b`). On the lab, each team namespace got a claim `app-data` and the demo app of Part 3:
+
+```bash
+oc get pvc -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,CLASS:.spec.storageClassName | grep -E 'NS|team'
+oc get pv "$(oc get pvc app-data -n ipsec-nas-team-a -o jsonpath='{.spec.volumeName}')" -o jsonpath='{.spec.csi.volumeHandle}{"\n"}'
+```
+
+✅ **Expected** (measured): both claims `Bound`; the volume handle names the export, `192.168.64.8#export-team-a#csi/ipsec-nas-team-a/app-data#…`.
+
+### Step 5.4 – Verify each claim landed in its own export, through the tunnel
+
+On the NAS:
+
+```text
+$ find /export-team-a /export-team-b -name app-data
+/export-team-a/csi/ipsec-nas-team-a/app-data
+/export-team-b/csi/ipsec-nas-team-b/app-data
+$ ls /export/csi
+ipsec-nas-csi-demo
+```
+
+On the node, one mount per export, all over the one NFS connection, which the tunnel carries:
+
+```bash
+oc debug node/<node> -- chroot /host bash -c "findmnt -t nfs4 -o SOURCE | grep csi; ss -tn dst ${NAS_IP}"
+```
+
+✅ **Expected** (measured): `192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data`, `192.168.64.8:/export-team-a/csi/ipsec-nas-team-a/app-data`, `192.168.64.8:/export-team-b/csi/ipsec-nas-team-b/app-data`, and one `ESTAB … 192.168.64.8:2049`. Each team's files on the NAS belong to that namespace's user ID (1001270000 and 1001280000), and the NAS's IPsec-only rule counted the traffic (13,196,958 → 13,197,591 packets) while its cleartext drops stayed at 660.
+
+### Rules for several classes
+
+1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. Measured with a class that keeps data and one that removes it, both using `csi/…` on `/export`: a claim of the removing class, given the name of an earlier claim of the keeping class, bound to the kept directory and could read its data, and deleting it removed the directory and the data. Give each class its own parent (`csi/…`, `csi-scratch/…`), or its own export.
+2. **A class cannot be edited.** To change one, delete it and create it again ([Part 6](#how-to-change-it)); its volumes are not touched.
 3. **Name the class in every claim.** Only one class can be the cluster's default (`storageclass.kubernetes.io/is-default-class: "true"`); on CRC it is `crc-csi-hostpath-provisioner`, so a claim without `storageClassName` does not reach the NAS.
 
-**Measured** ([evidence 58](../evidence/crc/58-csi-multiple-exports.txt)): two more exports on the lab NAS, `/export-team-a` and `/export-team-b`, with a class each (`ipsec-nas-team-a`, `ipsec-nas-team-b`) beside `ipsec-nas-csi`. A claim of each class in its own namespace landed in its own export, the demo app in each namespace wrote there (files owned by that namespace's user ID), the node mounted all three through the one NFS connection, and the NAS's IPsec-only rule counted the traffic while its cleartext drops stayed at 660. Nothing changed on the cluster's IPsec. Rule 1's overlap was run too (section 3 of the evidence). **Not measured:** a second NAS IP, or a second NAS; that needs a second tunnel, which the lab does not have.
+**Not measured:** a second NAS IP, or a second NAS. That needs a second tunnel, which the lab does not have.
 
 ---
 
-## When a claim is deleted
+## Part 6 – What deleting a claim does, and how to change it
 
-`reclaimPolicy: Retain` (measured with a throwaway claim):
+Two settings decide it, at two levels:
 
-| You do | What happens |
-|---|---|
-| `oc delete pvc <claim> -n <namespace>` | The PersistentVolume becomes `Released`. The directory and its data stay on the NAS. |
-| `oc delete pv <pv name>` | The PersistentVolume is gone. The directory and its data **still** stay on the NAS; the driver is not asked to delete anything. |
-| Delete the data | On the NAS, by the storage team: `rm -r ${NAS_EXPORT}/csi/<namespace>/<claim>` |
+| Setting | Where | Decides | Values |
+|---|---|---|---|
+| `reclaimPolicy` | StorageClass (copied onto each PersistentVolume) | What Kubernetes does with the **PersistentVolume** when its claim is deleted | `Delete`: delete it, and ask the driver to delete the volume. `Retain`: keep it, `Released`, and ask the driver nothing |
+| `onDelete` | StorageClass `parameters` (written into each volume's handle at creation); the driver's default otherwise | What the driver does with the **data on the NAS** when it is asked to delete the volume | `retain`: keep the directory. `delete`: remove it and its empty parents. `archive`: move it to `archived-<subDir>` |
 
-With `reclaimPolicy: Delete` instead (measured with a separate class), deleting the claim makes the driver remove the claim's directory **and its data**, then every parent directory left empty. Use it only where losing the data with the claim is intended.
+The driver's default for `onDelete` is a Helm value, `controller.defaultOnDeletePolicy` (chart default `delete`; **here `retain`**, [Step 1.3](#step-13--install-the-chart)).
+
+### Every combination, measured
+
+| `reclaimPolicy` | `onDelete` | After `oc delete pvc` | Data on the NAS | Use it for |
+|---|---|---|---|---|
+| **`Delete`** | **`retain`** | **PersistentVolume deleted** | **Kept** in `csi/<ns>/<claim>` | **Applications: this setup's classes** |
+| `Delete` | `delete` | PersistentVolume deleted | **Deleted**, with its empty parent directories | Scratch space you never need back, in a class with its own parent directory |
+| `Delete` | `archive` | PersistentVolume deleted, the first time | Moved to `archived-csi/<ns>/<claim>` | **Do not use.** Re-using a claim name breaks it: deleting the second volume fails with `rename …: file exists`, and the volume stays `Released` with `VolumeFailedDelete` events, retried for ever. In one run, a claim re-used 6 seconds after the archive got no directory at all |
+| `Retain` | any | PersistentVolume stays, `Released` | Kept | Where a person must decide about each volume; leaves `Released` volumes to delete by hand |
+
+Measured in [evidence 59](../evidence/crc/59-csi-reclaim-and-ondelete.txt) (and 56 for `Retain`). Also measured, with `Delete` + `retain`:
+
+- **Deleting a namespace** deletes its claims, so their volumes too; the data stays on the NAS. With `onDelete: delete` it would be removed.
+- **The same claim name again** gets a new volume on the old directory, with the old data in it.
+
+### How to change it
+
+| To change… | Do this | What it affects |
+|---|---|---|
+| A class's `reclaimPolicy` or `onDelete` | A class cannot be edited. Delete it and create it again with the new values: `oc delete storageclass ipsec-nas-csi`, edit the template, render, `oc apply -f rendered/demo-app-csi/51-storageclass.yaml` | Claims made **from then on**. Deleting a class does not touch its volumes or their data (measured) |
+| An existing volume's `reclaimPolicy` | `oc patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}'` (or `"Retain"`) | That volume only |
+| An existing volume's `onDelete` | Cannot be changed: it is part of the volume's handle (`…#retain`). A handle made with no policy (`…#`, from before a class or the default set one) gets the driver's **current** default when it is deleted (measured) | — |
+| The driver's default `onDelete` | `controller.defaultOnDeletePolicy` in [`values.yaml`](../../manifests/csi-driver-nfs/values.yaml), then `helm upgrade csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace csi-driver-nfs --version 4.13.4 -f manifests/csi-driver-nfs/values.yaml --wait` | Classes without `onDelete`: written into their new volumes' handles; and volumes whose handle has no policy |
+
+Check a volume before deleting its claim:
+
+```bash
+oc get pv <pv> -o custom-columns=RECLAIM:.spec.persistentVolumeReclaimPolicy,HANDLE:.spec.csi.volumeHandle
+# RECLAIM Delete and a handle ending in #retain (or in # with the driver's default retain): the data stays
+```
+
+What this lab did, as an example: the classes were first `Retain` with no `onDelete`; the driver's default was set to `retain` (Helm revision 3), each class was deleted and created again with `Delete` and `onDelete: retain`, and the volumes made before were patched to `Delete` (their handles have no policy, so the default `retain` applies).
+
+### Clean up data the NAS keeps
+
+With `onDelete: retain`, nothing on the cluster refers to a deleted claim's directory any more. To list the directories that no volume uses (on a host with `oc` and access to the NAS):
+
+```bash
+oc get pv -o jsonpath='{range .items[?(@.spec.csi.driver=="nfs.csi.k8s.io")]}{.spec.csi.volumeAttributes.share}/{.spec.csi.volumeAttributes.subDir}{"\n"}{end}' | sort > in-use.txt
+# on the NAS: find /export/csi /export-team-a/csi /export-team-b/csi -mindepth 2 -maxdepth 2 -type d | sort > on-nas.txt
+comm -13 in-use.txt on-nas.txt        # directories on the NAS that no volume uses
+```
+
+The storage team archives or removes those (`rm -r <dir>`), then any parent left empty.
+
+### A volume stuck `Released` with `VolumeFailedDelete`
+
+The driver could not delete it (for example an `archive` class with a re-used name). Stop the retries without touching the NAS, then remove the volume:
+
+```bash
+oc describe pv <pv> | sed -n '/Events/,$p'
+oc patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'
+oc delete pv <pv>
+```
 
 ---
 
@@ -350,19 +471,19 @@ With `reclaimPolicy: Delete` instead (measured with a separate class), deleting 
 ```bash
 # the demo
 oc delete -f rendered/demo-app-csi/54-route.yaml -f rendered/demo-app-csi/53-app.yaml -f rendered/demo-app-csi/52-pvc.yaml
-oc get pv -o custom-columns=NAME:.metadata.name,CLASS:.spec.storageClassName,STATUS:.status.phase | grep ipsec-nas-csi
-oc delete pv <each Released volume of class ipsec-nas-csi>
 oc delete -f rendered/demo-app-csi/50-namespace.yaml
+oc get pv -o custom-columns=NAME:.metadata.name,CLASS:.spec.storageClassName,STATUS:.status.phase | grep ipsec-nas   # none left (reclaimPolicy Delete)
 
-# the StorageClass, then the driver (only when no volume of class ipsec-nas-csi is left)
+# the StorageClasses (and Part 5's), then the driver: only when no volume of the driver is left
 oc delete -f rendered/demo-app-csi/51-storageclass.yaml
+oc delete storageclass ipsec-nas-team-a ipsec-nas-team-b --ignore-not-found
 helm uninstall csi-driver-nfs --namespace csi-driver-nfs --wait
 oc adm policy remove-scc-from-user privileged -z csi-nfs-controller-sa -n csi-driver-nfs
 oc adm policy remove-scc-from-user privileged -z csi-nfs-node-sa -n csi-driver-nfs
 oc delete namespace csi-driver-nfs
 ```
 
-The data stays on the NAS under `${NAS_EXPORT}/csi/`; the storage team deletes it if it is no longer wanted.
+The data stays on the NAS (`onDelete: retain`) under `${NAS_EXPORT}/csi/` and each team export's `csi/`; the storage team deletes it if it is no longer wanted, and removes the exports of Part 5 (`/etc/exports.d/ipsec-nas-teams.exports`, then `exportfs -ra`).
 
 ---
 
@@ -374,6 +495,7 @@ The data stays on the NAS under `${NAS_EXPORT}/csi/`; the storage team deletes i
 | Claim `Pending`, the controller log shows a mount that timed out | The controller's node has no working tunnel, so the NAS drops its NFS | `oc logs -n csi-driver-nfs deploy/csi-nfs-controller -c nfs --tail=30`; `oc get pod -n csi-driver-nfs -l app=csi-nfs-controller -o wide`; on that node `ipsec trafficstatus` |
 | Pod stuck in `ContainerCreating`, `oc describe pod` shows a mount that timed out | The pod's node has no working tunnel | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `type=ESP` line with the NAS's `id=` means the tunnel is down; go to the setup docs' troubleshooting |
 | No driver pods, or fewer than expected | The SCC grants of Step 1.2 are missing (not measured: Step 1.2 was always run first) | `oc get events -n csi-driver-nfs`; run Step 1.2, then `oc rollout restart` the controller Deployment and the node DaemonSet in `csi-driver-nfs` |
+| Volume `Released`, events `VolumeFailedDelete` repeating | The driver cannot delete or archive the directory (measured with `onDelete: archive` and a re-used claim name) | [Part 6](#a-volume-stuck-released-with-volumefaileddelete): switch the volume to `Retain`, then delete it |
 | Pod `Running` but writes fail with `Permission denied` | The NAS maps users or groups differently from the lab's `root_squash` (anonymous 65534) | Add `mountPermissions: "0777"` to the class's `parameters` (a new class: parameters cannot be changed). Measured: the claim's directory becomes `2777` and a `restricted-v2` pod writes |
 
 ---

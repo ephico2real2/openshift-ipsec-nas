@@ -1,0 +1,35 @@
+# What deleting a claim does to its PersistentVolume and to its data on the NAS: reclaimPolicy (Kubernetes) and onDelete
+# (csi-driver-nfs 4.13.4), every combination run on CRC 4.22.7 against the lab NAS, 2026-10-05 02:16-02:25Z.
+# Earlier runs: reclaimPolicy Retain and Delete (onDelete unset, driver default delete) in evidence 56 and 58.
+
+## 1. reclaimPolicy Delete + onDelete archive (class test-delete-archive, subDir csi-archive/<ns>/<claim>)
+  claim app-data -> pvc-276123e0; marker v1 written; claim deleted -> PV removed;
+    NAS: /export/archived-csi-archive/ipsec-nas-reclaim-test/app-data/marker.txt "v1" (moved, "archived-" + subDir)
+  Same name again, 6 s later -> pvc-ae05a64c Bound, but no directory on the NAS (writing marker.txt: No such file);
+    claim deleted -> PV Released, VolumeFailedDelete x7: "rename .../csi-archive/.../app-data .../archived-csi-archive/.../app-data:
+    no such file or directory"
+  Same test with a new name, 70 s between: claim reuse -> directory made; marker v1; deleted -> archived, PV removed;
+    reuse again -> directory made; marker v2; deleted -> PV Released, VolumeFailedDelete:
+    "rename .../csi-archive/.../reuse .../archived-csi-archive/.../reuse: file exists"; the older archive (v1) untouched.
+    (The driver removes an older archive only with --remove-archived-volume-path, which this install does not set.)
+  A PV stuck like this: oc patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}'; oc delete pv <pv>
+    (done for pvc-ae05a64c and pvc-99bab699; nothing deleted on the NAS)
+
+## 2. reclaimPolicy Delete + onDelete retain (class test-delete-retain, subDir csi-keep/<ns>/<claim>)
+  claim app-data -> pvc-b6598041, handle ...#retain; marker v1; claim deleted -> PV removed;
+  controller: "DeleteVolume: volume(...#retain) is set to retain, not deleting/archiving subdirectory"; NAS: marker "v1"
+
+## 3. The driver's default (Helm revision 3, controller.defaultOnDeletePolicy: retain -> --default-ondelete-policy=retain)
+  A claim of ipsec-nas-csi (then Retain, no onDelete): handle ...#pvc-b6ccdbca-...#retain (the default is written into
+    the handle at creation); PV patched to Delete; claim deleted -> PV removed, "is set to retain", NAS data kept.
+  A handle with no policy (as the volumes made before revision 3 have, "...#pvc-<id>#"): hand-made PV handmade-old-handle,
+    Delete, handle 192.168.64.8#export#csi/ipsec-nas-reclaim-test/handmade#handmade-old-handle#; claim deleted ->
+    PV removed, "is set to retain", NAS: "handmade-data" kept.
+
+## 4. The classes now: ipsec-nas-csi, ipsec-nas-team-a, ipsec-nas-team-b recreated with reclaimPolicy Delete, onDelete retain
+##    (a class cannot be edited; deleting it does not touch its volumes). The three volumes made earlier patched to Delete:
+##    pvc-f76d7d9c (ipsec-nas-csi-demo), pvc-c98412b4 (ipsec-nas-team-a), pvc-64b4a32e (ipsec-nas-team-b).
+  claim data -> pvc-56198ee5, Delete, handle ...#retain; marker "first"; claim deleted -> PV removed; NAS "first"
+  65 s later, same name -> pvc-82445309 Bound; NAS: "first" (the new volume has the old directory and data)
+  02:24:57Z namespace ipsec-nas-reclaim-test deleted (its claim with it) -> PV removed; NAS "first" still there
+  Afterwards: no PV of the test namespace left; its directories removed from the NAS by hand.

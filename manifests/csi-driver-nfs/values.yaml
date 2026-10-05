@@ -6,3 +6,7 @@ controller:
   # The chart's default tolerates the control-plane taints, and runOnControlPlane: false does not keep it off them.
   nodeSelector:
     node-role.kubernetes.io/worker: ""
+  # What the driver does with a volume's data on the NAS when Kubernetes deletes the volume, for any StorageClass
+  # that does not set onDelete itself (and for volumes made before a class set it). The chart's default, delete,
+  # removes the data; retain keeps it. A class that wants its data removed says onDelete: delete explicitly.
+  defaultOnDeletePolicy: retain

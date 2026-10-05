@@ -12,7 +12,10 @@ parameters:
   # A parent of its own: with root_squash the driver creates directories as the NAS's anonymous user,
   # which cannot create one inside a directory another user owns (measured: Method 1's ipsec-nas-demo)
   subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
-reclaimPolicy: Retain               # deleting a claim keeps its directory and data on the NAS
+  # What happens to the data when the volume is deleted: retain keeps the claim's directory on the NAS.
+  # Other values: delete (removes the directory and its data); archive is not used (it fails when a claim name is reused)
+  onDelete: retain
+reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume too; onDelete decides about the data
 volumeBindingMode: Immediate
 mountOptions:
 - nfsvers=4.1
