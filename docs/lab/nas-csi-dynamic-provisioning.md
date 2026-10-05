@@ -9,7 +9,8 @@
 | Driver | [`csi-driver-nfs`](https://github.com/kubernetes-csi/csi-driver-nfs) 4.13.4 (Kubernetes CSI project, upstream Helm chart), in the namespace `csi-driver-nfs` |
 | StorageClass | `ipsec-nas-csi`: the NAS IP, the export, one directory per claim (`csi/<namespace>/<claim>`); deleting a claim deletes its PersistentVolume and keeps its data |
 | Demo | The demo app of nas-consumer-app.md on a dynamic claim, in the namespace `ipsec-nas-csi-demo`, with a Route |
-| Files | [`manifests/csi-driver-nfs/values.yaml`](../../manifests/csi-driver-nfs/values.yaml), [`manifests/demo-app-csi/`](../../manifests/demo-app-csi/) |
+| Files | [`manifests/csi-driver-nfs/values.yaml`](../../manifests/csi-driver-nfs/values.yaml), [`manifests/demo-app-csi/`](../../manifests/demo-app-csi/) (Part 5: [`teams/`](../../manifests/demo-app-csi/teams/)) |
+| Running on the lab | The driver in `csi-driver-nfs`; the classes `ipsec-nas-csi`, `ipsec-nas-team-a`, `ipsec-nas-team-b`; the demo app in `ipsec-nas-csi-demo`, `ipsec-nas-team-a` and `ipsec-nas-team-b`; on the NAS the exports `/export`, `/export-team-a`, `/export-team-b` |
 | Measured | Every step on OpenShift Local (CRC 4.22.7) against the lab NAS (NFS accepted only through IPsec), 2026-10-05: evidence [56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt) (the setup), [57](../evidence/crc/57-csi-demo-app.txt) (the demo), [58](../evidence/crc/58-csi-multiple-exports.txt) (several exports), [59](../evidence/crc/59-csi-reclaim-and-ondelete.txt) (what deleting does) |
 
 **Contents:** [How it works](#how-it-works) · [Before you start](#before-you-start) · [Part 1 – Install the driver](#part-1--install-the-driver) · [Part 2 – The StorageClass](#part-2--the-storageclass) · [Part 3 – Use it: the demo app](#part-3--use-it-the-demo-app) · [Part 4 – Use it for your application](#part-4--use-it-for-your-application) · [Part 5 – More exports, more StorageClasses](#part-5--more-exports-more-storageclasses) · [Part 6 – What deleting a claim does, and how to change it](#part-6--what-deleting-a-claim-does-and-how-to-change-it) · [Remove everything](#remove-everything) · [Troubleshooting](#troubleshooting) · [References](#references)
@@ -343,7 +344,12 @@ mountOptions:
 - noatime
 ```
 
-`ipsec-nas-team-b` is the same with `share: /export-team-b`. Fill in `${NAS_IP}`, then `oc apply -f` each.
+`ipsec-nas-team-b` is the same with `share: /export-team-b`. Both are in [`manifests/demo-app-csi/teams/`](../../manifests/demo-app-csi/teams/), each with its team's namespace and claim (Step 5.3); `render.sh` fills in `${NAS_IP}`:
+
+```bash
+./render.sh
+oc apply -f rendered/demo-app-csi/teams/60-team-a.yaml -f rendered/demo-app-csi/teams/61-team-b.yaml
+```
 
 ```bash
 oc get storageclass -o custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,SHARE:.parameters.share,ONDELETE:.parameters.onDelete | grep -E 'NAME|ipsec-nas'
@@ -360,7 +366,19 @@ ipsec-nas-team-b   Delete    /export-team-b   retain
 
 ### Step 5.3 – Each team claims from its class
 
-In each team's namespace, a claim as in [Part 4](#part-4--use-it-for-your-application) with `storageClassName: ipsec-nas-team-a` (or `-b`). On the lab, each team namespace got a claim `app-data` and the demo app of Part 3:
+In each team's namespace, a claim as in [Part 4](#part-4--use-it-for-your-application) with `storageClassName: ipsec-nas-team-a` (or `-b`). The files applied in Step 5.2 made the namespaces `ipsec-nas-team-a` and `ipsec-nas-team-b`, each with a claim `app-data`. The demo app of Part 3 goes into each, with only its namespace changed:
+
+```bash
+for t in a b; do
+  for f in 53-app 54-route; do        # one file at a time: the files do not start with ---
+    sed "s/namespace: ipsec-nas-csi-demo/namespace: ipsec-nas-team-${t}/" rendered/demo-app-csi/${f}.yaml | oc apply -f -
+  done
+  oc rollout status deploy/nas-demo -n ipsec-nas-team-${t}
+done
+curl -sk https://nas-demo-ipsec-nas-team-a.apps-crc.testing/ | grep 'lines in'      # the Route's host on CRC
+```
+
+Then:
 
 ```bash
 oc get pvc -A -o custom-columns=NS:.metadata.namespace,NAME:.metadata.name,STATUS:.status.phase,CLASS:.spec.storageClassName | grep -E 'NS|team'

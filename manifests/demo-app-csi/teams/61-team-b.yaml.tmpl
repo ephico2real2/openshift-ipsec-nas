@@ -1,0 +1,37 @@
+# Part 5 of docs/lab/nas-csi-dynamic-provisioning.md: a StorageClass for the NAS export /export-team-b, and team b's
+# namespace and claim. The export must exist on the NAS first (Step 5.1). The demo app is added with Step 5.3's command.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ipsec-nas-team-b
+provisioner: nfs.csi.k8s.io
+parameters:
+  # The NAS IP, not its name: the same IP as ipsec-nas-csi, so the same IPsec tunnel
+  server: ${NAS_IP}
+  share: /export-team-b
+  subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
+  onDelete: retain                  # deleting a volume keeps its data (Part 6)
+reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume
+volumeBindingMode: Immediate
+mountOptions:
+- nfsvers=4.1
+- hard
+- noatime
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ipsec-nas-team-b
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  namespace: ipsec-nas-team-b
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: ipsec-nas-team-b
+  resources:
+    requests:
+      storage: 1Gi
