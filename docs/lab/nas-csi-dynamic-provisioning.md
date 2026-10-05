@@ -419,9 +419,9 @@ The driver's default for `onDelete` is a Helm value, `controller.defaultOnDelete
 | `Delete` | `archive` | PersistentVolume deleted, the first time | Moved to `archived-csi/<ns>/<claim>` | **Do not use.** Re-using a claim name breaks it: deleting the second volume fails with `rename …: file exists`, and the volume stays `Released` with `VolumeFailedDelete` events, retried for ever. In one run, a claim re-used 6 seconds after the archive got no directory at all |
 | `Retain` | any | PersistentVolume stays, `Released` | Kept | Where a person must decide about each volume; leaves `Released` volumes to delete by hand |
 
-Measured in [evidence 59](../evidence/crc/59-csi-reclaim-and-ondelete.txt) (and 56 for `Retain`). Also measured, with `Delete` + `retain`:
+Measured in [evidence 59](../evidence/crc/59-csi-reclaim-and-ondelete.txt); `Retain`, and `Delete` with `delete` (then the driver's default), in [56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt) and [58](../evidence/crc/58-csi-multiple-exports.txt). Also measured, with `Delete` + `retain`:
 
-- **Deleting a namespace** deletes its claims, so their volumes too; the data stays on the NAS. With `onDelete: delete` it would be removed.
+- **Deleting a namespace** deletes its claims, so their volumes too; the data stays on the NAS. With `onDelete: delete` it would be removed: that follows from deleting a claim with `delete` (measured), not from a namespace deletion run with it.
 - **The same claim name again** gets a new volume on the old directory, with the old data in it.
 
 ### How to change it
