@@ -278,7 +278,7 @@ The driver is installed once; a StorageClass is only a set of parameters for it,
 
 | A class per… | The parameter that differs | Example |
 |---|---|---|
-| Export | `share` | `/export/team-a`, `/export/team-b` |
+| Export | `share` | `/export-team-a`, `/export-team-b` |
 | Data lifetime | `reclaimPolicy` | `Retain` for applications, `Delete` for scratch space |
 | Permissions | `mountPermissions` | `"0777"` for a NAS that maps users differently ([Troubleshooting](#troubleshooting)) |
 | NFS behaviour | `mountOptions` | `nfsvers`, `rsize`/`wsize` |
@@ -294,7 +294,7 @@ metadata:
 provisioner: nfs.csi.k8s.io
 parameters:
   server: ${NAS_IP}                 # the same NAS IP: the same IPsec tunnel
-  share: /export/team-a             # this class's export
+  share: /export-team-a             # this class's export
   subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
 reclaimPolicy: Retain
 volumeBindingMode: Immediate
@@ -304,7 +304,15 @@ mountOptions:
 - noatime
 ```
 
-A second class is the same file with another `name` and `share`. An application team then writes `storageClassName: ipsec-nas-team-a` in its claim ([Part 4](#part-4--use-it-for-your-application)).
+A second class is the same file with another `name` and `share` (`ipsec-nas-team-b`, `/export-team-b`). An application team then writes `storageClassName: ipsec-nas-team-a` in its claim ([Part 4](#part-4--use-it-for-your-application)), and its claim's directory is made in that export: `/export-team-a/csi/<namespace>/<claim>`.
+
+On the NAS, each export is an ordinary NFS export of its own, shared like the first one. On the lab NAS, beside `/export`:
+
+```text
+# /etc/exports.d/ipsec-nas-teams.exports   (directories mode 0777, as lab/rhel/setup-nas.sh makes /export)
+/export-team-a 192.168.127.2(rw,sync,no_subtree_check)
+/export-team-b 192.168.127.2(rw,sync,no_subtree_check)
+```
 
 ### What each new class needs
 
@@ -315,11 +323,11 @@ A second class is the same file with another `name` and `share`. An application 
 
 ### Rules
 
-1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. If a `Retain` class and a `Delete` class both used `csi/…` on the same export, a `Delete` claim with the name of an earlier `Retain` claim would get the kept directory, and deleting it would remove that data. Give each class its own parent (`csi-retain/…`, `csi-delete/…`), or its own export.
+1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. Measured with a `Retain` class and a `Delete` class both using `csi/…` on `/export`: a `Delete` claim given the name of an earlier, deleted `Retain` claim bound to the kept directory and could read its data, and deleting it removed the directory and the data. Give each class its own parent (`csi-retain/…`, `csi-delete/…`), or its own export.
 2. **Parameters cannot be changed.** To change a class, create a new one; volumes already made keep the parameters they were made with.
 3. **Name the class in every claim.** Only one class can be the cluster's default (`storageclass.kubernetes.io/is-default-class: "true"`); on CRC it is `crc-csi-hostpath-provisioner`, so a claim without `storageClassName` does not reach the NAS.
 
-**Measured and not:** two classes on the lab NAS's one export at the same time (both `Delete`, one with the driver's defaults and one with `mountPermissions: "0777"`), each provisioning its claim and a pod writing to each; then `ipsec-nas-csi` on the same export ([evidence 56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt), §2 and §3). Classes on **different exports**, and on a second NAS IP, were not measured: the lab NAS exports only `/export`. Rule 1 follows from two measured facts (the directory is `csi/<namespace>/<claim>` whatever the class, and `Delete` removes it) but the collision itself was not run.
+**Measured** ([evidence 58](../evidence/crc/58-csi-multiple-exports.txt)): two more exports on the lab NAS, `/export-team-a` and `/export-team-b`, with a class each (`ipsec-nas-team-a`, `ipsec-nas-team-b`) beside `ipsec-nas-csi`. A claim of each class in its own namespace landed in its own export, the demo app in each namespace wrote there (files owned by that namespace's user ID), the node mounted all three through the one NFS connection, and the NAS's IPsec-only rule counted the traffic while its cleartext drops stayed at 660. Nothing changed on the cluster's IPsec. Rule 1's overlap was run too (section 3 of the evidence). **Not measured:** a second NAS IP, or a second NAS; that needs a second tunnel, which the lab does not have.
 
 ---
 

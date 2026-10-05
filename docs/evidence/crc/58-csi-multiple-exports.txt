@@ -1,0 +1,38 @@
+# Several StorageClasses, one per NAS export, and the Retain/Delete overlap (docs/lab/nas-csi-dynamic-provisioning.md,
+# "More than one StorageClass"). CRC 4.22.7, csi-driver-nfs 4.13.4 (namespace csi-driver-nfs), lab NAS crc-nas
+# (192.168.64.8, NFS accepted only over IPsec), 2026-10-05 02:12-02:15Z.
+
+## 1. Two new exports on the NAS (02:12:29Z), made as lab/rhel/setup-nas.sh makes /export, in a file of their own
+  $ mkdir -p /export-team-a /export-team-b; chmod 0777 /export-team-a /export-team-b
+  $ printf ... > /etc/exports.d/ipsec-nas-teams.exports; exportfs -ra; exportfs -v
+  /export-team-a  192.168.127.2(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+  /export-team-b  192.168.127.2(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+  /export         192.168.127.2(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,root_squash,no_all_squash)
+  Nothing changed on the cluster's IPsec or on the NAS's firewall (its rule is per port, not per export).
+
+## 2. A class per export: ipsec-nas-team-a (share /export-team-a), ipsec-nas-team-b (share /export-team-b), both
+##    server 192.168.64.8, subDir csi/${pvc.metadata.namespace}/${pvc.metadata.name}, Retain. A namespace per team with
+##    a claim app-data of its team's class, and the demo app of manifests/demo-app-csi/ (53, 54) in each.
+  02:12:44Z before: NAS nfs-over-ipsec 13196958 packets, nfs-cleartext-dropped 660
+  ipsec-nas-team-a/app-data Bound, pvc-c98412b4-..., handle 192.168.64.8#export-team-a#csi/ipsec-nas-team-a/app-data#...
+  ipsec-nas-team-b/app-data Bound, pvc-64b4a32e-..., handle 192.168.64.8#export-team-b#csi/ipsec-nas-team-b/app-data#...
+  NAS: /export-team-a/csi/ipsec-nas-team-a/app-data and /export-team-b/csi/ipsec-nas-team-b/app-data (755 65534:65534);
+       /export/csi holds only ipsec-nas-csi-demo
+  02:13:35Z both pages: "4 lines in data.log" (pods nas-demo-5f69b4d9d9-rffjl, -xdtxq on crc)
+  node mounts: 192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data, 192.168.64.8:/export-team-a/csi/ipsec-nas-team-a/app-data,
+               192.168.64.8:/export-team-b/csi/ipsec-nas-team-b/app-data; one NFS connection 192.168.127.2:676 -> 192.168.64.8:2049
+  NAS files: team-a data.log, index.html owned by 1001270000; team-b by 1001280000 (each namespace's user ID)
+  NAS: nfs-over-ipsec 13196958 -> 13197591 packets; nfs-cleartext-dropped 660 -> 660
+
+## 3. The overlap: class ipsec-nas-csi (Retain) and a class ipsec-nas-csi-delete (Delete), same share /export and the
+##    same subDir layout; namespace ipsec-nas-collision, one claim name shared-name
+  1. claim of ipsec-nas-csi: Bound pvc-e4c1db83-...; on the NAS: important.txt "kept by the Retain claim"
+  2. claim and its PV deleted: important.txt still there
+  3. claim of ipsec-nas-csi-delete, same name: Bound pvc-38570143-..., subDir csi/ipsec-nas-collision/shared-name,
+     important.txt readable: "kept by the Retain claim"
+  4. 02:14:04Z that claim deleted: the controller "removing subdirectory at .../csi/ipsec-nas-collision/shared-name",
+     "Removing empty directory .../csi/ipsec-nas-collision"; on the NAS the directory and important.txt are gone.
+  Removed afterwards: the namespace ipsec-nas-collision and the class ipsec-nas-csi-delete.
+
+## Left: the classes ipsec-nas-team-a and -b, the namespaces ipsec-nas-team-a and -b with their claims and demo apps,
+## and the two exports on the NAS.
