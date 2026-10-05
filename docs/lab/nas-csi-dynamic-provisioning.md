@@ -12,7 +12,7 @@
 | Files | [`manifests/csi-driver-nfs/values.yaml`](../../manifests/csi-driver-nfs/values.yaml), [`manifests/demo-app-csi/`](../../manifests/demo-app-csi/) |
 | Measured | Every step on OpenShift Local (CRC 4.22.7) against the lab NAS (NFS accepted only through IPsec), 2026-10-05: [evidence 56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt) |
 
-**Contents:** [How it works](#how-it-works) · [Before you start](#before-you-start) · [Part 1 – Install the driver](#part-1--install-the-driver) · [Part 2 – The StorageClass](#part-2--the-storageclass) · [Part 3 – Use it: the demo app](#part-3--use-it-the-demo-app) · [Part 4 – Use it for your application](#part-4--use-it-for-your-application) · [When a claim is deleted](#when-a-claim-is-deleted) · [Remove everything](#remove-everything) · [Troubleshooting](#troubleshooting) · [References](#references)
+**Contents:** [How it works](#how-it-works) · [Before you start](#before-you-start) · [Part 1 – Install the driver](#part-1--install-the-driver) · [Part 2 – The StorageClass](#part-2--the-storageclass) · [Part 3 – Use it: the demo app](#part-3--use-it-the-demo-app) · [Part 4 – Use it for your application](#part-4--use-it-for-your-application) · [More than one StorageClass](#more-than-one-storageclass) · [When a claim is deleted](#when-a-claim-is-deleted) · [Remove everything](#remove-everything) · [Troubleshooting](#troubleshooting) · [References](#references)
 
 ---
 
@@ -269,6 +269,57 @@ What the team gets: a directory `csi/<namespace>/<claim name>` on the NAS, writa
 - **The size is not a quota.** NFS has no per-directory limit here; ask the storage team for quotas if they matter.
 - **The name is the directory.** Deleting a claim (and its volume) and creating one with the same name in the same namespace gives a new volume on the **same** directory, with the old data still in it (`Retain`; measured).
 - **Pods write with the pod's user ID**, through the directory's group: the anonymous group, which `root_squash` also gives the pod's group 0 ([Step 3.3](#step-33--see-the-data-on-the-nas-and-prove-it-used-the-tunnel)). If the NAS maps users differently and writes fail, see [Troubleshooting](#troubleshooting).
+
+---
+
+## More than one StorageClass
+
+The driver is installed once; a StorageClass is only a set of parameters for it, and a claim picks one by name. So one driver serves **several classes**: one per NAS export, or per data lifetime, on the same NAS or on several.
+
+| A class per… | The parameter that differs | Example |
+|---|---|---|
+| Export | `share` | `/export/team-a`, `/export/team-b` |
+| Data lifetime | `reclaimPolicy` | `Retain` for applications, `Delete` for scratch space |
+| Permissions | `mountPermissions` | `"0777"` for a NAS that maps users differently ([Troubleshooting](#troubleshooting)) |
+| NFS behaviour | `mountOptions` | `nfsvers`, `rsize`/`wsize` |
+| Directory layout | `subDir` | a parent of its own per class |
+
+A class per export, on the same NAS:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ipsec-nas-team-a
+provisioner: nfs.csi.k8s.io
+parameters:
+  server: ${NAS_IP}                 # the same NAS IP: the same IPsec tunnel
+  share: /export/team-a             # this class's export
+  subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+mountOptions:
+- nfsvers=4.1
+- hard
+- noatime
+```
+
+A second class is the same file with another `name` and `share`. An application team then writes `storageClassName: ipsec-nas-team-a` in its claim ([Part 4](#part-4--use-it-for-your-application)).
+
+### What each new class needs
+
+| The export is… | Needed before the class works |
+|---|---|
+| On the same NAS IP | From the storage team: the export, shared to every worker's address, its top directory writable by the anonymous user ([Before you start](#before-you-start)). Nothing changes on the cluster's IPsec: the tunnel already covers that IP. |
+| On another IP of the same NAS, or on another NAS | First a tunnel to that IP: the tunnel protects only `rightsubnet: ${NAS_IP}/32`, so it needs its own NNCP and certificate setup ([docs/README.md](../README.md)). Without it, NFS to that IP leaves the node in clear text, and an IPsec-only NAS drops it. Use the IP in `server`, never a name. |
+
+### Rules
+
+1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. If a `Retain` class and a `Delete` class both used `csi/…` on the same export, a `Delete` claim with the name of an earlier `Retain` claim would get the kept directory, and deleting it would remove that data. Give each class its own parent (`csi-retain/…`, `csi-delete/…`), or its own export.
+2. **Parameters cannot be changed.** To change a class, create a new one; volumes already made keep the parameters they were made with.
+3. **Name the class in every claim.** Only one class can be the cluster's default (`storageclass.kubernetes.io/is-default-class: "true"`); on CRC it is `crc-csi-hostpath-provisioner`, so a claim without `storageClassName` does not reach the NAS.
+
+**Measured and not:** two classes on the lab NAS's one export at the same time (both `Delete`, one with the driver's defaults and one with `mountPermissions: "0777"`), each provisioning its claim and a pod writing to each; then `ipsec-nas-csi` on the same export ([evidence 56](../evidence/crc/56-csi-driver-nfs-dynamic-provisioning.txt), §2 and §3). Classes on **different exports**, and on a second NAS IP, were not measured: the lab NAS exports only `/export`. Rule 1 follows from two measured facts (the directory is `csi/<namespace>/<claim>` whatever the class, and `Delete` removes it) but the collision itself was not run.
 
 ---
 
