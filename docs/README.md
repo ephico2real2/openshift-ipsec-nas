@@ -68,7 +68,8 @@ Supporting guides, in [`lab/`](lab/):
 |---|---|
 | [lab/test-nas-rhel.md](lab/test-nas-rhel.md) | A test NAS on RHEL 10: NFSv4 that accepts only IPsec, certificate login, as a host or a container |
 | [lab/lima-lab.md](lab/lima-lab.md) | Lima on a Mac, and a lab with that NAS and two stand-in workers: the cases that need two nodes |
-| [lab/nas-consumer-app.md](lab/nas-consumer-app.md) | An application that stores data on the NAS: a static PV and PVC with a demo app and Route, or the NFS CSI driver |
+| [lab/nas-consumer-app.md](lab/nas-consumer-app.md) | An application that stores data on the NAS: a static PV and PVC with a demo app and Route |
+| [lab/nas-csi-dynamic-provisioning.md](lab/nas-csi-dynamic-provisioning.md) | Storage on demand from the NAS: csi-driver-nfs, the StorageClass `ipsec-nas-csi`, a claim per application, all over IPsec |
 
 ## Prerequisites, in short
 

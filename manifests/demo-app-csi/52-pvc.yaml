@@ -1,0 +1,13 @@
+# A claim of class ipsec-nas-csi: the driver makes the PersistentVolume and the directory on the NAS.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  namespace: ipsec-nas-csi-demo
+spec:
+  accessModes:
+  - ReadWriteMany            # several pods, on several nodes, may mount it at once
+  storageClassName: ipsec-nas-csi
+  resources:
+    requests:
+      storage: 1Gi           # advisory only for NFS: the NAS decides the real limit

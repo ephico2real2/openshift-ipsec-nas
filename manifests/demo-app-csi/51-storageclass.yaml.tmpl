@@ -1,0 +1,20 @@
+# Dynamic provisioning on the NAS through csi-driver-nfs. Cluster-wide object.
+# Each claim gets its own directory on the share, made by the driver: csi/<namespace>/<claim name>.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ipsec-nas-csi
+provisioner: nfs.csi.k8s.io
+parameters:
+  # The NAS IP, not its name: it is the address the IPsec tunnel protects (rightsubnet in the NNCP)
+  server: ${NAS_IP}
+  share: ${NAS_EXPORT}
+  # A parent of its own: with root_squash the driver creates directories as the NAS's anonymous user,
+  # which cannot create one inside a directory another user owns (measured: Method 1's ipsec-nas-demo)
+  subDir: csi/${pvc.metadata.namespace}/${pvc.metadata.name}
+reclaimPolicy: Retain               # deleting a claim keeps its directory and data on the NAS
+volumeBindingMode: Immediate
+mountOptions:
+- nfsvers=4.1
+- hard                              # retry forever instead of returning I/O errors to the app
+- noatime

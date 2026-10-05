@@ -1,0 +1,55 @@
+# #23: dynamic provisioning with csi-driver-nfs against the IPsec-only lab NAS (docs/lab/nas-csi-dynamic-provisioning.md).
+# CRC 4.22.7 (one node, crc, 192.168.127.2 towards the NAS through NAT), tunnel up (Option C, master pool), lab NAS
+# crc-nas (Lima, 192.168.64.8, /export with root_squash, NFS accepted only over IPsec), 2026-10-05 01:36-01:50Z.
+
+## 0. Before: the old driver release (kube-system, 2026-09-26, for the in-cluster nfs-server) and its StorageClass nfs-csi
+##    were removed; no PersistentVolume used nfs.csi.k8s.io. First try, with that old release and
+##    subDir ${pvc.metadata.namespace}/${pvc.metadata.name}, claim ipsec-nas-demo/app-data:
+  ProvisioningFailed: failed to make subdirectory: mkdir /tmp/pvc-.../ipsec-nas-demo/app-data: permission denied
+  Why: /export/ipsec-nas-demo is Method 1's directory, owned by its pod (1001160000, mode 755); with root_squash the
+  driver's mkdir runs as the NAS's anonymous user (65534). Hence the class's own parent, csi/.
+
+## 1. The driver, fresh, in its own namespace (01:39:59Z)
+  $ oc create namespace csi-driver-nfs
+  $ oc adm policy add-scc-to-user privileged -z csi-nfs-controller-sa -n csi-driver-nfs   (and -z csi-nfs-node-sa)
+  $ helm install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace csi-driver-nfs --version 4.13.4 --wait
+  01:40:02Z csi-nfs-controller 5/5 Running, csi-nfs-node 3/3 Running; both scc=privileged, hostNetwork=true;
+            CSIDriver nfs.csi.k8s.io (fsGroupPolicy File)
+  Helm revision 2 with manifests/csi-driver-nfs/values.yaml: controller nodeSelector node-role.kubernetes.io/worker="".
+  (The chart's default controller tolerates the master/control-plane NoSchedule taints, runOnControlPlane=false or not.)
+
+## 2. Who can write: two probe classes, a restricted-v2 pod (uid 1001240000, gid 0, fsGroup 1001240000)
+  driver default (no chmod):     /data drwxrwsr-x 65534:65534 -> WRITE-OK; on the NAS the claim's dir 2775 65534:65534
+  mountPermissions: "0777":      /data drwxrwsrwx 65534:65534 -> WRITE-OK; on the NAS 2777
+  Both: the file on the NAS 644 1001240000:65534. The directories the driver makes: 755 65534:65534.
+  reclaimPolicy Delete (probe class): DeleteVolume removed the claim's directory, then the empty parents
+  ("Removing empty directory .../csi/ipsec-nas-csi-probe", ".../csi").
+
+## 3. The setup (manifests/demo-app-csi/, rendered with NAS_IP=192.168.64.8 NAS_EXPORT=/export)
+  01:44:48Z before: tunnel inBytes=9408000 outBytes=17219044; NAS nfs-over-ipsec 13187359 packets, nfs-cleartext-dropped 660
+  $ oc apply -f rendered/demo-app-csi/50-namespace.yaml -f .../51-storageclass.yaml -f .../52-pvc.yaml
+  01:44:51Z app-data Bound, pvc-f76d7d9c-d04f-4be2-88cf-5b3e64f4311b, RWX, ipsec-nas-csi, Retain,
+            subDir csi/ipsec-nas-csi-demo/app-data (about 2 s after the apply)
+            NAS: /export/csi/ipsec-nas-csi-demo/app-data 755 65534:65534
+  $ oc apply -f .../53-app.yaml -f .../54-route.yaml
+  01:45:50Z nas-demo-5f69b4d9d9-2v6b4 2/2 Running on crc
+  https://nas-demo-ipsec-nas-csi-demo.apps-crc.testing/: "5 lines in data.log", line=1 at 01:45:43Z ... line=5 at 01:46:23Z
+  NAS: app-data 2775 65534:65534; data.log and index.html 644 1001250000:65534; the same last lines as the page
+
+## 4. Through the tunnel (01:46:34Z)
+  node mount: 192.168.64.8:/export/csi/ipsec-nas-csi-demo/app-data on /var/lib/kubelet/pods/.../pvc-f76d7d9c-.../mount
+              rw,noatime,vers=4.1,...,hard,proto=tcp
+  node: one NFS connection, ESTAB 192.168.127.2:676 -> 192.168.64.8:2049 (shared with Method 1's mount)
+  tunnel: inBytes 9408000 -> 9507112, outBytes 17219044 -> 17409308
+  NAS: nfs-over-ipsec 13187359 -> 13187923 packets; nfs-cleartext-dropped 660 -> 660
+  (Method 1's demo app writes on the same connection, so the increase is both apps; no NFS arrived outside IPsec.)
+
+## 5. Retain (claim scratch, 01:46:50Z)
+  marker.txt written into /export/csi/ipsec-nas-csi-demo/scratch; claim deleted -> PV Released (Retain);
+  PV deleted -> the directory and marker.txt still on the NAS ("kept"); no DeleteVolume call. Removed by hand.
+  After the Helm revision 2 (controller on workers): a new claim Bound within 5 s; removed the same way.
+  Same name again: claim scratch -> pvc-5494903f-..., marker "first-claim" written on the NAS; claim and PV deleted;
+  claim scratch again -> pvc-269856f9-..., subDir csi/ipsec-nas-csi-demo/scratch, marker.txt still "first-claim".
+
+## Left on CRC: release csi-driver-nfs revision 2 in csi-driver-nfs; StorageClass ipsec-nas-csi; namespace
+## ipsec-nas-csi-demo with app-data, the demo app and its Route. Method 1 (ipsec-nas-demo) untouched.

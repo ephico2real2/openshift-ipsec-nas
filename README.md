@@ -75,6 +75,8 @@ manifests/option-b-per-node-certs/   Option B: namespace, Kyverno CEL policies, 
                                      ServiceMonitor, alert rules, Grafana dashboard, orphaned-Secret cleanup
 manifests/option-b-per-node-certs/kyverno-legacy/  the same Kyverno policies as legacy ClusterPolicy/CleanupPolicy
 manifests/demo-app/                  demo application: namespace, NFS PV and PVC, Deployment, Service, Route
+manifests/demo-app-csi/              the demo application on a dynamic claim: StorageClass ipsec-nas-csi, PVC, Deployment, Route
+manifests/csi-driver-nfs/            values for the csi-driver-nfs chart (controller on workers)
 manifests/dynatrace/                 the DynaKube used in docs/62 (no token)
 render.sh                            fills in the *.tmpl variables → rendered/
 charts/ipsec-nas/                    Helm chart of Option B (the same objects as the manifests)

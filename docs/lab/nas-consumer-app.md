@@ -8,9 +8,8 @@ The setup docs ([`docs/README.md`](../README.md)) build the IPsec tunnel from ev
 |---|---|
 | Namespace | `ipsec-nas-demo` (never `default`) |
 | Method 1 | A static PersistentVolume and PersistentVolumeClaim, plus the demo app and a Route. Manifests: [`manifests/demo-app/`](../../manifests/demo-app/) |
-| Method 2 | Dynamic provisioning with the NFS CSI driver (`csi-driver-nfs`), installed with Helm |
-| Tested so far | The demo app's two containers, run with podman on a lab worker against the lab NAS on 2026-10-02, with the same commands and the same NFS mount options as the manifests. The OpenShift objects were validated against an OpenShift 4.22.7 API with dry runs. |
-| **Not tested yet** | Running it on an OpenShift cluster connected to the NAS. No such cluster exists for this project yet, so every `oc` output below is what the objects should show, not a measurement. |
+| Method 2 | Dynamic provisioning with the NFS CSI driver (`csi-driver-nfs`): its own guide, [nas-csi-dynamic-provisioning.md](nas-csi-dynamic-provisioning.md) |
+| Measured | First the demo app's two containers with podman on a lab worker against the lab NAS (2026-10-02, the output in Step 6); then Method 1 on OpenShift Local (CRC 4.22.7) connected to that NAS through the tunnel ([Step H.6 of doc 20](../20-option-b-per-node-certificates.md#step-h6--an-application-that-stores-its-data-on-the-nas), [evidence 18](../evidence/crc/18-option-b-demo-app.txt)) |
 
 ---
 
@@ -180,95 +179,7 @@ Because of `Retain`, the files stay on the NAS in `${NAS_EXPORT}/ipsec-nas-demo/
 
 ## Method 2 – Dynamic provisioning with the NFS CSI driver
 
-Use this when many applications need their own space on the NAS. Each new PVC gets its own sub-directory on the share, and nobody writes a PersistentVolume by hand.
-
-> [!NOTE]
-> This method is **documented, not yet run against this NAS**. The commands follow the upstream chart and the article in [References](#references). The facts marked "on our CRC cluster" were read from a cluster where the driver is already installed for another NFS server.
-
-### Step 1 – Install the driver with Helm
-
-```bash
-helm repo add csi-driver-nfs https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts
-helm repo update
-helm search repo csi-driver-nfs/csi-driver-nfs --versions | head -5
-
-helm install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace kube-system \
-  --version 4.13.4 \
-  --set controller.replicas=2
-```
-
-Verify:
-
-```bash
-oc get pods -n kube-system | grep csi-nfs
-oc get csidriver nfs.csi.k8s.io
-```
-
-✅ **Expected:** `csi-nfs-controller-...` pods and one `csi-nfs-node-...` pod per node, all `Running`.
-
-On our CRC cluster (chart 4.13.4, default values, namespace `kube-system`): the controller and node pods run with `hostNetwork: true`, and no SCC grant was needed.
-
-### Step 2 – Create a StorageClass for the NAS
-
-```bash
-cat <<EOF > ipsec-nas-csi-storageclass.yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: ipsec-nas-csi
-provisioner: nfs.csi.k8s.io
-parameters:
-  server: ${NAS_IP}                 # the IP the IPsec tunnel protects
-  share: ${NAS_EXPORT}
-  # one directory per claim: <namespace>/<claim name>
-  subDir: \${pvc.metadata.namespace}/\${pvc.metadata.name}
-reclaimPolicy: Retain               # deleting a claim keeps its data on the NAS
-volumeBindingMode: Immediate
-mountOptions:
-- nfsvers=4.1
-- hard
-- noatime
-EOF
-
-oc apply -f ipsec-nas-csi-storageclass.yaml
-oc get storageclass ipsec-nas-csi
-```
-
-> [!NOTE]
-> Use a name of your own, such as `ipsec-nas-csi`. A class called `nfs-csi` may already exist for another NFS server; it does on our CRC cluster.
-
-### Step 3 – Ask for storage with a claim
-
-```bash
-cat <<'EOF' > dynamic-pvc.yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: app-data
-  namespace: ipsec-nas-demo
-spec:
-  accessModes:
-  - ReadWriteMany
-  storageClassName: ipsec-nas-csi
-  resources:
-    requests:
-      storage: 1Gi
-EOF
-
-oc apply -f dynamic-pvc.yaml
-oc get pvc app-data -n ipsec-nas-demo
-oc get pv | grep app-data
-```
-
-✅ **Expected:** the claim becomes `Bound` within seconds and a PersistentVolume named `pvc-<id>` appears. On the NAS there is a new directory `${NAS_EXPORT}/ipsec-nas-demo/app-data`.
-
-To use it in the demo app, change `claimName: nas-data` to `claimName: app-data` in `43-app.yaml`.
-
-### What IPsec changes for the CSI driver
-
-- The **node** pods mount the share for application pods, from the node's own address. That is the traffic the tunnel covers.
-- The **controller** pod also mounts the share, to create and delete the per-claim directories. It uses the host network of whichever node it runs on, so **that node needs a tunnel too**. The setup builds tunnels on worker nodes only; the chart's default keeps the controller off the control plane (`controller.runOnControlPlane: false`), which is what we want. Do not change it.
-- If the controller cannot reach the NAS, new claims stay `Pending` while existing volumes keep working.
+Use this when many applications need their own space on the NAS: install `csi-driver-nfs` once, create the StorageClass `ipsec-nas-csi`, and every claim of that class gets its own directory on the NAS. It has its own step-by-step guide, measured on CRC against the lab NAS: **[nas-csi-dynamic-provisioning.md](nas-csi-dynamic-provisioning.md)**.
 
 ---
 
@@ -277,7 +188,7 @@ To use it in the demo app, change `claimName: nas-data` to `claimName: app-data`
 | Symptom | Likely cause | What to do |
 |---|---|---|
 | PVC stays `Pending` (Method 1) | The claim and the volume do not match | `oc describe pvc nas-data -n ipsec-nas-demo`; the class name, access mode and `volumeName` must match the PV, and the PV's `claimRef` must name this claim |
-| PVC stays `Pending` (Method 2) | The CSI controller cannot mount the share | `oc logs -n kube-system deploy/csi-nfs-controller -c nfs --tail=30`; check the tunnel on the node the controller runs on |
+| PVC stays `Pending` (Method 2) | See [its guide's troubleshooting](nas-csi-dynamic-provisioning.md#troubleshooting) | |
 | Pod stuck in `ContainerCreating`; `oc describe pod` shows a mount that timed out | The node has no working tunnel, so the NAS drops its NFS | On that node: `oc debug node/<node> -- chroot /host ipsec trafficstatus`. No `ipsec-nas` line means the tunnel is down; go to the setup docs' troubleshooting |
 | Pod is `Running` but `writer` logs `Permission denied` | The export directory is not writable for the pod's user ID | The pod runs with a random user ID. The share (or the sub-directory) must allow it to write, for example mode `0777` on a test share |
 | The page shows old data | The `writer` container stopped | `oc logs -n ipsec-nas-demo deploy/nas-demo -c writer --tail=20` |
@@ -287,4 +198,4 @@ To use it in the demo app, change `claimName: nas-data` to `claimName: app-data`
 ## References
 
 - OneUptime: [How to use NAS storage with Kubernetes](https://oneuptime.com/blog/post/2025-12-15-how-to-use-nas-storage-with-kubernetes/view), methods 1 (static NFS volumes) and 2 (dynamic provisioning with the NFS CSI driver)
-- kubernetes-csi: [csi-driver-nfs](https://github.com/kubernetes-csi/csi-driver-nfs)
+- kubernetes-csi: [csi-driver-nfs](https://github.com/kubernetes-csi/csi-driver-nfs), set up in [nas-csi-dynamic-provisioning.md](nas-csi-dynamic-provisioning.md)

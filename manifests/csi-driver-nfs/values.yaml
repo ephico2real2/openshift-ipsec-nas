@@ -1,0 +1,8 @@
+# Values for the upstream chart csi-driver-nfs/csi-driver-nfs 4.13.4 (kubernetes-csi), installed in its own namespace.
+# Everything not set here is the chart's default.
+controller:
+  # The controller mounts the NAS share to create and remove each claim's directory, from its node's host network.
+  # Only nodes with an IPsec tunnel reach the NAS (the setup builds tunnels on worker nodes), so keep it on workers.
+  # The chart's default tolerates the control-plane taints, and runOnControlPlane: false does not keep it off them.
+  nodeSelector:
+    node-role.kubernetes.io/worker: ""
