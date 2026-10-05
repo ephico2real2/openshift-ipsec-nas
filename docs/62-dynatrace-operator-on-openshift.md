@@ -4,7 +4,7 @@
 
 This is how the Dynatrace Operator was installed on OpenShift Local (CRC 4.22.7) against a Dynatrace trial tenant, on 2026-10-04: the way that worked, the two that did not, and why. Every step was measured ([evidence 54](evidence/crc/54-dynatrace-operator.txt)).
 
-**Contents:** [What was installed](#what-was-installed) · [Step D.1 – The tenant and the token](#step-d1--the-tenant-and-the-token) · [D.2 – The operator](#step-d2--the-operator-dynatraces-openshift-manifest) · [D.3 – The token Secret](#step-d3--the-token-secret) · [D.4 – The DynaKube](#step-d4--the-dynakube) · [D.5 – Verify](#step-d5--verify) · [What did not work](#what-did-not-work-and-why) · [Scope and security](#scope-and-security) · [Removal](#removal)
+**Contents:** [What was installed](#what-was-installed) · [Step D.1 – The tenant and the token](#step-d1--the-tenant-and-the-token) · [D.2 – The operator](#step-d2--the-operator-dynatraces-openshift-manifest) · [D.3 – The token Secret](#step-d3--the-token-secret) · [D.4 – The DynaKube](#step-d4--the-dynakube) · [D.5 – Verify](#step-d5--verify) · [What did not work](#what-did-not-work-and-why) · [The IPsec metrics in Dynatrace](#the-ipsec-metrics-in-dynatrace) · [Scope and security](#scope-and-security) · [Removal](#removal)
 
 ## What was installed
 
@@ -79,6 +79,31 @@ oc -n dynatrace get pods
 |---|---|---|
 | `dtwiz install kubernetes` (Dynatrace's [dtwiz](https://github.com/dynatrace-oss/dtwiz) v1.10.0) | It installed the operator's Helm chart 1.11.0, then its DynaKube was refused: `unknown field "spec.extensions.prometheus"` (its manifest is newer than the chart it installed). It also detected the distribution as plain Kubernetes, not OpenShift | Removed: the DynaKube first (the operator then removes what it made), the Helm release, the namespace, and `dtwiz`'s ClusterRole and binding `dynatrace-kubernetes-monitoring-sensitive` |
 | The OLM catalog (OperatorHub) | `dynatrace-operator` in Certified and Community Operators, channel `alpha`, is **v1.10.2**, AllNamespaces only; it installed (CSV `Succeeded` after 7 minutes) | Older than the 1.11.0 Dynatrace documents for OpenShift; removed (Subscription, CSV, OperatorGroup, CRDs, namespace) |
+
+## The IPsec metrics in Dynatrace
+
+With the operator running, the IPsec metrics reach Dynatrace through its in-cluster ActiveGate, the way Dynatrace's OpenShift control-plane and etcd extensions get theirs (#45, path a; [evidence 55](evidence/crc/55-dynatrace-ipsec-metrics.txt)):
+
+1. **In the tenant:** Settings → **Collect and capture → Cloud and virtualization → Kubernetes** → turn on **Monitor annotated Prometheus exporters**. The ActiveGate picked it up a minute later (its log: `openMetricsPipelineEnabled=true`).
+2. **On the cluster:** `metrics.dynatrace.scrape: true` in either chart. It annotates the metrics Service (`metrics.dynatrace.com/scrape`, `port: 9754`, `path: /metrics`, `filter: {"mode":"include","names":["ipsec_nas_*"]}`), and the ActiveGate scrapes each pod behind it.
+
+```bash
+oc -n kcs-ipsec get svc ipsec-nas-metrics -o jsonpath='{.metadata.annotations}'   # the four metrics.dynatrace.com annotations
+```
+
+In a Dynatrace notebook, the metrics arrive under their Prometheus names (no prefix), gauges as `gauge` and counters as `count` (`ipsec_nas_tunnel_out_bytes_total`). The capture below shows 11 of the collector's 16 families; the list scrolls, and the other five (the certificate, collector and tunnel timestamps and `ipsec_nas_certificate_source_info`) have not been looked at in Dynatrace yet.
+
+<img alt="Dynatrace Notebooks, the metric browser searching ipsec_nas: ipsec_nas_tunnel_up (selected, Unit and Type gauge), ipsec_nas_nfs_mounts, ipsec_nas_tunnel_info, ipsec_nas_libreswan_info, ipsec_nas_collect_success, ipsec_nas_xfrm_errors_total, ipsec_nas_ike_sa_established, ipsec_nas_certificate_present, ipsec_nas_connection_configured, ipsec_nas_tunnel_in_bytes_total and ipsec_nas_tunnel_out_bytes_total." src="images/dynatrace/ipsec-nas-metrics-in-dynatrace.png">
+
+*Dynatrace's metric browser: the `ipsec_nas_*` metrics from the cluster, `ipsec_nas_tunnel_up` a gauge.*
+
+```text
+timeseries v = avg(ipsec_nas_tunnel_up), by: {node, connection, k8s.pod.name, k8s.node.name, k8s.workload.name, k8s.cluster.name}
+```
+
+<img alt="A Dynatrace notebook running that DQL over the last two hours: one record, value 1, starting about 7:35 PM local time when the scraping was turned on and continuous since; the legend starts crc, ipsec-nas, ipsec-nas-." src="images/dynatrace/ipsec-nas-tunnel-up-timeseries.png">
+
+*`ipsec_nas_tunnel_up` in Dynatrace: 1 (the tunnel up) on `crc`, from the minute the setting and the annotations went on.*
 
 ## Scope and security
 

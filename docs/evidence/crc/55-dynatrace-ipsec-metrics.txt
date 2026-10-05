@@ -1,0 +1,35 @@
+# #45, path (a): the IPsec metrics in Dynatrace through the in-cluster ActiveGate's annotated Prometheus exporters.
+# CRC 4.22.7, Option C chart (Argo CD Application ipsec-nas-option-c), Dynatrace trial tenant, 2026-10-05 00:35-01:08Z.
+
+## 1. The tenant setting (the operator, in the UI): Settings > Collect and capture > Cloud and virtualization >
+##    Kubernetes > "Monitor annotated Prometheus exporters" on.
+  The ActiveGate's own log (/var/log/dynatrace/gateway), its configuration for cluster crc:
+    2026-10-04 23:01:33 UTC Configuration added   openMetricsPipelineEnabled=false
+    2026-10-05 00:35:40 UTC Configuration removed: crc
+    2026-10-05 00:36:40 UTC Configuration added   openMetricsPipelineEnabled=true
+
+## 2. The annotations, through Git (chart c74c7eb, value metrics.dynatrace.scrape=true in the Application)
+  00:35:51Z Application Synced Healthy at c74c7eb18fbced704ecb4e42a46e87345d9c5c43
+  Service kcs-ipsec/ipsec-nas-metrics:
+    metrics.dynatrace.com/filter: {"mode":"include","names":["ipsec_nas_*"]}
+    metrics.dynatrace.com/path: /metrics
+    metrics.dynatrace.com/port: 9754
+    metrics.dynatrace.com/scrape: true
+  endpoint: 10.217.0.151 (pod ipsec-nas-metrics-tcmr8)
+  From the ActiveGate pod (no curl in its image; bash /dev/tcp): GET /metrics on 10.217.0.151:9754 -> 43 ipsec_nas lines.
+
+## 3. In Dynatrace (the operator's screenshots, Notebooks; docs/images/dynatrace/)
+  Metric browser, search ipsec_nas: the keys are the Prometheus names, no prefix, no suffix. The capture shows 11 of the
+  collector's 16 families: ipsec_nas_tunnel_up, _nfs_mounts, _tunnel_info, _libreswan_info, _collect_success,
+  _xfrm_errors_total, _ike_sa_established, _certificate_present, _connection_configured, _tunnel_in_bytes_total,
+  _tunnel_out_bytes_total. The list scrolls; the other five (_certificate_source_info, _collect_timestamp_seconds,
+  _certificate_import_timestamp_seconds, _tunnel_established_timestamp_seconds, _certificate_not_after_timestamp_seconds)
+  were not looked at.
+  Types: ipsec_nas_tunnel_up gauge; ipsec_nas_tunnel_out_bytes_total count (a counter keeps its key, no .count suffix).
+  DQL: timeseries v = avg(ipsec_nas_tunnel_up), by: {node, connection, k8s.pod.name, k8s.node.name, k8s.workload.name,
+  k8s.cluster.name} -> 1 record, value 1, from about 00:35Z (when the setting and annotations went on) and continuous;
+  the series' legend starts "crc • ipsec-nas • ipsec-nas-..." (node, connection, pod). Which k8s.* fields are set was not
+  yet read (a table view is needed).
+
+## 4. Not measured yet (#45): the five families above, the dimensions in full, data points per minute and the licensing it falls under,
+## path (b) (the OpenTelemetry Collector).
