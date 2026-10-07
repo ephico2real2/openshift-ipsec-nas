@@ -12,6 +12,7 @@ jobs:
   # are on the runner.
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       CONTAINER_ENGINE: docker
     steps:
