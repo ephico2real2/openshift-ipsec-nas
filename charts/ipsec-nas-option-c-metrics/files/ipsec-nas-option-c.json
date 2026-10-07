@@ -996,7 +996,7 @@
       "id": 14,
       "type": "table",
       "title": "Per node",
-      "description": "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan not answering. \u2013 means unknown: no series (for example the IKE SA when libreswan does not answer). NFS requests/s comes from the platform's node-exporter. A node in two rows is reported by two pods.",
+      "description": "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan not answering. A cell showing \u2013 or nothing means unknown: no series (for example the IKE SA when libreswan does not answer). NFS requests/s comes from the platform's node-exporter. The reporting pod of each node, and the NAS identity of each node whose tunnel is up, are in the table below.",
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -1014,7 +1014,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "time() - max by (node, pod) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+          "expr": "max by (node) (ipsec_nas_tunnel_up{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1025,7 +1025,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (node) (ipsec_nas_tunnel_up{node=~\"$node\"})",
+          "expr": "max by (node) (ipsec_nas_ike_sa_established{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1036,7 +1036,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (node) (ipsec_nas_ike_sa_established{node=~\"$node\"})",
+          "expr": "max by (node) (ipsec_nas_certificate_present{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1047,7 +1047,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (node) (ipsec_nas_certificate_present{node=~\"$node\"})",
+          "expr": "max by (node) (ipsec_nas_connection_configured{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1058,7 +1058,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (node) (ipsec_nas_connection_configured{node=~\"$node\"})",
+          "expr": "max by (node) (ipsec_nas_collect_success{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1069,7 +1069,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "max by (node) (ipsec_nas_collect_success{node=~\"$node\"})",
+          "expr": "sum by (node) (ipsec_nas_nfs_mounts{node=~\"$node\"}) or 0 * max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1080,7 +1080,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (node) (ipsec_nas_nfs_mounts{node=~\"$node\"}) or 0 * max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+          "expr": "sum by (node) (label_replace(rate(node_nfs_requests_total{instance=~\"$node\"}[5m]), \"node\", \"$1\", \"instance\", \"(.*)\")) and on (node) max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1091,7 +1091,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (node) (label_replace(rate(node_nfs_requests_total{instance=~\"$node\"}[5m]), \"node\", \"$1\", \"instance\", \"(.*)\")) and on (node) max by (node) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+          "expr": "sum by (node) (increase(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[1h]))",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1102,29 +1102,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum by (node) (increase(ipsec_nas_xfrm_errors_total{node=~\"$node\"}[1h]))",
-          "legendFormat": "",
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "J",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
           "expr": "time() - max by (node) (ipsec_nas_certificate_import_timestamp_seconds{node=~\"$node\"})",
-          "legendFormat": "",
-          "instant": true,
-          "format": "table"
-        },
-        {
-          "refId": "K",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "max by (node, peer_id) (ipsec_nas_tunnel_info{node=~\"$node\"})",
           "legendFormat": "",
           "instant": true,
           "format": "table"
@@ -1139,13 +1117,11 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true,
-              "Value #K": true,
-              "Value #A": true
+              "Time": true
             },
             "indexByName": {
               "node": 0,
-              "pod": 1,
+              "Value #A": 1,
               "Value #B": 2,
               "Value #C": 3,
               "Value #D": 4,
@@ -1153,27 +1129,19 @@
               "Value #F": 6,
               "Value #G": 7,
               "Value #H": 8,
-              "Value #I": 9,
-              "Value #J": 10,
-              "Value #K": 11,
-              "peer_id": 12,
-              "Value #A": 13
+              "Value #I": 9
             },
             "renameByName": {
-              "Value #A": "Metrics age",
-              "Value #B": "Tunnel",
-              "Value #C": "IKE SA",
-              "Value #D": "Certificate",
-              "Value #E": "Connection",
-              "Value #F": "libreswan",
-              "Value #G": "NFS mounts",
-              "Value #H": "NFS requests/s",
-              "Value #I": "IPsec drops (1h)",
-              "Value #J": "Cert imported",
-              "Value #K": "NAS identity",
-              "node": "Node",
-              "pod": "Reporting pod",
-              "peer_id": "NAS identity"
+              "Value #A": "Tunnel",
+              "Value #B": "IKE SA",
+              "Value #C": "Certificate",
+              "Value #D": "Connection",
+              "Value #E": "libreswan",
+              "Value #F": "NFS mounts",
+              "Value #G": "NFS requests/s",
+              "Value #H": "IPsec drops (1h)",
+              "Value #I": "Cert imported",
+              "node": "Node"
             }
           }
         }
@@ -1509,18 +1477,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Reporting pod"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 180
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "NFS mounts"
             },
             "properties": [
@@ -1539,6 +1495,119 @@
               {
                 "id": "custom.width",
                 "value": 110
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "fields": ""
+        },
+        "sortBy": [
+          {
+            "displayName": "Node",
+            "desc": false
+          }
+        ]
+      }
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "NAS identity per node",
+      "description": "The ipsec-nas-metrics pod that reports each node, and the identity the NAS presented, from its certificate. A node with no tunnel has no NAS identity. A node in two rows is reported by two pods.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 39,
+        "w": 24,
+        "h": 5
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true
+            },
+            "indexByName": {
+              "node": 0,
+              "pod": 1,
+              "peer_id": 2
+            },
+            "renameByName": {
+              "node": "Node",
+              "pod": "Reporting pod",
+              "peer_id": "NAS identity"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (node, pod, peer_id) (ipsec_nas_tunnel_info{node=~\"$node\"}) or on (node, pod) max by (node, pod) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+          "legendFormat": "",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "transparent",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Reporting pod"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
               }
             ]
           },
@@ -1580,7 +1649,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 44
       },
       "id": 21,
       "panels": [],
@@ -1598,7 +1667,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -1668,7 +1737,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 40,
+        "y": 45,
         "w": 12,
         "h": 8
       },
@@ -1715,7 +1784,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 53
       },
       "id": 23,
       "panels": [],
@@ -1733,7 +1802,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 54,
         "w": 6,
         "h": 4
       },
@@ -1794,7 +1863,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 49,
+        "y": 54,
         "w": 6,
         "h": 4
       },
@@ -1855,7 +1924,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 49,
+        "y": 54,
         "w": 6,
         "h": 4
       },
@@ -1920,7 +1989,7 @@
       },
       "gridPos": {
         "x": 18,
-        "y": 49,
+        "y": 54,
         "w": 6,
         "h": 4
       },
@@ -1985,7 +2054,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 58,
         "w": 24,
         "h": 7
       },
@@ -2188,7 +2257,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 65,
         "w": 24,
         "h": 7
       },

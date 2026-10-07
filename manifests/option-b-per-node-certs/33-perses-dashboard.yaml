@@ -42,300 +42,33 @@ spec:
       "display": {
         "name": "IPsec to the NAS"
       },
-      "duration": "1h",
-      "layouts": [
+      "variables": [
         {
-          "kind": "Grid",
+          "kind": "ListVariable",
           "spec": {
             "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "Summary"
+              "name": "Node",
+              "hidden": false
             },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/0_0"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 0,
-                "y": 1
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/0_1"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 6,
-                "y": 1
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/0_2"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 12,
-                "y": 1
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/0_3"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 18,
-                "y": 1
+            "defaultValue": "$__all",
+            "allowAllValue": true,
+            "allowMultiple": true,
+            "customAllValue": ".*",
+            "sort": "alphabetical-asc",
+            "plugin": {
+              "kind": "PrometheusLabelValuesVariable",
+              "spec": {
+                "labelName": "node",
+                "matchers": [
+                  "ipsec_nas_tunnel_up"
+                ],
+                "datasource": {
+                  "kind": "PrometheusDatasource",
+                  "name": "ipsec-nas-thanos"
+                }
               }
-            ]
-          }
-        },
-        {
-          "kind": "Grid",
-          "spec": {
-            "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "Tunnels per node"
             },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_0"
-                },
-                "height": 5,
-                "width": 12,
-                "x": 0,
-                "y": 6
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_1"
-                },
-                "height": 5,
-                "width": 12,
-                "x": 12,
-                "y": 6
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_2"
-                },
-                "height": 8,
-                "width": 24,
-                "x": 0,
-                "y": 11
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_3"
-                },
-                "height": 5,
-                "width": 6,
-                "x": 0,
-                "y": 19
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_4"
-                },
-                "height": 5,
-                "width": 6,
-                "x": 6,
-                "y": 19
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_5"
-                },
-                "height": 5,
-                "width": 6,
-                "x": 12,
-                "y": 19
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/1_6"
-                },
-                "height": 5,
-                "width": 6,
-                "x": 18,
-                "y": 19
-              }
-            ]
-          }
-        },
-        {
-          "kind": "Grid",
-          "spec": {
-            "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "Checks (all should be 0)"
-            },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/2_0"
-                },
-                "height": 4,
-                "width": 8,
-                "x": 0,
-                "y": 25
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/2_1"
-                },
-                "height": 4,
-                "width": 8,
-                "x": 8,
-                "y": 25
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/2_2"
-                },
-                "height": 4,
-                "width": 8,
-                "x": 16,
-                "y": 25
-              }
-            ]
-          }
-        },
-        {
-          "kind": "Grid",
-          "spec": {
-            "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "Per-node detail"
-            },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/3_0"
-                },
-                "height": 9,
-                "width": 24,
-                "x": 0,
-                "y": 30
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/nas_identity"
-                },
-                "height": 5,
-                "width": 24,
-                "x": 0,
-                "y": 39
-              }
-            ]
-          }
-        },
-        {
-          "kind": "Grid",
-          "spec": {
-            "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "History"
-            },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/4_0"
-                },
-                "height": 8,
-                "width": 12,
-                "x": 0,
-                "y": 40
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/4_1"
-                },
-                "height": 8,
-                "width": 12,
-                "x": 12,
-                "y": 40
-              }
-            ]
-          }
-        },
-        {
-          "kind": "Grid",
-          "spec": {
-            "display": {
-              "collapse": {
-                "open": true
-              },
-              "title": "Storage on the NAS (csi-driver-nfs)"
-            },
-            "items": [
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_0"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 0,
-                "y": 49
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_1"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 6,
-                "y": 49
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_2"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 12,
-                "y": 49
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_3"
-                },
-                "height": 4,
-                "width": 6,
-                "x": 18,
-                "y": 49
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_4"
-                },
-                "height": 7,
-                "width": 24,
-                "x": 0,
-                "y": 53
-              },
-              {
-                "content": {
-                  "$ref": "#/spec/panels/5_5"
-                },
-                "height": 7,
-                "width": 24,
-                "x": 0,
-                "y": 60
-              }
-            ]
+            "name": "node"
           }
         }
       ],
@@ -344,8 +77,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Workers that have an established IPsec tunnel to the NAS.",
-              "name": "Tunnels up"
+              "name": "Tunnels up",
+              "description": "Workers that have an established IPsec tunnel to the NAS."
             },
             "plugin": {
               "kind": "StatChart",
@@ -389,8 +122,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Workers that report no tunnel. Anything above 0 needs attention.",
-              "name": "Tunnels down"
+              "name": "Tunnels down",
+              "description": "Workers that report no tunnel. Anything above 0 needs attention."
             },
             "plugin": {
               "kind": "StatChart",
@@ -438,8 +171,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Workers whose ipsec-cert-sync pod is being scraped.",
-              "name": "Workers reporting"
+              "name": "Workers reporting",
+              "description": "Workers whose ipsec-cert-sync pod is being scraped."
             },
             "plugin": {
               "kind": "StatChart",
@@ -483,8 +216,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Days until the first node certificate expires. cert-manager renews 30 days before expiry.",
-              "name": "Soonest certificate expiry"
+              "name": "Soonest certificate expiry",
+              "description": "Days until the first node certificate expires. cert-manager renews 30 days before expiry."
             },
             "plugin": {
               "kind": "StatChart",
@@ -537,8 +270,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "UP when the node has an established tunnel to the NAS.",
-              "name": "Tunnel state per node"
+              "name": "Tunnel state per node",
+              "description": "UP when the node has an established tunnel to the NAS."
             },
             "plugin": {
               "kind": "StatChart",
@@ -608,8 +341,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "From the certificate in each node's NSS database, which is what libreswan actually uses.",
-              "name": "Certificate days left per node"
+              "name": "Certificate days left per node",
+              "description": "From the certificate in each node's NSS database, which is what libreswan actually uses."
             },
             "plugin": {
               "kind": "BarChart",
@@ -645,8 +378,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Bytes per second sent to and received from the NAS through IPsec. NFS traffic shows up here.",
-              "name": "Traffic through the tunnel"
+              "name": "Traffic through the tunnel",
+              "description": "Bytes per second sent to and received from the NAS through IPsec. NFS traffic shows up here."
             },
             "plugin": {
               "kind": "TimeSeriesChart",
@@ -706,8 +439,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Time since the current tunnel was established. A small value on one node means it was re-established recently.",
-              "name": "Tunnel age per node"
+              "name": "Tunnel age per node",
+              "description": "Time since the current tunnel was established. A small value on one node means it was re-established recently."
             },
             "plugin": {
               "kind": "StatChart",
@@ -751,8 +484,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Time since the collector last ran. More than 5 minutes means the collector container stopped.",
-              "name": "Metrics age per node"
+              "name": "Metrics age per node",
+              "description": "Time since the collector last ran. More than 5 minutes means the collector container stopped."
             },
             "plugin": {
               "kind": "StatChart",
@@ -804,8 +537,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "The libreswan version installed on each node.",
-              "name": "libreswan version per node"
+              "name": "libreswan version per node",
+              "description": "The libreswan version installed on each node."
             },
             "plugin": {
               "kind": "StatChart",
@@ -850,8 +583,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Which option put the certificate on each node: B (cert-sync), C (wildcard MachineConfig) or A (shared MachineConfig). A node with none of their markers shows nothing.",
-              "name": "Certificate source per node"
+              "name": "Certificate source per node",
+              "description": "Which option put the certificate on each node: B (cert-sync), C (wildcard MachineConfig) or A (shared MachineConfig). A node with none of their markers shows nothing."
             },
             "plugin": {
               "kind": "StatChart",
@@ -896,8 +629,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Nodes with more than one ipsec-cert-sync pod reporting (alert IpsecNasDuplicateNode). Must be 0.",
-              "name": "Nodes reported twice"
+              "name": "Nodes reported twice",
+              "description": "Nodes with more than one ipsec-cert-sync pod reporting (alert IpsecNasDuplicateNode). Must be 0."
             },
             "plugin": {
               "kind": "StatChart",
@@ -945,8 +678,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Pods whose node label differs from the node Kubernetes placed them on (alert IpsecNasNodeLabelMismatch). Must be 0.",
-              "name": "Pods reporting the wrong node"
+              "name": "Pods reporting the wrong node",
+              "description": "Pods whose node label differs from the node Kubernetes placed them on (alert IpsecNasNodeLabelMismatch). Must be 0."
             },
             "plugin": {
               "kind": "StatChart",
@@ -994,8 +727,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Packets the kernel IPsec code dropped in the last hour, over every selected node: the sum of the counters in /proc/net/xfrm_stat, each of which counts drops for one reason.",
-              "name": "Kernel IPsec errors, last hour"
+              "name": "Kernel IPsec errors, last hour",
+              "description": "Packets the kernel IPsec code dropped in the last hour, over every selected node: the sum of the counters in /proc/net/xfrm_stat, each of which counts drops for one reason."
             },
             "plugin": {
               "kind": "StatChart",
@@ -1043,8 +776,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan not answering. NFS requests/s comes from the platform's node-exporter. The reporting pod and the NAS identity of each node whose tunnel is up are in the table below.",
-              "name": "Per node"
+              "name": "Per node",
+              "description": "One row per node. Why a tunnel is down: no certificate, no connection (NNCP), no IKE SA, or libreswan not answering. A cell showing \u2013 or nothing means unknown: no series (for example the IKE SA when libreswan does not answer). NFS requests/s comes from the platform's node-exporter. The reporting pod of each node, and the NAS identity of each node whose tunnel is up, are in the table below."
             },
             "plugin": {
               "kind": "Table",
@@ -1065,7 +798,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "DOWN"
+                        "text": "DOWN",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1075,7 +809,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "UP"
+                        "text": "UP",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "Tunnel",
@@ -1092,7 +827,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "NO"
+                        "text": "NO",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1102,7 +838,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "YES"
+                        "text": "YES",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "IKE SA",
@@ -1119,7 +856,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "MISSING"
+                        "text": "MISSING",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1129,7 +867,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "PRESENT"
+                        "text": "PRESENT",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "Certificate",
@@ -1146,7 +885,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "MISSING"
+                        "text": "MISSING",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1156,7 +896,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "YES"
+                        "text": "YES",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "Connection",
@@ -1173,7 +914,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "NO"
+                        "text": "NO",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1183,7 +925,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "YES"
+                        "text": "YES",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "libreswan",
@@ -1378,12 +1121,69 @@ spec:
             ]
           }
         },
+        "3_1": {
+          "kind": "Panel",
+          "spec": {
+            "display": {
+              "name": "NAS identity per node",
+              "description": "The ipsec-cert-sync pod that reports each node, and the identity the NAS presented, from its certificate. A node with no tunnel has no NAS identity. A node in two rows is reported by two pods."
+            },
+            "plugin": {
+              "kind": "Table",
+              "spec": {
+                "columnSettings": [
+                  {
+                    "header": "Node",
+                    "name": "node",
+                    "width": 170
+                  },
+                  {
+                    "header": "Reporting pod",
+                    "name": "pod",
+                    "width": 220
+                  },
+                  {
+                    "header": "NAS identity",
+                    "name": "peer_id"
+                  },
+                  {
+                    "hide": true,
+                    "name": "timestamp"
+                  },
+                  {
+                    "hide": true,
+                    "name": "value"
+                  }
+                ],
+                "density": "compact"
+              }
+            },
+            "queries": [
+              {
+                "kind": "TimeSeriesQuery",
+                "spec": {
+                  "plugin": {
+                    "kind": "PrometheusTimeSeriesQuery",
+                    "spec": {
+                      "datasource": {
+                        "kind": "PrometheusDatasource",
+                        "name": "ipsec-nas-thanos"
+                      },
+                      "query": "max by (node, pod, peer_id) (ipsec_nas_tunnel_info{node=~\"$node\"}) or on (node, pod) max by (node, pod) (ipsec_nas_collect_timestamp_seconds{node=~\"$node\"})",
+                      "seriesNameFormat": ""
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
         "4_0": {
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "How often each node's tunnel was set up again. Above 3 fires IpsecNasTunnelFlapping: a tunnel that keeps restarting looks up on the other panels.",
-              "name": "Tunnel re-establishments in the last hour"
+              "name": "Tunnel re-establishments in the last hour",
+              "description": "How often each node's tunnel was set up again. Above 3 fires IpsecNasTunnelFlapping: a tunnel that keeps restarting looks up on the other panels."
             },
             "plugin": {
               "kind": "TimeSeriesChart",
@@ -1441,8 +1241,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Rate of the error counters in /proc/net/xfrm_stat, by counter. Lines appear only for counters that moved.",
-              "name": "Kernel IPsec errors per node"
+              "name": "Kernel IPsec errors per node",
+              "description": "Rate of the error counters in /proc/net/xfrm_stat, by counter. Lines appear only for counters that moved."
             },
             "plugin": {
               "kind": "TimeSeriesChart",
@@ -1488,8 +1288,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Namespaces with at least one claim whose volume the NFS CSI driver (nfs.csi.k8s.io) made. The NAS IP of each is in the table below.",
-              "name": "Namespaces using the NAS"
+              "name": "Namespaces using the NAS",
+              "description": "Namespaces with at least one claim whose volume the NFS CSI driver (nfs.csi.k8s.io) made. The NAS IP of each is in the table below."
             },
             "plugin": {
               "kind": "StatChart",
@@ -1533,8 +1333,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Claims whose volume the NFS CSI driver made, in all namespaces.",
-              "name": "Claims on the NAS"
+              "name": "Claims on the NAS",
+              "description": "Claims whose volume the NFS CSI driver made, in all namespaces."
             },
             "plugin": {
               "kind": "StatChart",
@@ -1578,8 +1378,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Claims of a StorageClass of the NFS CSI driver that are not Bound (Pending: the driver could not create the directory, or cannot reach the NAS). Must be 0.",
-              "name": "Claims not Bound"
+              "name": "Claims not Bound",
+              "description": "Claims of a StorageClass of the NFS CSI driver that are not Bound (Pending: the driver could not create the directory, or cannot reach the NAS). Must be 0."
             },
             "plugin": {
               "kind": "StatChart",
@@ -1627,8 +1427,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Pods that mount a NAS claim on a node whose tunnel is down, or whose node has no collector reporting it. Their NFS cannot reach an IPsec-only NAS. Must be 0.",
-              "name": "NAS pods without a working tunnel"
+              "name": "NAS pods without a working tunnel",
+              "description": "Pods that mount a NAS claim on a node whose tunnel is down, or whose node has no collector reporting it. Their NFS cannot reach an IPsec-only NAS. Must be 0."
             },
             "plugin": {
               "kind": "StatChart",
@@ -1676,8 +1476,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Each claim whose volume the NFS CSI driver made: where it lives on the NAS (taken from the volume's handle) and what deleting the claim does to the volume (reclaim policy; what happens to the data is the class's onDelete).",
-              "name": "Claims on the NAS"
+              "name": "Claims on the NAS",
+              "description": "Each claim whose volume the NFS CSI driver made: where it lives on the NAS (taken from the volume's handle) and what deleting the claim does to the volume (reclaim policy; what happens to the data is the class's onDelete)."
             },
             "plugin": {
               "kind": "Table",
@@ -1764,8 +1564,8 @@ spec:
           "kind": "Panel",
           "spec": {
             "display": {
-              "description": "Each pod that mounts a NAS claim, the node it runs on, and that node's IPsec tunnel: UP, DOWN, or NO COLLECTOR (no pod of the collector reports the node, so its tunnel is not watched). The node filter applies here.",
-              "name": "Pods using NAS claims, and their node's tunnel"
+              "name": "Pods using NAS claims, and their node's tunnel",
+              "description": "Each pod that mounts a NAS claim, the node it runs on, and that node's IPsec tunnel: UP, DOWN, or NO COLLECTOR (no pod of the collector reports the node, so its tunnel is not watched). The node filter applies here."
             },
             "plugin": {
               "kind": "Table",
@@ -1801,7 +1601,8 @@ spec:
                             "value": "-1"
                           }
                         },
-                        "text": "NO COLLECTOR"
+                        "text": "NO COLLECTOR",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#f2495c",
@@ -1811,7 +1612,8 @@ spec:
                             "value": "0"
                           }
                         },
-                        "text": "DOWN"
+                        "text": "DOWN",
+                        "textColor": "#000000"
                       },
                       {
                         "backgroundColor": "#73bf69",
@@ -1821,7 +1623,8 @@ spec:
                             "value": "1"
                           }
                         },
-                        "text": "UP"
+                        "text": "UP",
+                        "textColor": "#000000"
                       }
                     ],
                     "header": "Tunnel on the node",
@@ -1864,93 +1667,303 @@ spec:
               }
             ]
           }
-        },
-        "nas_identity": {
-          "kind": "Panel",
+        }
+      },
+      "layouts": [
+        {
+          "kind": "Grid",
           "spec": {
             "display": {
-              "description": "The identity the NAS presented, from its certificate, and the ipsec-cert-sync pod that reports the node. A node with no tunnel has no row here. A node in two rows is reported by two pods.",
-              "name": "NAS identity per node"
-            },
-            "plugin": {
-              "kind": "Table",
-              "spec": {
-                "columnSettings": [
-                  {
-                    "header": "Node",
-                    "name": "node",
-                    "width": 170
-                  },
-                  {
-                    "header": "Reporting pod",
-                    "name": "pod",
-                    "width": 220
-                  },
-                  {
-                    "header": "NAS identity",
-                    "name": "peer_id"
-                  },
-                  {
-                    "hide": true,
-                    "name": "value"
-                  },
-                  {
-                    "hide": true,
-                    "name": "timestamp"
-                  }
-                ],
-                "density": "compact"
+              "title": "Summary",
+              "collapse": {
+                "open": true
               }
             },
-            "queries": [
+            "items": [
               {
-                "kind": "TimeSeriesQuery",
-                "spec": {
-                  "plugin": {
-                    "kind": "PrometheusTimeSeriesQuery",
-                    "spec": {
-                      "datasource": {
-                        "kind": "PrometheusDatasource",
-                        "name": "ipsec-nas-thanos"
-                      },
-                      "query": "max by (node, pod, peer_id) (ipsec_nas_tunnel_info{node=~\"$node\"})",
-                      "seriesNameFormat": ""
-                    }
-                  }
+                "x": 0,
+                "y": 1,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/0_0"
+                }
+              },
+              {
+                "x": 6,
+                "y": 1,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/0_1"
+                }
+              },
+              {
+                "x": 12,
+                "y": 1,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/0_2"
+                }
+              },
+              {
+                "x": 18,
+                "y": 1,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/0_3"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "Grid",
+          "spec": {
+            "display": {
+              "title": "Tunnels per node",
+              "collapse": {
+                "open": true
+              }
+            },
+            "items": [
+              {
+                "x": 0,
+                "y": 6,
+                "width": 12,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_0"
+                }
+              },
+              {
+                "x": 12,
+                "y": 6,
+                "width": 12,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_1"
+                }
+              },
+              {
+                "x": 0,
+                "y": 11,
+                "width": 24,
+                "height": 8,
+                "content": {
+                  "$ref": "#/spec/panels/1_2"
+                }
+              },
+              {
+                "x": 0,
+                "y": 19,
+                "width": 6,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_3"
+                }
+              },
+              {
+                "x": 6,
+                "y": 19,
+                "width": 6,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_4"
+                }
+              },
+              {
+                "x": 12,
+                "y": 19,
+                "width": 6,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_5"
+                }
+              },
+              {
+                "x": 18,
+                "y": 19,
+                "width": 6,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/1_6"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "Grid",
+          "spec": {
+            "display": {
+              "title": "Checks (all should be 0)",
+              "collapse": {
+                "open": true
+              }
+            },
+            "items": [
+              {
+                "x": 0,
+                "y": 25,
+                "width": 8,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/2_0"
+                }
+              },
+              {
+                "x": 8,
+                "y": 25,
+                "width": 8,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/2_1"
+                }
+              },
+              {
+                "x": 16,
+                "y": 25,
+                "width": 8,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/2_2"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "Grid",
+          "spec": {
+            "display": {
+              "title": "Per-node detail",
+              "collapse": {
+                "open": true
+              }
+            },
+            "items": [
+              {
+                "x": 0,
+                "y": 30,
+                "width": 24,
+                "height": 9,
+                "content": {
+                  "$ref": "#/spec/panels/3_0"
+                }
+              },
+              {
+                "x": 0,
+                "y": 39,
+                "width": 24,
+                "height": 5,
+                "content": {
+                  "$ref": "#/spec/panels/3_1"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "Grid",
+          "spec": {
+            "display": {
+              "title": "History",
+              "collapse": {
+                "open": true
+              }
+            },
+            "items": [
+              {
+                "x": 0,
+                "y": 45,
+                "width": 12,
+                "height": 8,
+                "content": {
+                  "$ref": "#/spec/panels/4_0"
+                }
+              },
+              {
+                "x": 12,
+                "y": 45,
+                "width": 12,
+                "height": 8,
+                "content": {
+                  "$ref": "#/spec/panels/4_1"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "Grid",
+          "spec": {
+            "display": {
+              "title": "Storage on the NAS (csi-driver-nfs)",
+              "collapse": {
+                "open": true
+              }
+            },
+            "items": [
+              {
+                "x": 0,
+                "y": 54,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/5_0"
+                }
+              },
+              {
+                "x": 6,
+                "y": 54,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/5_1"
+                }
+              },
+              {
+                "x": 12,
+                "y": 54,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/5_2"
+                }
+              },
+              {
+                "x": 18,
+                "y": 54,
+                "width": 6,
+                "height": 4,
+                "content": {
+                  "$ref": "#/spec/panels/5_3"
+                }
+              },
+              {
+                "x": 0,
+                "y": 58,
+                "width": 24,
+                "height": 7,
+                "content": {
+                  "$ref": "#/spec/panels/5_4"
+                }
+              },
+              {
+                "x": 0,
+                "y": 65,
+                "width": 24,
+                "height": 7,
+                "content": {
+                  "$ref": "#/spec/panels/5_5"
                 }
               }
             ]
           }
         }
-      },
-      "variables": [
-        {
-          "kind": "ListVariable",
-          "spec": {
-            "allowAllValue": true,
-            "allowMultiple": true,
-            "customAllValue": ".*",
-            "defaultValue": "$__all",
-            "display": {
-              "hidden": false,
-              "name": "Node"
-            },
-            "name": "node",
-            "plugin": {
-              "kind": "PrometheusLabelValuesVariable",
-              "spec": {
-                "datasource": {
-                  "kind": "PrometheusDatasource",
-                  "name": "ipsec-nas-thanos"
-                },
-                "labelName": "node",
-                "matchers": [
-                  "ipsec_nas_tunnel_up"
-                ]
-              }
-            },
-            "sort": "alphabetical-asc"
-          }
-        }
-      ]
+      ],
+      "duration": "1h"
     }

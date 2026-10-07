@@ -110,7 +110,7 @@ Off by default; with them the chart sets up Option C with **cert-manager and Kyv
 | `metrics.persesDashboard.enabled` / `thanosURL` | `true` / Thanos Querier, port 9091 | The Perses dashboard; COO 1.5 or later is then a prerequisite. Viewers need `view` in the namespace and `cluster-monitoring-view` |
 | `metrics.grafanaDashboard` | `false` | The Grafana ConfigMap |
 
-The dashboards are generated: `scripts/perses-dashboard.sh` derives `files/ipsec-nas-option-c.json` from Option B's `charts/ipsec-nas/files/ipsec-nas.json` (`scripts/option-c-dashboard.py`: its own uid, title and reporting pod) and converts it to `files/ipsec-nas-option-c.perses.json`. Edit Option B's dashboard, then run the script; the chart test fails on a stale copy, and the Claude Code hook blocks hand edits.
+The dashboards are generated: `scripts/perses-dashboard.sh` derives `files/ipsec-nas-option-c.json` from Option B's `charts/ipsec-nas/files/ipsec-nas.json` (`scripts/option-c-dashboard.py`: its own uid, title and reporting pod) and converts it to `files/ipsec-nas-option-c.perses.json` with diagram-kit's `perses-dashboard` ([what it needs](../../docs/61-perses-dashboard-review.md#what-the-conversion-needs)). Edit Option B's dashboard, then run the script; the chart test fails on a stale copy, and the Claude Code hook blocks hand edits.
 
 `values.schema.json` refuses unknown values.
 

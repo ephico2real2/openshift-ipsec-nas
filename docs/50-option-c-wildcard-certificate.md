@@ -359,7 +359,7 @@ What it reports on Option C, measured on CRC with C1:
 
 <img alt="The same dashboard in Grafana 13.2.3, kiosk mode, light theme, last 30 minutes, reading CRC's Thanos. Summary: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 729.8 days. Tunnel state UP, certificate 729.8 days, traffic through the tunnel at about 4 MB/s in each direction during the load, tunnel age 36.1 mins, metrics age 31.6 s, libreswan crc: 5.3. Checks all 0. Per-node row: crc, reporting pod ipsec-nas-metrics-tcmr8, UP, YES, PRESENT, YES, YES, 1 NFS mount, 35.9 req/s, 0 drops, certificate imported 36.9 mins ago, NAS identity O=KCS OpenShift lab, CN=crc-nas. History: tunnel re-establishments 1, and kernel IPsec errors per node showing No drops." src="images/crc/48-grafana-ipsec-nas-option-c.light.png">
 
-*Capture 48b. The same dashboard in Grafana, from the chart's ConfigMap (`metrics.grafanaDashboard: true`), reading CRC's Thanos. A Grafana dashboard sidecar loaded that ConfigMap as for Option B (kind, evidence 48 section 4). Re-establishments reads 1: the node rebooted within the hour.*
+*Capture 48b. The same dashboard in Grafana, from the chart's ConfigMap (`metrics.grafanaDashboard: true`), reading CRC's Thanos. A Grafana dashboard sidecar loaded that ConfigMap as for Option B (kind, evidence 48 section 4). Re-establishments reads 1: the node rebooted within the hour. Since 2026-10-07 the reporting pod and the NAS identity are in a table of their own, in Grafana as in Perses ([doc 61, Capture 9](61-perses-dashboard-review.md#what-the-grafana-file-must-look-like)).*
 
 Remove it before Option C: `helm uninstall ipsec-nas-metrics -n kcs-ipsec`.
 
