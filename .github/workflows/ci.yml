@@ -1,0 +1,51 @@
+# The repository's checks that need no cluster: every script under tests/, and the diagram pages.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  # The charts equal the manifests, the collector, the alert rules (promtool from its image), the dashboard script,
+  # the links in the documents. helm is pinned to the version the tests are written with; ruby, python3 and docker
+  # are on the runner.
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CONTAINER_ENGINE: docker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install helm 4.3.0
+        run: |
+          set -euo pipefail
+          curl -fsSLO https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
+          echo "86584a54def73570558f66f5111cc53dfed56689637ae32c1201205d494f54fb  helm-v4.3.0-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf helm-v4.3.0-linux-amd64.tar.gz
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          rm -rf linux-amd64 helm-v4.3.0-linux-amd64.tar.gz
+          helm version --short
+      # Every script runs, so that one failure does not hide the next; the job fails if any did.
+      - name: Tests
+        run: |
+          failed=""
+          for t in tests/test-*.sh; do
+            echo "::group::${t}"
+            bash "${t}" || failed="${failed} ${t}"
+            echo "::endgroup::"
+          done
+          if [ -n "${failed}" ]; then
+            echo "::error::failed:${failed}"
+            exit 1
+          fi
+      # tests/test-chart.sh rewrites ./rendered, which is not tracked; nothing tracked may change.
+      - name: The tests left the tree as it was
+        run: git status --porcelain && git diff --exit-code
+  # Every diagram page through diagram-kit's checks (a font that did not load, a label past its box, text under
+  # 4.5:1 in either theme, a dashed arrow with no label, sideways scroll at 375 px). No PNG is written: the committed
+  # ones are rendered and looked at by a person. The kit's tag is given twice; keep the two the same.
+  diagrams:
+    uses: ephico2real2/diagram-kit/.github/workflows/check-diagrams.yml@v0.2.3
+    with:
+      kit: v0.2.3
