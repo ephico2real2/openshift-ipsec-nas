@@ -101,3 +101,19 @@
   Console (as section 4): the ten headers as written; row crc UP YES PRESENT YES YES 3 5.72 requests/sec 0 2.92d.
   The four captures were taken again and replace those of section 6. The tunnel was 3.18 h old at this capture and
   6.34 h old at the one before: it was established again in between, by nothing done for these checks.
+
+## 9. A second review, of the corrections of section 7 (2026-10-07)
+  The corrected script (#55) had not been reviewed itself. A second review ran it under /bin/bash 3.2.57 and bash
+  5.3.20 with one step made to fail per run: 16 failure points x 2 shells, no tracked file changed and nothing left
+  in all 32. It found:
+    - the line "wrote <target> (24 panels)" was printed for a conversion whose file was still a .tmp, and stayed on
+      the screen when a later step failed and nothing had been written (26 of the 32 runs). The line now reads
+      "converted <target> (24 panels)"; "wrote" is said once, when the five files are in place.
+    - a signal between two of the five moves left the first files new and the others old. INT, TERM and HUP are now
+      held off for the moves. A move that itself fails, or SIGKILL, can still leave that state; running the script
+      again puts it right, and doc 61 says so where it had said "no file has changed" without exception.
+    - tests/test-perses-dashboard-script.sh did not notice Option C's Perses file written directly (the last file
+      made before the moves). Two cases added, "the first move fails" and "SIGTERM between two moves": 9 ok.
+    - doc 61 said the kit stops at any other legend; with an empty legend, or none, kit 0.2.2 did not. Kit 0.2.3 does.
+  Regenerated with the corrected script and kit 0.2.3's branch: "converted ... (24 panels)" twice, "wrote ..." twice,
+  and the five files have the same sha256.

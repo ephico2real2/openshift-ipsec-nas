@@ -43,14 +43,15 @@ CONVERT="$(command -v "${PERSES_DASHBOARD:-perses-dashboard}" || true)"
 [[ -x "${CONVERT}" ]] || { echo "perses-dashboard not found: install diagram-kit (see the top of this script) or set PERSES_DASHBOARD" >&2; exit 1; }
 
 # convert <grafana.json> <perses.json>: nothing is written when a check fails. The kit says "wrote <file> (24 panels)";
-# the file it is handed here is the target's .tmp, so its line is shown with the target's name.
+# the file it is handed here is the target's .tmp, which is not the target until the moves at the end. So its line is
+# shown as "converted <target> (24 panels)", and "wrote" is said once, when the five files are in place.
 convert() {
   if [[ -n "${PERCLI:-}" ]]; then
     "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --percli "${PERCLI}" \
       --plugins "${PERSES_PLUGINS:-${HOME}/.local/share/perses/plugins}"
   else
     "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --image "${IMAGE}"
-  fi | sed 's/\.tmp (/ (/'
+  fi | sed 's/^wrote \(.*\)\.tmp (/converted \1 (/'
 }
 
 convert "${GRAFANA}" "${CONFIG}.tmp"
@@ -111,6 +112,10 @@ grep -q '^  ipsec-nas.json: |$' "${GRAFANA_MANIFEST}.tmp" || { echo "${GRAFANA_M
 python3 scripts/option-c-dashboard.py < "${GRAFANA}" > "${C_GRAFANA}.tmp"
 convert "${C_GRAFANA}.tmp" "${C_CONFIG}.tmp"
 
+# The five moves are one step: a signal that would stop the script between two of them is held off until they are
+# done. (A move that fails, or a kill that cannot be held off, leaves the first files new and the others old: running
+# the script again puts that right.)
+trap '' INT TERM HUP
 for f in "${TARGETS[@]}"; do mv "${f}.tmp" "${f}"; done
 echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
 echo "wrote ${C_GRAFANA} and ${C_CONFIG}"
