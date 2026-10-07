@@ -745,8 +745,7 @@
             "columnSettings": [
               {
                 "header": "Node",
-                "name": "node",
-                "width": 170
+                "name": "node"
               },
               {
                 "cellSettings": [
