@@ -102,4 +102,4 @@ Kyverno 1.19 deprecates the `ClusterPolicy` and `CleanupPolicy` kinds and plans 
 ## Evidence and tests
 
 - [`evidence/crc/`](evidence/crc/): the saved output of every measured step, as text. The captures in [`images/crc/`](images/crc/) are rendered from these files by [`images/render-terminal.py`](images/render-terminal.py).
-- [`../tests/`](../tests/): the chart equals the manifests for both Kyverno policy sets (`test-chart.sh`), the metrics collector (`test-metrics-collector.sh`), the alert rules with `promtool` (`test-alert-rules.sh`), and every link in these docs (`test-doc-links.sh`).
+- [`../tests/`](../tests/): the chart equals the manifests for both Kyverno policy sets (`test-chart.sh`), the metrics collector (`test-metrics-collector.sh`), the alert rules with `promtool` (`test-alert-rules.sh`), the dashboard script writing all its files or none (`test-perses-dashboard-script.sh`), and every link in these docs (`test-doc-links.sh`).

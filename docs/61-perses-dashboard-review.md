@@ -145,17 +145,17 @@ The Grafana dashboard, `charts/ipsec-nas/files/ipsec-nas.json`, is the **one sou
    scripts/perses-dashboard.sh
    ```
 
-   It writes `charts/ipsec-nas/files/ipsec-nas.perses.json` and `manifests/option-b-per-node-certs/33-perses-dashboard.yaml`, refreshes the Grafana ConfigMap `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`, and writes Option C's two files, `charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json` and `ipsec-nas-option-c.perses.json`. When a check fails it says which panel and writes nothing.
+   It writes `charts/ipsec-nas/files/ipsec-nas.perses.json` and `manifests/option-b-per-node-certs/33-perses-dashboard.yaml`, refreshes the Grafana ConfigMap `manifests/option-b-per-node-certs/30-grafana-dashboard.yaml`, and writes Option C's two files, `charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json` and `ipsec-nas-option-c.perses.json`. When a check or a step fails it says what is wrong, naming the panel where one is at fault, and no file of the repository has changed: the five are written together at the end.
 3. Run `tests/test-chart.sh` and `tests/test-option-c-chart.sh`, which keep the charts and the manifests identical, and commit all of them with the Grafana one.
 
 ### What the conversion needs
 
 | Need | How |
 |---|---|
-| [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) 0.2.1 or later: its `perses-dashboard` command | `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.1"`. The script takes the command from `PERSES_DASHBOARD`, from the `PATH`, or from `.venv/bin` |
+| [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) 0.2.1 or later: its `perses-dashboard` command | `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.2"`. The script takes the command from `PERSES_DASHBOARD`, from the `PATH`, or from `.venv/bin` |
 | `percli` 0.54.0, the Perses version in COO 1.5.2's and 1.5.3's `go.mod` | With podman or docker, nothing: the kit runs it from `docker.io/persesdev/perses:v0.54.0` (`PERSES_IMAGE` names another). Without a container engine, `PERCLI=<binary> PERSES_PLUGINS=<unpacked plugins>` ([how to install them](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md)) |
 
-Before 2026-10-07 the repository had its own `scripts/perses-dashboard-fix.py`, which rewrote four panels after `percli` and found them by title. The kit replaced it; the fixes it made are now either the kit's or rules for the Grafana file.
+Before 2026-10-07 the repository had its own `scripts/perses-dashboard-fix.py`, which rewrote five panels after `percli` (two units, two labels, the per-node table), added a sixth, and found them by title. The kit replaced it; the fixes it made are now either the kit's or rules for the Grafana file.
 
 ### What the Grafana file must look like
 
@@ -164,9 +164,9 @@ Four rules. The first three are things `percli` does not carry over by itself, m
 | In the Grafana file | Why | Otherwise |
 |---|---|---|
 | Every query of a table with several queries carries the **same labels**: the nine of **Per node** are all `... by (node) (...)` | A Perses table joins rows by all their labels; Grafana's merge joins on the labels they share | One query labelled `node, pod` and one labelled `node, peer_id` gave each node three rows. What carries other labels goes in a table of its own: **NAS identity per node** |
-| A stat that shows a **label** has the legend `{{node}}: {{version}}`: who, then what | A Perses stat shows one label. The kit reads the first as the series name and the second as the label shown | With any other legend of several labels the kit stops and names the panel. (`percli` alone wrote a label no series has, and the panel showed `1`) |
+| A stat that shows a **label** has the legend `{{node}}: {{version}}`: who, then what (or one label, `{{version}}`) | A Perses stat shows one label. The kit reads the first as the series name and the second as the label shown | With any other legend (three labels, a fixed text, a different one on a second query) the kit stops and names the panel. (`percli` alone wrote a label no series has, and the panel showed `1`; kit 0.2.1 still let a fixed text and `{{ node }}`, with spaces, through, and 0.2.2 does not) |
 | In a table, **one column has no width** (in **Per node**, *Node*) | Grafana gives that column what the others leave; with a width on every column the table stops short of its panel (it ended at about three quarters) | Perses spreads the columns either way |
-| A count of days has the unit `suffix: days` | The kit turns it into the Perses unit `days` (the same for the other units of time) | Another suffix becomes a plain number, with a warning |
+| A count of days has the unit `suffix: days` | The kit turns it into the Perses unit `days` (the same for `milliseconds`, `seconds`, `minutes`, `hours`, `weeks`, `months` and `years`, spelled so) | Another suffix becomes a plain number, with a warning. With kit 0.2.1 this held only for a panel that also sets `decimals`, as the two here do: without them `percli` writes no unit at all, and 0.2.1 neither turned it nor warned. Kit 0.2.2 does both |
 
 **What the kit does by itself:**
 
@@ -182,6 +182,7 @@ Four rules. The first three are things `percli` does not carry over by itself, m
 | Certificate time left | 727.3 days | 2.0 years: Perses writes a duration in its largest fitting unit |
 | *libreswan version per node*, *Certificate source per node* | `crc: 5.3`, `crc: C` | `5.3`, `C` |
 | *Kernel IPsec errors per node* with no errors | "No drops" | "No data" |
+| *Per node*, **IPsec drops (1h)** above zero | red, no decimals (`thresholds`, `color-text` and `decimals` on the column, which `percli` does not carry over) | the plain number as it comes, for example `1.0169`, in the ordinary text colour |
 
 <!-- markdownlint-disable MD033 -->
 <picture>
