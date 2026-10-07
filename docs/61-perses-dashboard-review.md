@@ -314,4 +314,4 @@ The generated dashboard carries 25 of the 27 Grafana expressions over verbatim; 
 
 - COO itself, Perses' installation, `percli`: [openshift-coo-helm](https://github.com/ephico2real2/openshift-coo-helm).
 - Granting `cluster-monitoring-view` to teams: `metricsAccess.groups` of the [openshift-coo chart](https://github.com/ephico2real2/openshift-coo-helm/tree/main/charts/openshift-coo).
-- The figure's source: [`diagrams/ipsec-nas/source.html`](diagrams/ipsec-nas/source.html) (its fourth figure), rendered with `diagrams/render.py`; Mermaid text: [`diagrams/mermaid/perses-dashboard.mmd`](diagrams/mermaid/perses-dashboard.mmd). Figure, text version and source change together.
+- The figure's source: [`diagrams/ipsec-nas/source.html`](diagrams/ipsec-nas/source.html) (its fourth figure), rendered with [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0); Mermaid text: [`diagrams/mermaid/perses-dashboard.mmd`](diagrams/mermaid/perses-dashboard.mmd). Figure, text version and source change together.
