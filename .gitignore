@@ -7,3 +7,5 @@
 *.cer
 *.pem
 rendered/
+# the pinned diagram-kit install (docs/00-prepare-the-cluster.md, Diagram sources)
+.venv/

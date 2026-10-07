@@ -917,11 +917,11 @@ To undo the rest, in this order:
 
 ## Diagram and capture sources
 
-The NAT figure (Part B) and the deployment figure ([30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md)) are rendered from `source.html` pages by `docs/diagrams/render.py` (see [Diagram sources](00-prepare-the-cluster.md#diagram-sources)):
+The NAT figure (Part B) and the deployment figure ([30-option-b-automated-helm-argocd.md](30-option-b-automated-helm-argocd.md)) are rendered from `source.html` pages with [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) (see [Diagram sources](00-prepare-the-cluster.md#diagram-sources)):
 
 ```bash
-python3 docs/diagrams/render.py docs/diagrams/crc-nat/source.html docs/diagrams/crc-nat nat-tunnel-mode
-python3 docs/diagrams/render.py docs/diagrams/deploy-flow/source.html docs/diagrams/deploy-flow gitops-deploy-flow
+.venv/bin/diagram-render docs/diagrams/crc-nat/source.html docs/diagrams/crc-nat nat-tunnel-mode
+.venv/bin/diagram-render docs/diagrams/deploy-flow/source.html docs/diagrams/deploy-flow gitops-deploy-flow
 ```
 
 The Mermaid text versions are `docs/diagrams/mermaid/nat-tunnel-mode.mmd` and `gitops-deploy-flow.mmd`; they are not what the docs display.

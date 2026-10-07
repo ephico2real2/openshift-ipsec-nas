@@ -561,12 +561,12 @@ Final proof: run a workload on that node that reads/writes the NAS (NFS PVC), ru
 
 ## Diagram sources
 
-Figures 1 to 3 are rendered from one hand-authored page, `docs/diagrams/ipsec-nas/source.html`, and Figure 4 from `docs/diagrams/option-c/source.html` (inline SVG, light and dark palettes). The docs show the light version of every figure; the dark one is rendered next to it. `docs/diagrams/render.py` screenshots each figure in both themes at twice the pixel density and checks the page at phone width. It needs Playwright's Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). From the repository root:
+Figures 1 to 3 are rendered from one hand-authored page, `docs/diagrams/ipsec-nas/source.html`, and Figure 4 from `docs/diagrams/option-c/source.html` (inline SVG, light and dark palettes). The docs show the light version of every figure; the dark one is rendered next to it. [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) renders each figure in both themes at twice the pixel density, and writes a PNG only when the page passes its checks: a font that did not load, a label that runs past its box, text that cannot be read in one of the two themes, a page that scrolls sideways at phone width. Install it once, pinned (`python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.0" && .venv/bin/playwright install chromium`). From the repository root:
 
 ```bash
-python3 docs/diagrams/render.py docs/diagrams/ipsec-nas/source.html docs/diagrams/ipsec-nas \
-  overview,option-a-shared-cert,option-b-per-node-certs
-python3 docs/diagrams/render.py docs/diagrams/option-c/source.html docs/diagrams/option-c option-c-wildcard-cert
+.venv/bin/diagram-render docs/diagrams/ipsec-nas/source.html docs/diagrams/ipsec-nas \
+  overview,option-a-shared-cert,option-b-per-node-certs,perses-dashboard
+.venv/bin/diagram-render docs/diagrams/option-c/source.html docs/diagrams/option-c option-c-wildcard-cert
 ```
 
 | Figure | Where it is shown | Rendered files (`docs/diagrams/ipsec-nas/`) | Mermaid text source (`docs/diagrams/mermaid/`) |

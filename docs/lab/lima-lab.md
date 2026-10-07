@@ -500,10 +500,10 @@ limactl list
 
 ## Diagram sources
 
-Figure 1 is rendered from `docs/diagrams/lima-lab/source.html` by `docs/diagrams/render.py` (see [Diagram sources](../00-prepare-the-cluster.md#diagram-sources) for what the renderer needs). From the repository root:
+Figure 1 is rendered from `docs/diagrams/lima-lab/source.html` with [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) (see [Diagram sources](../00-prepare-the-cluster.md#diagram-sources) for its install line). From the repository root:
 
 ```bash
-python3 docs/diagrams/render.py docs/diagrams/lima-lab/source.html docs/diagrams/lima-lab lab-checks
+.venv/bin/diagram-render docs/diagrams/lima-lab/source.html docs/diagrams/lima-lab lab-checks
 ```
 
 The Mermaid text version is `docs/diagrams/mermaid/lab-checks.mmd`; it is not what this document displays. If the lab changes, change the figure, its text twin above and the Mermaid file together.
