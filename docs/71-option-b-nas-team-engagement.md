@@ -66,7 +66,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 1 | The refined NNCP | Sample 2's four settings into the Kyverno policy template and the chart's values, as options with today's behaviour as the default | Platform | Spec in doc 70; not built |
 | 2 | Venafi issuer | The chart's `clusterIssuer` value pointing at the Venafi `ClusterIssuer`, and its zone allowing the profile above | Platform | Open |
 | 3 | cert-manager | The cert-manager Operator for Red Hat OpenShift on enterprise clusters (channel, version, who operates it) | Platform | Open: not on enterprise clusters today |
-| 4 | Kyverno | Kyverno on enterprise clusters: version (1.19 or later), its two OpenShift settings, and **the support decision** (it is a community project, not a Red Hat product) | Platform + architecture | Open |
+| 4 | Kyverno | Kyverno on enterprise clusters: version (1.19 or later) and its two OpenShift settings. The most popular policy engine for Kubernetes; we run the open-source release as-is and support it ourselves ([doc 72](72-option-b-implementation-plan.md#4-the-case-for-each-component)) | Platform | Support model decided |
 | 5 | NMState | The NMState Operator and its instance; `routingViaHost` and IPsec `External` mode | Platform | Documented ([doc 00](00-prepare-the-cluster.md)) |
 | 6 | Monitoring | The user workload monitoring settings ([doc 60](60-monitoring-per-node.md#the-cluster-settings-user-workload-monitoring-config)); the Cluster Observability Operator for the console dashboard ([doc 61](61-perses-dashboard-review.md)) | Platform | Measured in the lab |
 | 7 | Which nodes | The pools and labels that get a tunnel, and the exclusions (control plane, infra) | Platform | Chart values exist |
@@ -81,5 +81,5 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 2026-10-07 | Option B is the option for enterprise clusters | Direction (operator); to confirm after the NAS meeting |
 | 2026-10-07 | The tunnel definition follows the enterprise standard (Sample 2) | Proposed; depends on the NAS team's answers |
 | 2026-10-07 | The enterprise CA is Venafi TPP, through cert-manager's Venafi issuer | Decided (operator) |
-| — | Kyverno's support model on enterprise clusters | Open |
+| 2026-10-07 | Kyverno: the open-source release as-is, supported by platform engineering | Decided (operator) |
 | — | The PoC cluster | Open |

@@ -89,7 +89,7 @@ Every component is part of OpenShift or a Red Hat operator, except Kyverno and o
 |---|---|---|---|---|
 | **cert-manager Operator for Red Hat OpenShift** | Issues and renews one certificate per node; the key is generated in the cluster and never leaves it | Red Hat operator | v1.20.0 | Not integrated with the enterprise CA |
 | **ClusterIssuer → Venafi TPP** | Every node certificate is requested from the enterprise CA, in a zone with the profile of [doc 71](71-option-b-nas-team-engagement.md#the-certificate-profile-for-venafi): the enterprise CA stays the authority | cert-manager's Venafi issuer | (lab: an in-cluster CA) | — |
-| **Kyverno** | Watches Nodes: makes each node's `Certificate`, mounts that node's Secret into its pod, makes its NNCP once the certificate is on the node, and cleans up after a deleted node | CNCF project, graduated March 2026 ([CNCF](https://www.cncf.io/announcements/2026/03/24/cloud-native-computing-foundation-announces-kyvernos-graduation/)); not shipped by Red Hat; commercial support from Nirmata, certified for OpenShift ([Red Hat Marketplace](https://marketplace.redhat.com/en-us/products/nirmata-enterprise-for-kyverno)) | 3.9.1 chart (1.19+ policies) | Not installed |
+| **Kyverno** | Watches Nodes: makes each node's `Certificate`, mounts that node's Secret into its pod, makes its NNCP once the certificate is on the node, and cleans up after a deleted node | The most popular policy engine for Kubernetes; a CNCF project, graduated March 2026 ([CNCF](https://www.cncf.io/announcements/2026/03/24/cloud-native-computing-foundation-announces-kyvernos-graduation/)). We run the open-source release as-is and support it ourselves | 3.9.1 chart (1.19+ policies) | Not installed |
 | **The `ipsec-cert-sync` DaemonSet** | One pod per selected node: imports **that node's** certificate into the node's NSS database, labels the node, re-imports and restarts the tunnel on renewal, heals a tunnel NetworkManager thinks is up; its collector reports the node's metrics | Ours ([`charts/ipsec-nas`](../charts/ipsec-nas/README.md)) | — | — |
 | **NMState Operator** | Turns each node's NNCP into a NetworkManager connection and the libreswan tunnel | Red Hat operator | NMState 2.2.60 | — |
 | **User workload monitoring** | Scrapes each pod's metrics; the alert rules | Part of OpenShift | 4.22 | — |
@@ -98,7 +98,9 @@ Every component is part of OpenShift or a Red Hat operator, except Kyverno and o
 
 **Why cert-manager.** The enterprise CA must sign one certificate per node, renew it before it expires, and never ship private keys around. cert-manager does all three from a `Certificate` object: the key is made in the cluster, the CSR goes to the CA through the issuer, the signed certificate lands in a Secret, and it renews 30 days before expiry with a new key (`renewBefore: 720h`, `rotationPolicy: Always`). Doing this by hand for every node of every cluster, every year, is not an operation anyone can keep up.
 
-**Why Kyverno.** Something must react to Nodes: a new worker needs its own `Certificate`, its pod needs **its** Secret, and its tunnel must wait until its certificate is on the node. Kyverno does it declaratively, from four policies in the chart (`ipsec-node-certificate`, `ipsec-cert-sync-mount`, `ipsec-nncp-per-node`, `ipsec-orphaned-node-secrets`), with no code of ours to maintain. It is the one component that is not a Red Hat product, so it needs a support decision: the community release, or Nirmata's certified distribution. (Red Hat Advanced Cluster Management policies could template per-node objects too; not evaluated here.)
+**Why Kyverno.** Something must react to Nodes: a new worker needs its own `Certificate`, its pod needs **its** Secret, and its tunnel must wait until its certificate is on the node. Kyverno does it declaratively, from four policies in the chart (`ipsec-node-certificate`, `ipsec-cert-sync-mount`, `ipsec-nncp-per-node`, `ipsec-orphaned-node-secrets`), with no code of ours to maintain. It is **the most popular policy engine for Kubernetes**, in our assessment, and the facts behind it are public: the CNCF graduated it in March 2026, its highest maturity level; it grew from 574 to more than 9,000 GitHub stars; Bloomberg, Coinbase, Deutsche Telekom, LinkedIn, Spotify, Vodafone and Wayfair rely on it; LinkedIn runs it on more than 230 clusters with more than 500,000 nodes, at more than 20,000 admission requests a minute ([CNCF](https://www.cncf.io/announcements/2026/03/24/cloud-native-computing-foundation-announces-kyvernos-graduation/)).
+
+**We run Kyverno's open-source release as-is and support it ourselves.** It is the one component that is not a Red Hat product, and it needs no subscription: platform engineering owns its version, its upgrades and its incidents, as for the chart. Upgrades go through Git and the lab cluster first, like every other change here. (A commercially supported distribution exists, Nirmata's, certified for OpenShift ([Red Hat Marketplace](https://marketplace.redhat.com/en-us/products/nirmata-enterprise-for-kyverno)); we do not need it.)
 
 **Why a DaemonSet.** A node's NSS database lives on the node's disk, and RHCOS is managed through MachineConfigs, which can only carry one file for a whole pool (section 2). A DaemonSet is the Kubernetes way to run exactly one pod on each selected node: that pod, pinned to its node, can mount that node's Secret and import it, with no MachineConfig and no reboot. It is also the natural place for per-node metrics: each pod reports its own node ([doc 60](60-monitoring-per-node.md)).
 
@@ -181,7 +183,7 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 
 - [ ] An enterprise non-production cluster with **at least three workers**, on OpenShift 4.19 or later.
 - [ ] The cert-manager Operator for Red Hat OpenShift, and a `ClusterIssuer` for the Venafi TPP zone with the node certificate profile.
-- [ ] Kyverno 1.19 or later, with the support decision taken.
+- [ ] Kyverno 1.19 or later: the open-source release, supported by platform engineering.
 - [ ] The NMState Operator; `routingViaHost` and IPsec `External` mode ([doc 00](00-prepare-the-cluster.md)).
 - [ ] The storage team's peer definition for the PoC cluster's worker subnet, the NAS certificate and its chain, the firewall rules.
 - [ ] The refined tunnel settings built into the chart (section 5).
@@ -207,16 +209,17 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 
 | Role | Owns |
 |---|---|
-| Platform engineering | The operators, Kyverno, the chart and its values, Argo CD, the PoC, monitoring and runbooks |
+| Platform engineering | The operators, Kyverno (the open-source release, and its support), the chart and its values, Argo CD, the PoC, monitoring and runbooks |
 | PKI | The Venafi zone and its policy for node certificates, the issuer's credential, revocation |
 | Storage | The NAS's certificate, peer definition, proposals, firewall, and their changes |
-| Security and architecture | The support decision for Kyverno; the review of the PoC evidence |
+| Security and architecture | The review of the PoC evidence |
 
 | Risk | What would happen | Mitigation |
 |---|---|---|
 | The enterprise NAS is not libreswan and behaves differently | A setting the lab never needed | The PoC runs against the enterprise NAS; the NAS product is on doc 71's question list |
 | The NAS lists its peers one by one | Every new node needs a NAS change | Ask for a subnet peer definition; otherwise a NAS change per scale-up |
 | Kyverno is down | New nodes wait for their certificate and tunnel; existing NNCPs and tunnels are not Kyverno's to run (expected, not measured) | Kyverno's high-availability install; `IpsecNasExporterMissing` and `IpsecNasCertificateMissing` alerts |
+| Kyverno is supported by us, not a vendor | A Kyverno defect or security fix is ours to find and roll out | Follow the project's releases and security advisories; upgrade through Git, on the lab cluster first |
 | The Venafi zone refuses the profile | No certificate, so no tunnel; the pod waits | Agree the profile with the PKI team before the PoC (doc 71) |
 | A tunnel is down | That node's NFS stops | `IpsecNasTunnelDown`, per node; the cert-sync pod heals a tunnel NetworkManager reports as up |
 
