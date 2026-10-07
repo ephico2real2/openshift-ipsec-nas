@@ -1478,18 +1478,6 @@ data:
               {
                 "matcher": {
                   "id": "byName",
-                  "options": "Node"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 170
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
                   "options": "NFS mounts"
                 },
                 "properties": [

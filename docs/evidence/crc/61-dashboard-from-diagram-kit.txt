@@ -60,3 +60,12 @@
   NAS identity per node: crc ipsec-nas-metrics-tcmr8 O=KCS OpenShift lab, CN=crc-nas.lab.internal
   panel errors 0, "No data" 0.
   Captures: docs/images/crc/61-grafana-two-tables.{light,dark}.png (Chromium, 1500x3300, kiosk).
+
+## 6. Later that day (15:10-15:20Z): the Per node table fills its panel in Grafana
+  After section 2 every column of Per node had a width (170 + 940 px), and in Grafana the table ended at about three
+  quarters of its panel: before, the NAS identity column, which has none, took the rest. The width of Node is removed
+  from the Grafana file; the only change in the Perses files is that the column "node" has no "width".
+  Grafana 12.3.1 (as section 5): 33 queries, failed 0, no series 1; the table spans the panel, Node the widest column.
+  Console (as section 4): the same row, crc UP YES PRESENT YES YES 3 8.21 requests/sec 0 2.73d; the columns are
+  spread as before (Perses spreads them either way).
+  The four captures of sections 4 and 5 were taken again with this change and replace the earlier ones.
