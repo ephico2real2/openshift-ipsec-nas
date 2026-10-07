@@ -47,12 +47,12 @@ render --set nodeselector.x=1 >/dev/null 2>&1 && bad "the schema refuses an unkn
 render --set metrics.persesDashboard.enabled=false | grep -qE 'kind: Perses(Dashboard|Datasource)$' \
   && bad "persesDashboard.enabled=false" || ok "metrics.persesDashboard.enabled=false renders no Perses object"
 grep -q 'name: ipsec-nas-grafana-dashboard' <<<"$out" && bad "grafanaDashboard is off by default" || ok "the Grafana ConfigMap is off by default"
-graf="$(render --set metrics.grafanaDashboard=true)"
-ruby -ryaml -rjson -e '
-  cm = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "ConfigMap" && d["metadata"]["name"] == "ipsec-nas-grafana-dashboard" }
+# On stdin: with both dashboards the rendering is larger than Linux allows for one argument (128 KiB; macOS takes it).
+render --set metrics.grafanaDashboard=true | ruby -ryaml -rjson -e '
+  cm = YAML.load_stream($stdin.read).compact.find { |d| d["kind"] == "ConfigMap" && d["metadata"]["name"] == "ipsec-nas-grafana-dashboard" }
   exit 1 unless cm && cm["metadata"]["labels"]["grafana_dashboard"] == "1"
   d = JSON.parse(cm["data"]["ipsec-nas-option-c.json"])
-  exit(d["uid"] == "ipsec-nas-option-c" ? 0 : 1)' -- "$graf" \
+  exit(d["uid"] == "ipsec-nas-option-c" ? 0 : 1)' \
   && ok "grafanaDashboard=true: the labelled ConfigMap with the Option C dashboard (uid ipsec-nas-option-c)" || bad "Grafana ConfigMap"
 python3 scripts/option-c-dashboard.py < charts/ipsec-nas/files/ipsec-nas.json | cmp -s - "${CHART}/files/ipsec-nas-option-c.json" \
   && ok "files/ipsec-nas-option-c.json is current (scripts/option-c-dashboard.py of Option B's)" || bad "files/ipsec-nas-option-c.json is stale: run scripts/perses-dashboard.sh"
