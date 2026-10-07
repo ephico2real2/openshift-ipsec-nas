@@ -1,35 +1,50 @@
 #!/usr/bin/env bash
 # Generates the Perses dashboard from the Grafana one, so the two stay one dashboard:
-#   charts/ipsec-nas/files/ipsec-nas.json  --percli migrate-->  scripts/perses-dashboard-fix.py
-#     --> charts/ipsec-nas/files/ipsec-nas.perses.json            (the chart's PersesDashboard spec.config)
+#   charts/ipsec-nas/files/ipsec-nas.json  --perses-dashboard-->
+#         charts/ipsec-nas/files/ipsec-nas.perses.json               (the chart's PersesDashboard spec.config)
 #     --> manifests/option-b-per-node-certs/33-perses-dashboard.yaml (the same, for the plain manifests)
 #   and refreshes the Grafana ConfigMap of the plain manifests, manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 # Then Option C's, from the same source:
 #   charts/ipsec-nas/files/ipsec-nas.json  --scripts/option-c-dashboard.py-->  charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
-#     --percli migrate--> scripts/perses-dashboard-fix.py --> charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
+#     --perses-dashboard--> charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
 # Run from the repository root after changing ipsec-nas.json:  scripts/perses-dashboard.sh
 #
-# Needs percli 0.54.0 (the Perses version in COO 1.5.2's go.mod; COO's server reports none) and its plugins UNPACKED; see
-# https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md
+# The Grafana JSON is the only source: whatever the Perses dashboard shows is written there. The conversion is
+# diagram-kit's perses-dashboard (https://github.com/ephico2real2/diagram-kit, MPL-2.0; v0.2.1 or later). It runs
+# percli migrate, names the datasource on every query and on the Node filter, and refuses a panel that became a
+# placeholder or a query that differs from the Grafana one: docs/61-perses-dashboard-review.md, "Change the dashboard".
+# Install it once:
+#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.1"
+# It is taken from PERSES_DASHBOARD, from the PATH, or from .venv/bin. percli must be 0.54.0, the Perses version in
+# COO 1.5.2's go.mod (COO's server reports none). By default it runs from the Perses image, with podman or docker:
+#   PERSES_IMAGE=docker.io/persesdev/perses:v0.54.0
+# Without a container engine, name a percli binary and its UNPACKED plugins
+# (https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md):
 #   PERCLI=percli  PERSES_PLUGINS=~/.local/share/perses/plugins
 set -euo pipefail
 
-PERCLI="${PERCLI:-percli}"
-PLUGINS="${PERSES_PLUGINS:-${HOME}/.local/share/perses/plugins}"
+IMAGE="${PERSES_IMAGE:-docker.io/persesdev/perses:v0.54.0}"
+DATASOURCE=ipsec-nas-thanos   # the PersesDatasource each chart creates beside its dashboard
 GRAFANA=charts/ipsec-nas/files/ipsec-nas.json
 CONFIG=charts/ipsec-nas/files/ipsec-nas.perses.json
 MANIFEST=manifests/option-b-per-node-certs/33-perses-dashboard.yaml
 GRAFANA_MANIFEST=manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
 
-command -v "${PERCLI}" >/dev/null || { echo "percli not found (set PERCLI)" >&2; exit 1; }
-[[ -d "${PLUGINS}" ]] || { echo "no Perses plugins at ${PLUGINS} (set PERSES_PLUGINS to the unpacked plugins)" >&2; exit 1; }
-ls "${PLUGINS}"/*.tar.gz >/dev/null 2>&1 && { echo "${PLUGINS} holds packed archives: percli needs them unpacked" >&2; exit 1; }
+CONVERT="${PERSES_DASHBOARD:-$(command -v perses-dashboard || true)}"
+[[ -n "${CONVERT}" ]] || CONVERT=.venv/bin/perses-dashboard
+[[ -x "${CONVERT}" ]] || { echo "perses-dashboard not found: install diagram-kit (see the top of this script) or set PERSES_DASHBOARD" >&2; exit 1; }
 
-# percli 0.54.0 logs "failed query migration: no plugins found matching target" once per Grafana query and still
-# converts every query (measured: all 27 expressions carried over verbatim). The fixer refuses placeholders.
-"${PERCLI}" migrate -f "${GRAFANA}" --format native --plugin.path "${PLUGINS}" --use-default-datasource -o json \
-  | python3 scripts/perses-dashboard-fix.py > "${CONFIG}.tmp"
-mv "${CONFIG}.tmp" "${CONFIG}"
+# convert <grafana.json> <perses.json>: nothing is written when a check fails.
+convert() {
+  if [[ -n "${PERCLI:-}" ]]; then
+    "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --percli "${PERCLI}" \
+      --plugins "${PERSES_PLUGINS:-${HOME}/.local/share/perses/plugins}"
+  else
+    "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --image "${IMAGE}"
+  fi
+}
+
+convert "${GRAFANA}" "${CONFIG}"
 
 {
   cat <<'EOF'
@@ -91,7 +106,5 @@ C_GRAFANA=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
 C_CONFIG=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
 python3 scripts/option-c-dashboard.py < "${GRAFANA}" > "${C_GRAFANA}.tmp"
 mv "${C_GRAFANA}.tmp" "${C_GRAFANA}"
-"${PERCLI}" migrate -f "${C_GRAFANA}" --format native --plugin.path "${PLUGINS}" --use-default-datasource -o json \
-  | REPORTING_POD=ipsec-nas-metrics python3 scripts/perses-dashboard-fix.py > "${C_CONFIG}.tmp"
-mv "${C_CONFIG}.tmp" "${C_CONFIG}"
+convert "${C_GRAFANA}" "${C_CONFIG}"
 echo "wrote ${C_GRAFANA} and ${C_CONFIG}"
