@@ -943,7 +943,7 @@ spec:
                     },
                     "header": "NFS requests/s",
                     "name": "value #7",
-                    "width": 110
+                    "width": 130
                   },
                   {
                     "header": "IPsec drops (1h)",

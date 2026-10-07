@@ -91,3 +91,13 @@
       - the kit itself (0.2.1) wrote out a label percli broke without a brace ("{{ node }}", a fixed text) and
         lost a unit without a word when a panel sets no decimals; neither occurs in this dashboard. Kit 0.2.2.
   Regenerated with kit 0.2.2 and the corrected script: the five files have the same sha256 as before.
+
+## 8. The header "NFS requests/s" is whole in Grafana (2026-10-07, 19:40-19:50Z)
+  At 110 px Grafana 12.3.1 cut the header of that column of Per node to "NFS request..." (it did so before section 2
+  as well). The column is now 130 px, as wide as IPsec drops (1h); in the Perses files the column "value #7" has
+  width 130 where it had 110, and nothing else changes.
+  Grafana (as section 5): 33 queries, failed 0, no series 1; headers cut short: none (each header cell's content
+  measured against its box, light and dark). Row: crc UP YES PRESENT YES YES 3 5.77 req/s 0 2.92 days.
+  Console (as section 4): the ten headers as written; row crc UP YES PRESENT YES YES 3 5.72 requests/sec 0 2.92d.
+  The four captures were taken again and replace those of section 6. The tunnel was 3.18 h old at this capture and
+  6.34 h old at the one before: it was established again in between, by nothing done for these checks.
