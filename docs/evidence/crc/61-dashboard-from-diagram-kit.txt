@@ -69,3 +69,25 @@
   Console (as section 4): the same row, crc UP YES PRESENT YES YES 3 8.21 requests/sec 0 2.73d; the columns are
   spread as before (Perses spreads them either way).
   The four captures of sections 4 and 5 were taken again with this change and replace the earlier ones.
+
+## 7. The review after the merge (2026-10-07), and what it changed
+  The change of sections 1 to 5 was merged without a review. One ran afterwards, read-only, with the real percli
+  0.54.0, the Perses 0.54.0 UI and promtool. Of its ten claims about the kit change and this repository:
+    confirmed: the two stats and the unit days as the fixer wrote them; the nine queries of Per node, their
+      columns and overrides; the identity query (promtool: tunnel up, no tunnel info, two pods with one or both
+      reporting a tunnel, an empty identity); the grid (30 panels, 1728 of 1728 cells, 0 overlapping);
+      the counts 24, 33 and 13; the contrast 2.24 and 9.39.
+    refuted or incomplete, all corrected:
+      - scripts/perses-dashboard.sh wrote its five files one by one. With Option C's conversion failing after
+        Option B's, four files were new and Option C's Perses file old, and both chart tests passed in that state;
+        with scripts/option-c-dashboard.py refusing the source, an empty ipsec-nas-option-c.json.tmp was left.
+        Now all five are made as <target>.tmp and moved together at the end; tests/test-perses-dashboard-script.sh.
+        On the script as merged: 2 ok, 3 FAIL. On the corrected one: 5 ok.
+      - PERSES_DASHBOARD=perses-dashboard (a name on the PATH, not a path) was "not found". Now found.
+      - doc 61 said the fixer "rewrote four panels": five, and it added a sixth.
+      - doc 61 said a failed check "says which panel": true where a panel is at fault.
+      - doc 61's table of differences lacked IPsec drops (1h): red and without decimals in Grafana above zero,
+        the plain number in Perses (forced to 1.0169 on the lab's data by the review, in the Perses UI).
+      - the kit itself (0.2.1) wrote out a label percli broke without a brace ("{{ node }}", a fixed text) and
+        lost a unit without a word when a panel sets no decimals; neither occurs in this dashboard. Kit 0.2.2.
+  Regenerated with kit 0.2.2 and the corrected script: the five files have the same sha256 as before.

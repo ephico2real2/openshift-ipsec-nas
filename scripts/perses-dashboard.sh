@@ -14,7 +14,7 @@
 # percli migrate, names the datasource on every query and on the Node filter, and refuses a panel that became a
 # placeholder or a query that differs from the Grafana one: docs/61-perses-dashboard-review.md, "Change the dashboard".
 # Install it once:
-#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.1"
+#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.2"
 # It is taken from PERSES_DASHBOARD, from the PATH, or from .venv/bin. percli must be 0.54.0, the Perses version in
 # COO 1.5.2's go.mod (COO's server reports none). By default it runs from the Perses image, with podman or docker:
 #   PERSES_IMAGE=docker.io/persesdev/perses:v0.54.0
@@ -29,22 +29,31 @@ GRAFANA=charts/ipsec-nas/files/ipsec-nas.json
 CONFIG=charts/ipsec-nas/files/ipsec-nas.perses.json
 MANIFEST=manifests/option-b-per-node-certs/33-perses-dashboard.yaml
 GRAFANA_MANIFEST=manifests/option-b-per-node-certs/30-grafana-dashboard.yaml
+# Option C: the same dashboard, naming its own uid, title and reporting pod (ipsec-nas-metrics).
+C_GRAFANA=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
+C_CONFIG=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
+# All five files are made beside their targets, as <target>.tmp, and moved into place together at the very end:
+# when a check or a step fails, no file of the repository has changed and no .tmp is left.
+TARGETS=("${CONFIG}" "${MANIFEST}" "${GRAFANA_MANIFEST}" "${C_GRAFANA}" "${C_CONFIG}")
+trap 'for f in "${TARGETS[@]}"; do rm -f "${f}.tmp"; done' EXIT
 
-CONVERT="${PERSES_DASHBOARD:-$(command -v perses-dashboard || true)}"
-[[ -n "${CONVERT}" ]] || CONVERT=.venv/bin/perses-dashboard
+# PERSES_DASHBOARD is a path or the name of a command; without it the PATH is searched, then .venv/bin.
+CONVERT="$(command -v "${PERSES_DASHBOARD:-perses-dashboard}" || true)"
+[[ -n "${CONVERT}" || -n "${PERSES_DASHBOARD:-}" ]] || CONVERT=.venv/bin/perses-dashboard
 [[ -x "${CONVERT}" ]] || { echo "perses-dashboard not found: install diagram-kit (see the top of this script) or set PERSES_DASHBOARD" >&2; exit 1; }
 
-# convert <grafana.json> <perses.json>: nothing is written when a check fails.
+# convert <grafana.json> <perses.json>: nothing is written when a check fails. The kit says "wrote <file> (24 panels)";
+# the file it is handed here is the target's .tmp, so its line is shown with the target's name.
 convert() {
   if [[ -n "${PERCLI:-}" ]]; then
     "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --percli "${PERCLI}" \
       --plugins "${PERSES_PLUGINS:-${HOME}/.local/share/perses/plugins}"
   else
     "${CONVERT}" "$1" "$2" --datasource "${DATASOURCE}" --image "${IMAGE}"
-  fi
+  fi | sed 's/\.tmp (/ (/'
 }
 
-convert "${GRAFANA}" "${CONFIG}"
+convert "${GRAFANA}" "${CONFIG}.tmp"
 
 {
   cat <<'EOF'
@@ -89,22 +98,19 @@ metadata:
 spec:
   config:
 EOF
-  sed 's/^/    /' "${CONFIG}"
-} > "${MANIFEST}"
+  sed 's/^/    /' "${CONFIG}.tmp"
+} > "${MANIFEST}.tmp"
 
 # The Grafana ConfigMap keeps its header and embeds the Grafana JSON verbatim under "ipsec-nas.json: |".
 {
   sed '/^  ipsec-nas.json: |$/q' "${GRAFANA_MANIFEST}"
   sed 's/^/    /' "${GRAFANA}"
 } > "${GRAFANA_MANIFEST}.tmp"
-grep -q '^  ipsec-nas.json: |$' "${GRAFANA_MANIFEST}.tmp" || { echo "${GRAFANA_MANIFEST}: no 'ipsec-nas.json: |' key" >&2; rm -f "${GRAFANA_MANIFEST}.tmp"; exit 1; }
-mv "${GRAFANA_MANIFEST}.tmp" "${GRAFANA_MANIFEST}"
-echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
+grep -q '^  ipsec-nas.json: |$' "${GRAFANA_MANIFEST}.tmp" || { echo "${GRAFANA_MANIFEST}: no 'ipsec-nas.json: |' key" >&2; exit 1; }
 
-# Option C: the same dashboard, naming its own uid, title and reporting pod (ipsec-nas-metrics).
-C_GRAFANA=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.json
-C_CONFIG=charts/ipsec-nas-option-c-metrics/files/ipsec-nas-option-c.perses.json
 python3 scripts/option-c-dashboard.py < "${GRAFANA}" > "${C_GRAFANA}.tmp"
-mv "${C_GRAFANA}.tmp" "${C_GRAFANA}"
-convert "${C_GRAFANA}" "${C_CONFIG}"
+convert "${C_GRAFANA}.tmp" "${C_CONFIG}.tmp"
+
+for f in "${TARGETS[@]}"; do mv "${f}.tmp" "${f}"; done
+echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
 echo "wrote ${C_GRAFANA} and ${C_CONFIG}"
