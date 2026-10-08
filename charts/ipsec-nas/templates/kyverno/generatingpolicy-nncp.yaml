@@ -42,10 +42,19 @@ spec:
                 leftrsasigkey: '%cert'
                 leftcert: left_server
                 leftmodecfgclient: false
+{{- with .Values.ipsec.leftprotoport }}
+                leftprotoport: {{ . | quote }}
+{{- end }}
                 right: {{ .Values.ipsec.right | default .Values.nas.fqdn }}
                 rightid: '%fromcert'
                 rightrsasigkey: '%cert'
+{{- with .Values.ipsec.rightca }}
+                rightca: {{ . | quote }}
+{{- end }}
                 rightsubnet: {{ .Values.nas.ip }}/32
+{{- with .Values.ipsec.rightprotoport }}
+                rightprotoport: {{ . | quote }}
+{{- end }}
                 ikev2: insist
                 type: {{ .Values.ipsec.type }}
 {{- end }}

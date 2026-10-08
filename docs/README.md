@@ -49,6 +49,9 @@ Side by side:
 | [10-option-a-shared-certificate.md](10-option-a-shared-certificate.md) | Option A: the documented procedure, its risks, its run on CRC, and what it costs |
 | [50-option-c-wildcard-certificate.md](50-option-c-wildcard-certificate.md) | Option C: one wildcard certificate in a MachineConfig, two variants (C1 with Red Hat components only, C2 with per-node identities), what the NAS team must configure, the renewal tool, and its measured run on CRC |
 | [70-review-enterprise-linux-ipsec-config.md](70-review-enterprise-linux-ipsec-config.md) | **Review:** our enterprise IPsec configuration for regular Linux hosts, setting by setting against the NNCP, and which option (A, B or C) matches it |
+| [71-option-b-nas-team-engagement.md](71-option-b-nas-team-engagement.md) | **Summary for the NAS team:** where we stand, what we bring and ask, the certificate profile for Venafi, what is left for us to specify |
+| [72-option-b-implementation-plan.md](72-option-b-implementation-plan.md) | **Implementation plan for Option B:** why there is no turnkey solution on OpenShift, the case for each component, end-to-end automation with workflow diagrams, the engineering PoC and its acceptance criteria |
+| [73-runbook-node-certificate-revocation.md](73-runbook-node-certificate-revocation.md) | **Runbook:** revoking a removed node's certificate; cert-manager does not revoke on deletion; the plan first, finding orphaned certificates, revoking by thumbprint |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
 
 Which to read:
@@ -60,6 +63,7 @@ Which to read:
 | On the storage team | 00, Part 3.1: the NAS certificate and IPsec settings |
 | Weighing the shared certificate | 10, especially its cost table; 50 for the wildcard variant |
 | Comparing with our Linux hosts' IPsec standard | 70 |
+| Preparing the NAS-team meeting, or the enterprise PoC | 71, then 72 |
 | On the storage team, for Option C | 50, "For the NAS team" |
 | Watching the tunnels, or on call | 61 (the dashboard: Observe → Dashboards (Perses)), then 60 (every metric and alert) |
 | Trying it on a laptop | 40, with the supporting guides below |

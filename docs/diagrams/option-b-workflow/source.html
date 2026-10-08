@@ -1,0 +1,293 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>Option B Workflow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · option B · 2026-10-07</div>
+    <h1>How Option B gives every node its own certificate and tunnel</h1>
+    <p class="lede">OpenShift nodes run RHCOS, configured by pools, not one by one. Option B gives each node its own certificate from the enterprise CA and its own tunnel to the NAS, with cert-manager, Kyverno and one DaemonSet, and no step by hand. Solid boxes are shipped and measured in the lab; dashed boxes and amber text are proposed or still to agree.</p>
+  </header>
+  <section>
+    <h2>Onboarding: from day 0 to a node's tunnel</h2>
+    <figure>
+      <div class="fig-scroll">
+<svg viewBox="0 0 1100 950" role="img" aria-label="Option B onboarding: on day 0 the platform team installs cert-manager with a ClusterIssuer for the enterprise CA, Kyverno, NMState and the chart, and the storage team sets up the NAS. Then for every worker that joins, with no human step: Kyverno creates its Certificate, the CA signs it into a Secret, the DaemonSet&#x27;s pod on that node imports it into the node&#x27;s NSS database and labels the node, Kyverno creates the node&#x27;s NNCP, NMState brings up libreswan, and the NAS accepts the node&#x27;s own certificate. If the NAS refuses, the tunnel is down and IpsecNasTunnelDown fires.">
+<defs><marker id="ah1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+<rect x="20" y="14" width="1060" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="550" y="34" text-anchor="middle" fill="var(--none)">DAY 0 · ONCE PER CLUSTER, BY PEOPLE</text>
+<rect x="20" y="150" width="320" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="180" y="170" text-anchor="middle" fill="var(--none)">KUBERNETES API · Kyverno, cert-manager</text>
+<rect x="360" y="150" width="180" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="450" y="170" text-anchor="middle" fill="var(--none)">ENTERPRISE CA</text>
+<rect x="560" y="150" width="300" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="710" y="170" text-anchor="middle" fill="var(--none)">EACH NODE · its own pod, NMState</text>
+<rect x="880" y="150" width="200" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/><text x="980" y="170" text-anchor="middle" fill="var(--remote)">THE NAS</text>
+</g>
+<g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+<rect x="30" y="56" width="330" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="78" font-weight="600">Platform · certificates</text>
+<text x="44" y="95">cert-manager Operator for Red Hat OpenShift</text>
+<text x="44" y="111">ClusterIssuer → enterprise CA (Venafi TPP)</text>
+<rect x="380" y="56" width="330" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="394" y="78" font-weight="600">Platform · automation, through Argo CD</text>
+<text x="394" y="95">Kyverno, NMState Operator, the ipsec-nas chart</text>
+<text x="394" y="111">monitoring: UWM, COO for the dashboard</text>
+<rect x="730" y="56" width="350" height="62" rx="7" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="744" y="78" font-weight="600" fill="var(--host)">Storage team · the NAS · to agree</text>
+<text x="744" y="95">its certificate from the same CA (rightca=%same)</text>
+<text x="744" y="111">peer = the worker subnet; NFS only over IPsec</text>
+<line x1="350" y1="150" x2="350" y2="880" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<line x1="550" y1="150" x2="550" y2="880" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<line x1="870" y1="150" x2="870" y2="880" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<rect x="30" y="200" width="300" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="222" font-weight="600">① A worker joins</text>
+<text x="44" y="239">Node: role worker, no excluded label</text>
+<text x="44" y="255" fill="var(--muted)">seen by policy ipsec-node-certificate</text>
+<rect x="30" y="288" width="300" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="310" font-weight="600">② Certificate ipsec-&lt;node&gt;</text>
+<text x="44" y="327">CN and SAN &lt;node&gt;.&lt;domain&gt;, RSA 3072</text>
+<text x="44" y="343" fill="var(--muted)">server + client auth · 1 year · renew at 30 d</text>
+<rect x="370" y="288" width="160" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="384" y="310" font-weight="600">③ The CA signs</text>
+<text x="384" y="327">Venafi TPP zone</text>
+<text x="384" y="343" fill="var(--muted)">lab: in-cluster CA</text>
+<rect x="30" y="376" width="300" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="398" font-weight="600">④ Secret ipsec-cert-&lt;node&gt;</text>
+<text x="44" y="415">that node&#x27;s key and certificate</text>
+<text x="44" y="431" fill="var(--muted)">only that node&#x27;s pod mounts it</text>
+<rect x="570" y="464" width="280" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="584" y="486" font-weight="600">⑤ The DaemonSet&#x27;s pod on that node</text>
+<text x="584" y="503">Kyverno mounts that node&#x27;s Secret</text>
+<text x="584" y="519" fill="var(--gap)">no Secret yet → it waits: no label</text>
+<rect x="570" y="552" width="280" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="584" y="574" font-weight="600">⑥ Import, then label</text>
+<text x="584" y="591">into the node&#x27;s NSS db as left_server</text>
+<text x="584" y="607" fill="var(--muted)">node: ipsec.kcs.io/cert-ready=true</text>
+<rect x="30" y="640" width="300" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="662" font-weight="600">⑦ NNCP ipsec-nas-&lt;node&gt;</text>
+<text x="44" y="679">policy ipsec-nncp-per-node, that node only</text>
+<text x="44" y="695" fill="var(--host)">proposed: + rightca, NFS selectors, tunnel</text>
+<rect x="570" y="728" width="280" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="584" y="750" font-weight="600">⑧ NMState applies it</text>
+<text x="584" y="767">NetworkManager → libreswan</text>
+<text x="584" y="783" fill="var(--muted)">IKEv2 with the node&#x27;s own certificate</text>
+<rect x="888" y="728" width="194" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="902" y="750" font-weight="600" fill="var(--remote)">⑨ The NAS checks it</text>
+<text x="902" y="767">its own CN, the same CA</text>
+<text x="902" y="783">tunnel up: NFS as ESP</text>
+<rect x="570" y="816" width="280" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="584" y="838" font-weight="600">⑩ Metrics from the same pod</text>
+<text x="584" y="855">tunnel, certificate expiry, NFS</text>
+<text x="584" y="871" fill="var(--muted)">UWM scrapes · alerts · Perses (COO)</text>
+<rect x="888" y="816" width="194" height="62" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+<text x="902" y="838" font-weight="600" fill="var(--gap)">refused → tunnel down</text>
+<text x="902" y="855">alert IpsecNasTunnelDown</text>
+<text x="902" y="871" fill="var(--muted)">fix: NAS peer, or the CA</text>
+<path d="M180,262 V288" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+<path d="M330,319 H370" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="336" y="312" fill="var(--muted)">CSR</text>
+<path d="M450,350 V407 H330" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="384" y="400" fill="var(--muted)">signed</text>
+<path d="M180,438 V495 H570" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="196" y="488" fill="var(--muted)">mounted into the pod pinned to that node</text>
+<path d="M710,526 V552" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/>
+<path d="M570,583 H180 V640" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="380" y="576" fill="var(--muted)">label cert-ready=true</text>
+<path d="M180,702 V759 H570" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="196" y="752" fill="var(--muted)">that node&#x27;s NNCP</text>
+<path d="M850,759 H888" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="852" y="752" fill="var(--muted)">IKEv2</text>
+<path d="M985,790 V816" fill="none" stroke="var(--gap)" stroke-width="1.2" marker-end="url(#ah1)"/><text x="992" y="810" fill="var(--muted)">no</text>
+<path d="M710,790 V816" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="718" y="810" fill="var(--muted)">the same pod</text>
+<text x="30" y="912" fill="var(--muted)">Measured in the lab (OpenShift Local): first policy to an established tunnel in 47 s, no reboot, no human step.</text>
+<text x="30" y="934" fill="var(--host)" font-weight="600">Dashed = to agree with the storage team; amber text = proposed, not applied yet (the NNCP's enterprise settings).</text>
+</g>
+</svg>
+      </div>
+      <figcaption>Day 0 is done once per cluster by people; everything from ① to ⑩ happens for every worker with no human step. The storage team's side (dashed) and the NNCP's enterprise settings (amber) are still to agree and apply.</figcaption>
+    </figure>
+  </section>
+  <section>
+    <h2>Lifecycle: a node joins, its certificate renews, a node leaves</h2>
+    <figure>
+      <div class="fig-scroll">
+<svg viewBox="0 0 1100 458" role="img" aria-label="Option B lifecycle. A node joins: its Certificate and Secret are made, imported on that node only, then its NNCP brings up the tunnel, with no reboot and no ticket. Its certificate renews: cert-manager renews 30 days before expiry with a new key, the pod re-imports it within 5 minutes and restarts the tunnel. A node leaves: Kyverno deletes its Certificate and NNCP, a cleanup policy deletes the leftover Secret, and a person revokes the certificate at the CA.">
+<defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+<rect x="20" y="14" width="340" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="190" y="34" text-anchor="middle" fill="var(--none)">A NODE JOINS</text>
+<rect x="380" y="14" width="340" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="550" y="34" text-anchor="middle" fill="var(--none)">ITS CERTIFICATE RENEWS</text>
+<rect x="740" y="14" width="340" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="910" y="34" text-anchor="middle" fill="var(--none)">A NODE LEAVES</text>
+</g>
+<g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+<rect x="30" y="60" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="82" font-weight="600">① Certificate, then Secret</text>
+<text x="44" y="99">Kyverno generates it; the CA signs</text>
+<text x="44" y="115" fill="var(--muted)">Secret ipsec-cert-&lt;node&gt; in kcs-ipsec</text>
+<path d="M190,122 V148" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="30" y="148" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="170" font-weight="600">② Imported on that node only</text>
+<text x="44" y="187">the DaemonSet&#x27;s pod mounts that Secret</text>
+<text x="44" y="203" fill="var(--muted)">NSS left_server; node labelled cert-ready</text>
+<path d="M190,210 V236" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="30" y="236" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="258" font-weight="600">③ NNCP, then the tunnel</text>
+<text x="44" y="275">Kyverno generates ipsec-nas-&lt;node&gt;</text>
+<text x="44" y="291" fill="var(--muted)">NMState → libreswan → IKEv2 to the NAS</text>
+<path d="M190,298 V324" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="30" y="324" width="320" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="44" y="346" font-weight="600" fill="var(--remote)">No reboot, no ticket</text>
+<text x="44" y="363">measured: 47 s from policy to tunnel</text>
+<text x="44" y="379" fill="var(--host)">NAS: no change, if its peer is the subnet</text>
+<rect x="390" y="60" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="404" y="82" font-weight="600">① cert-manager renews</text>
+<text x="404" y="99">30 days before expiry (renewBefore 720h)</text>
+<text x="404" y="115" fill="var(--muted)">a new RSA key each time (rotationPolicy)</text>
+<path d="M550,122 V148" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="390" y="148" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="404" y="170" font-weight="600">② The pod sees a new certificate</text>
+<text x="404" y="187">it checks every 5 minutes (sha256)</text>
+<text x="404" y="203" fill="var(--muted)">re-imports it into the node&#x27;s NSS db</text>
+<path d="M550,210 V236" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="390" y="236" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="404" y="258" font-weight="600">③ The tunnel restarts</text>
+<text x="404" y="275">connection down, then up: a new IKE session</text>
+<text x="404" y="291" fill="var(--muted)">libreswan loads a certificate only then</text>
+<path d="M550,298 V324" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="390" y="324" width="320" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="404" y="346" font-weight="600" fill="var(--remote)">No reboot, a short restart</text>
+<text x="404" y="363">measured on OpenShift Local (evidence 29)</text>
+<text x="404" y="379">NAS: nothing to change, same CA and CN</text>
+<rect x="750" y="60" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="764" y="82" font-weight="600">① The node is deleted</text>
+<text x="764" y="99">Kyverno (synchronize) deletes its</text>
+<text x="764" y="115">Certificate and its NNCP</text>
+<path d="M910,122 V148" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="750" y="148" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="764" y="170" font-weight="600">② The leftover Secret goes</text>
+<text x="764" y="187">cleanup policy, every 5 minutes</text>
+<text x="764" y="203" fill="var(--muted)">cert-manager leaves it, the key inside</text>
+<path d="M910,210 V236" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="750" y="236" width="320" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="764" y="258" font-weight="600">③ Revoke at the CA, by a person</text>
+<text x="764" y="275">the CA&#x27;s process for one certificate</text>
+<text x="764" y="291" fill="var(--muted)">possible: the certificate is that node&#x27;s</text>
+<path d="M910,298 V324" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah2)"/>
+<rect x="750" y="324" width="320" height="62" rx="7" fill="var(--gap-wash)" stroke="var(--gap)" stroke-width="1.5"/>
+<text x="764" y="346" font-weight="600" fill="var(--gap)">A live node given an excluded label</text>
+<text x="764" y="363">loses its Certificate and NNCP, not the</text>
+<text x="764" y="379" fill="var(--gap)">tunnel: remove it by hand (doc 20, B.14)</text>
+<text x="30" y="420" fill="var(--muted)">Every step but the revocation is automatic. Join and renewal were measured on OpenShift Local; node deletion follows doc 20, Steps B.11 and B.13.</text>
+<text x="30" y="442" fill="var(--host)" font-weight="600">Amber = depends on the storage team: a NAS that lists its peers one by one needs an entry per new node.</text>
+</g>
+</svg>
+      </div>
+      <figcaption>Joining and renewal need no reboot and no person; leaving needs one person, to revoke the certificate at the CA. Whether a new node needs a NAS change depends on how the NAS defines its peers.</figcaption>
+    </figure>
+  </section>
+  <section>
+    <h2>Why per-node certificates need this automation</h2>
+    <figure>
+      <div class="fig-scroll">
+<svg viewBox="0 0 1100 408" role="img" aria-label="Why per-node certificates need automation. A MachineConfig targets a MachineConfigPool, so every node of the pool gets the same certificate and identity; the NAS must then allow uniqueids=no for all its peers, renewal reboots every node, and per-node certificates would need one pool and one MachineConfig per node. Option B gives each node its own certificate through its own pod, works with the NAS default uniqueids=yes, and renews with no reboot.">
+<defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+<rect x="240" y="14" width="410" height="30" rx="6" fill="var(--gap-wash)" stroke="var(--gap)"/><text x="445" y="34" text-anchor="middle" fill="var(--gap)">A MACHINECONFIG · Options A and C</text>
+<rect x="670" y="14" width="410" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/><text x="875" y="34" text-anchor="middle" fill="var(--remote)">OPTION B · cert-manager, Kyverno, DaemonSet</text>
+</g>
+<g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+<text x="30" y="88" font-weight="600">What it targets</text>
+<rect x="250" y="58" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="264" y="80">a MachineConfigPool: every node in it</text>
+<text x="264" y="97" fill="var(--muted)">by the pool&#x27;s node selector</text>
+<rect x="680" y="58" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="694" y="80">one node: its Secret, in its own pod</text>
+<text x="694" y="97" fill="var(--muted)">the pod the DaemonSet pins to that node</text>
+<line x1="20" y1="112" x2="1080" y2="112" stroke="var(--rule)" stroke-width="1"/>
+<text x="30" y="150" font-weight="600">The certificate</text>
+<rect x="250" y="120" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="264" y="142" fill="var(--gap)">one file, one identity, on every node</text>
+<text x="264" y="159" fill="var(--muted)">the NAS sees the same subject from all</text>
+<rect x="680" y="120" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="694" y="142" fill="var(--remote)" font-weight="600">one per node: CN=&lt;node&gt;.&lt;domain&gt;</text>
+<text x="694" y="159" fill="var(--muted)">from the enterprise CA, key made per node</text>
+<line x1="20" y1="174" x2="1080" y2="174" stroke="var(--rule)" stroke-width="1"/>
+<text x="30" y="212" font-weight="600">What the NAS must allow</text>
+<rect x="250" y="182" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="264" y="204" fill="var(--gap)">uniqueids=no, for all of its peers</text>
+<text x="264" y="221" fill="var(--muted)">else the nodes replace each other&#x27;s tunnel</text>
+<rect x="680" y="182" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="694" y="204" fill="var(--remote)" font-weight="600">nothing: the default uniqueids=yes</text>
+<text x="694" y="221" fill="var(--muted)">two peers, two tunnels (measured)</text>
+<line x1="20" y1="236" x2="1080" y2="236" stroke="var(--rule)" stroke-width="1"/>
+<text x="30" y="274" font-weight="600">Renewal</text>
+<rect x="250" y="244" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="264" y="266">a new MachineConfig, by hand</text>
+<text x="264" y="283" fill="var(--gap)">every node of the pool reboots</text>
+<rect x="680" y="244" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="694" y="266">automatic, 30 days before expiry</text>
+<text x="694" y="283" fill="var(--muted)">no reboot; the tunnel restarts</text>
+<line x1="20" y1="298" x2="1080" y2="298" stroke="var(--rule)" stroke-width="1"/>
+<text x="30" y="336" font-weight="600">Per-node certificates?</text>
+<rect x="250" y="306" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="264" y="328" fill="var(--gap)">one pool and one MachineConfig per node</text>
+<text x="264" y="345" fill="var(--muted)">not manageable by hand at any scale</text>
+<rect x="680" y="306" width="390" height="46" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="694" y="328" fill="var(--remote)" font-weight="600">built in: a node joins, it gets its own</text>
+<text x="694" y="345" fill="var(--muted)">Kyverno + cert-manager + DaemonSet</text>
+<line x1="20" y1="360" x2="1080" y2="360" stroke="var(--rule)" stroke-width="1"/>
+<text x="30" y="390" fill="var(--muted)">Measured in the lab: shared identity with uniqueids=yes, one tunnel at a time (cases 1, 3, 5; finding 4); own certificates, two tunnels (finding 3).</text>
+</g>
+</svg>
+      </div>
+      <figcaption>A MachineConfig reaches nodes through their pool, so it can only give every node of the pool the same certificate: Option A (the procedure Red Hat documents) and Option C (one wildcard certificate) both do this. Option B is what makes one certificate per node possible without one pool per node.</figcaption>
+    </figure>
+  </section>
+</div>
