@@ -2,7 +2,7 @@
 
 **Audience:** platform engineers and the storage team. **Question:** our regular Linux hosts already reach the NAS over IPsec with an enterprise standard configuration. Which OpenShift setup option (A, B or C) lets the nodes connect to the same NAS the same way, and what would change?
 
-**Contents:** [The reference configuration](#the-reference-configuration) · [What it tells us, and what it does not](#what-it-tells-us-and-what-it-does-not) · [Setting by setting, against our NNCP](#setting-by-setting-against-our-nncp) · [Each option against the reference](#each-option-against-the-reference) · [`uniqueids` and Option B](#uniqueids-and-option-b) · [Sample NNCP for Option B](#sample-nncp-for-option-b-nas-on-uniqueidsyes) · [Findings](#findings) · [Questions for the storage team](#questions-for-the-storage-team) · [What to test next](#what-to-test-next)
+**Contents:** [The reference configuration](#the-reference-configuration) · [What it tells us, and what it does not](#what-it-tells-us-and-what-it-does-not) · [What does not carry over: odd and even](#what-does-not-carry-over-odd-and-even) · [Setting by setting, against our NNCP](#setting-by-setting-against-our-nncp) · [Each option against the reference](#each-option-against-the-reference) · [`uniqueids` and Option B](#uniqueids-and-option-b) · [Sample NNCP for Option B](#sample-nncp-for-option-b-nas-on-uniqueidsyes) · [Findings](#findings) · [Questions for the storage team](#questions-for-the-storage-team) · [What to test next](#what-to-test-next)
 
 ## The reference configuration
 
@@ -46,6 +46,20 @@ What each line means ([libreswan `ipsec.conf(5)`](https://libreswan.org/man/ipse
 - **It is the host side only.** How the NAS is configured for these hosts is not in it: whether the NAS has one connection per host (pinned by address and identity) or one for any peer from a subnet (`right=%any`), and whether it allows several peers with one identity (`uniqueids`). That decides Options A and C, and it has to come from the storage team ([questions](#questions-for-the-storage-team)).
 - **The enterprise model is one certificate per host.** The certificate's nickname is the host's FQDN, and each host identifies itself by its own certificate. No host shares an identity with another.
 - **It narrows the tunnel to NFS.** Our NNCP protects all traffic to the NAS's IP (`rightsubnet: ${NAS_IP}/32`); the reference protects only TCP to port 2049.
+
+## What does not carry over: odd and even
+
+The standard groups host connections under "EVEN" headings (`mytunnel2.conf`, `mytunnel4.conf`): on our Linux hosts, which tunnel and NAS a host uses follows whether its **host name or the last octet of its IP address is odd or even**. **That does not work on OpenShift, and we will not use it.**
+
+| On a Linux host | On OpenShift |
+|---|---|
+| A person names the host and gives it its address, once | Nodes come from **MachineSets**: the Machine API creates them with generated names and addresses from the network's address management, not chosen by a person |
+| The host keeps its name and address for years | Nodes are added when a MachineSet scales up, removed when it scales down, and replaced when a machine health check deletes an unhealthy machine: each new node has a new name and a new address |
+| Odd or even is fixed, so a host's tunnel and NAS are too | Odd or even is an accident of the generated name or the address, and changes when the node is replaced. Tracking it per node is a manual list again, which does not scale |
+
+On OpenShift, a group of nodes is chosen by a **node label**, which the cluster sets and keeps: the node's zone (`topology.kubernetes.io/zone`), its MachineSet, or a label of our own on the MachineSet's template. Were the nodes of one cluster ever split between two NAS servers, the split would be by label (Kyverno giving each group the tunnel to its NAS), one rule for all nodes, applied automatically to each new one. We split between clusters instead, below.
+
+**Our approach: one NAS IP per cluster, alternated between clusters.** Every node of a cluster uses that cluster's one NAS IP; the next cluster uses the other NAS IP, and so on. The split that odd and even makes between hosts is made between clusters instead, as one value per cluster in Git (`nas.ip` in its chart values): it never changes when nodes do, and **the charts need no change**, since they build one tunnel to one NAS IP per node today. (Several NAS IPs in one cluster would need one tunnel per NAS per node, by label or to all: new chart work, not planned.)
 
 ## Setting by setting, against our NNCP
 

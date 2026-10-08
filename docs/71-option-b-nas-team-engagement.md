@@ -30,7 +30,8 @@
 
 ### What we ask
 
-- [ ] **How the NAS defines its IPsec peers today** for the Linux hosts: one connection per host (address and identity pinned), or one for any peer of a subnet (`right=%any`, `rightid=%fromcert`)? For OpenShift, a subnet definition means no NAS change when a node is added.
+- [ ] **The NAS IP for each cluster.** Our plan: **one NAS IP per cluster, alternated between clusters** (cluster 1 the first NAS IP, cluster 2 the second, and so on), in place of the standard's odd/even split between hosts, which does not carry over to OpenShift ([doc 70](70-review-enterprise-linux-ipsec-config.md#what-does-not-carry-over-odd-and-even)). Confirm the NAS IPs, and that one NAS IP can serve a whole cluster.
+- [ ] **Peers by subnet, as today: a requirement.** The NAS whitelists each cluster by subnet, so a new node needs no NAS change. The subnet is the cluster's **machine (node) network**, not its pod network: NFS and the tunnel run from the node's own address (on the lab cluster: machine network `192.168.126.0/24`, the node `192.168.126.11`; pod network `10.217.0.0/22`). Find it with `oc get cm cluster-config-v1 -n kube-system -o jsonpath='{.data.install-config}'` (`machineNetwork`) or the nodes' `InternalIP`.
 - [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? **Our selectors must match theirs exactly**: the lab NAS refused a mismatch either way (`TS_UNACCEPTABLE`, [evidence 62](evidence/crc/62-nfs-only-selectors.txt)).
 - [ ] **Tunnel or transport mode** on the NAS's side.
 - [ ] **`uniqueids`** (or the product's equivalent): we expect the default (`yes`); Option B needs no change. A and C would need `no` for every peer.
@@ -75,6 +76,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 9 | NAS certificate rotation | Who renews the NAS's certificate, and how we are told | Storage | Open |
 | 10 | PoC | An enterprise non-production cluster with at least three workers, and the acceptance criteria of [doc 72](72-option-b-implementation-plan.md#6-the-engineering-poc) | Platform | Open |
 | 11 | Revocation of removed nodes' certificates | The plan of [doc 73](73-runbook-node-certificate-revocation.md#plan-first): does the NAS check CRL or OCSP, revoke by thumbprint, `Disable` false, superseded certificates, who holds the revoke token | Platform + PKI + Storage | Runbook written; plan open |
+| 12 | NAS IP per cluster | One NAS IP per cluster, alternated between clusters: `nas.ip` in each cluster's values. Never by odd or even name or address ([doc 70](70-review-enterprise-linux-ipsec-config.md#what-does-not-carry-over-odd-and-even)). No chart change | Platform + Storage | Planned; NAS IPs to confirm |
 
 ## Decision log
 
@@ -84,4 +86,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 2026-10-07 | The tunnel definition follows the enterprise standard (Sample 2) | Proposed; depends on the NAS team's answers |
 | 2026-10-07 | The enterprise CA is Venafi TPP, through cert-manager's Venafi issuer | Decided (operator) |
 | 2026-10-07 | Kyverno: the open-source release as-is, supported by platform engineering | Decided (operator) |
+| 2026-10-08 | The standard's odd/even assignment of hosts is not used on OpenShift; node groups are chosen by label | Decided (operator) |
+| 2026-10-08 | Peers by subnet stays a requirement: the NAS whitelists each cluster's machine network | Decided (operator) |
+| 2026-10-08 | One NAS IP per cluster, alternated between clusters | Working assumption (operator); NAS IPs to confirm |
 | — | The PoC cluster | Open |

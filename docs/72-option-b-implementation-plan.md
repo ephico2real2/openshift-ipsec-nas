@@ -217,7 +217,8 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 | Risk | What would happen | Mitigation |
 |---|---|---|
 | The enterprise NAS is not libreswan and behaves differently | A setting the lab never needed | The PoC runs against the enterprise NAS; the NAS product is on doc 71's question list |
-| The NAS lists its peers one by one | Every new node needs a NAS change | Ask for a subnet peer definition; otherwise a NAS change per scale-up |
+| The NAS lists its peers one by one | Every new node needs a NAS change | A requirement: the NAS whitelists each cluster's machine (node) network, as it does today ([doc 71](71-option-b-nas-team-engagement.md#what-we-ask)) |
+| Two NAS IPs to spread clusters over | — | One NAS IP per cluster, alternated between clusters (`nas.ip` per cluster); never by odd or even host name or address, which MachineSets do not keep stable ([doc 70](70-review-enterprise-linux-ipsec-config.md#what-does-not-carry-over-odd-and-even)). No chart change |
 | Kyverno is down | New nodes wait for their certificate and tunnel; existing NNCPs and tunnels are not Kyverno's to run (expected, not measured) | Kyverno's high-availability install; `IpsecNasExporterMissing` and `IpsecNasCertificateMissing` alerts |
 | Kyverno is supported by us, not a vendor | A Kyverno defect or security fix is ours to find and roll out | Follow the project's releases and security advisories; upgrade through Git, on the lab cluster first |
 | The Venafi zone refuses the profile | No certificate, so no tunnel; the pod waits | Agree the profile with the PKI team before the PoC (doc 71) |
