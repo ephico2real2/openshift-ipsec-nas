@@ -2,7 +2,20 @@
 
 The source of the presentation deck on Option B: 17 slides, for the storage, PKI, security and platform teams. It summarizes [doc 70](../../70-review-enterprise-linux-ipsec-config.md), [doc 71](../../71-option-b-nas-team-engagement.md), [doc 72](../../72-option-b-implementation-plan.md) and [doc 73](../../73-runbook-node-certificate-revocation.md); every number on a slide comes from them.
 
-The deck is a Slides artifact on claude.ai, which presents it and exports it as PDF or PowerPoint (Share › Export). These files are its source, kept here so the deck is versioned with the docs it summarizes. A change goes into both: edit the slide here, and publish the same file to the deck.
+The deck is a Slides artifact on claude.ai, which presents it and exports it as PDF or PowerPoint ([below](#export-as-pdf-or-powerpoint)). These files are its source, kept here so the deck is versioned with the docs it summarizes. A change goes into both: edit the slide here, and publish the same file to the deck.
+
+## Export as PDF or PowerPoint
+
+From the deck's page on claude.ai: open the **Share** menu, then **Export**, and pick the format.
+
+| Format | Use it for | What to know |
+|---|---|---|
+| **PDF** | Presenting, sending, printing | Looks exactly like the deck: the export fetches the deck's typefaces itself, so nothing is substituted |
+| **PowerPoint (.pptx), editable** | Editing the slides in PowerPoint | The file names the deck's typefaces, IBM Plex Sans and JetBrains Mono. A computer without them substitutes others and the spacing can shift: install both from Google Fonts first |
+| **PowerPoint (.pptx), basic fonts** | Editing on any computer | Each typeface is replaced by its fallback (Arial, Courier New): the same look everywhere, slightly different from the deck |
+| **PowerPoint, slides as pictures** (where the Export tab offers it) | Showing in PowerPoint exactly as designed | Every slide is an image: exact on any computer, but no editable text |
+
+For anyone outside the deck's owner, send the exported file, or share the deck from the same Share menu: the deck is private until shared.
 
 ## Files
 
