@@ -31,7 +31,7 @@
 ### What we ask
 
 - [ ] **How the NAS defines its IPsec peers today** for the Linux hosts: one connection per host (address and identity pinned), or one for any peer of a subnet (`right=%any`, `rightid=%fromcert`)? For OpenShift, a subnet definition means no NAS change when a node is added.
-- [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? **Our selectors must match theirs exactly**: the lab NAS refused a mismatch either way (`TS_UNACCEPTABLE`, [evidence 61](evidence/crc/61-nfs-only-selectors.txt)).
+- [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? **Our selectors must match theirs exactly**: the lab NAS refused a mismatch either way (`TS_UNACCEPTABLE`, [evidence 62](evidence/crc/62-nfs-only-selectors.txt)).
 - [ ] **Tunnel or transport mode** on the NAS's side.
 - [ ] **`uniqueids`** (or the product's equivalent): we expect the default (`yes`); Option B needs no change. A and C would need `no` for every peer.
 - [ ] **Signature schemes**: does the NAS accept RSA-PSS signatures from a peer? (`leftauth=rsasig` in the standard; OpenShift cannot set `leftauth`.)
@@ -64,7 +64,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 
 | # | Item | What to decide or write | Owner | Status |
 |---|---|---|---|---|
-| 1 | The refined NNCP | The chart values `ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport` (empty by default), set to match the NAS | Platform | Built; measured in the lab ([evidence 61](evidence/crc/61-nfs-only-selectors.txt)) |
+| 1 | The refined NNCP | The chart values `ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport` (empty by default), set to match the NAS | Platform | Built; measured in the lab ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)) |
 | 2 | Venafi issuer | The chart's `clusterIssuer` value pointing at the Venafi `ClusterIssuer`, and its zone allowing the profile above | Platform | Open |
 | 3 | cert-manager | The cert-manager Operator for Red Hat OpenShift on enterprise clusters (channel, version, who operates it) | Platform | Open: not on enterprise clusters today |
 | 4 | Kyverno | Kyverno on enterprise clusters: version (1.19 or later) and its two OpenShift settings. The most popular policy engine for Kubernetes; we run the open-source release as-is and support it ourselves ([doc 72](72-option-b-implementation-plan.md#4-the-case-for-each-component)) | Platform | Support model decided |

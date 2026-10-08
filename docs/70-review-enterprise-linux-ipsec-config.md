@@ -172,7 +172,7 @@ spec:
 
 What changes with it: only TCP to port 2049 on the NAS goes through the tunnel; anything else to the NAS (`ping`, NFSv3's helpers) leaves the node in clear, and an IPsec-only NAS drops it. Whether to use it depends on the storage team's answers: if the NAS's connection for hosts is limited to TCP 2049, Sample 1 may be refused and Sample 2 needed ([finding 4](#findings)). In Option B it would go into the policy's template (`27-kyverno-nncp-per-node.yaml.tmpl`, or the chart's), not into each node's NNCP.
 
-**Measured in the lab** ([evidence 61](evidence/crc/61-nfs-only-selectors.txt)), on OpenShift Local through the charts' new values `ipsec.rightca`, `ipsec.leftprotoport` and `ipsec.rightprotoport` (tunnel mode, as the lab needs for its NAT), against the libreswan NAS:
+**Measured in the lab** ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)), on OpenShift Local through the charts' new values `ipsec.rightca`, `ipsec.leftprotoport` and `ipsec.rightprotoport` (tunnel mode, as the lab needs for its NAT), against the libreswan NAS:
 
 | The NAS's connection | The node's NNCP | Result |
 |---|---|---|
@@ -213,7 +213,7 @@ On the NAS, `ipsec trafficstatus` then lists one tunnel per node, each with its 
 1. **Option B is the option that matches the enterprise standard.** The standard gives every host its own certificate and identity; Option B gives every node its own certificate from the same CA, and it worked against a libreswan NAS on its default settings. It is already our standard ([docs/README.md](README.md)).
 2. **Options A and C need the NAS to accept one identity from many peers** (`uniqueids=no`). The standard has no case of hosts sharing an identity, so the NAS may not allow it today. Measured against libreswan only; another NAS product has its own setting, or none (issue #34).
 3. **Three settings of the standard are not in our NNCP: `rightca=%same`, the NFS port selectors, and tunnel mode.** All three exist in NMState 2.2.60 and the node's plugin on OpenShift 4.22, so any option can carry them; they were not tested.
-4. **The port selectors must match the NAS's exactly.** Measured against the lab's libreswan NAS ([evidence 61](evidence/crc/61-nfs-only-selectors.txt)): a NAS limited to TCP 2049 refused the node's all-traffic request (`TS_UNACCEPTABLE`), and a NAS without selectors refused the node's NFS-only request. Which one to use is the storage team's answer.
+4. **The port selectors must match the NAS's exactly.** Measured against the lab's libreswan NAS ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)): a NAS limited to TCP 2049 refused the node's all-traffic request (`TS_UNACCEPTABLE`), and a NAS without selectors refused the node's NFS-only request. Which one to use is the storage team's answer.
 5. **`leftauth`/`rightauth=rsasig` cannot be set from OpenShift** (no NMState field, not written by the plugin). With RSA keys on every option, authentication is by RSA signature anyway: on CRC the node signed with `3072-bit RSASSA-PSS with SHA2_512` ([evidence 17](evidence/crc/17-option-b-tunnel.txt)). Confirm the enterprise NAS accepts RSA-PSS signatures.
 
 ## Questions for the storage team
