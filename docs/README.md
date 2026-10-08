@@ -54,6 +54,7 @@ Side by side:
 | [73-runbook-node-certificate-revocation.md](73-runbook-node-certificate-revocation.md) | **Runbook:** revoking a removed node's certificate; cert-manager does not revoke on deletion; the plan first, finding orphaned certificates, revoking by thumbprint |
 | [74-architecture-and-design-guide.md](74-architecture-and-design-guide.md) | **Architecture and design guide:** our in-house DaemonSet, its Prometheus metrics, the dashboard in Perses and Grafana, why a dashboard is critical for NAS encryption, self-service, Dynatrace and other APMs |
 | [deck/option-b/](deck/option-b/README.md) | **The presentation deck on Option B:** 17 slides summarizing docs 70 to 73, their source and how they map to the diagrams |
+| [deck/architecture/](deck/architecture/README.md) | **The architecture and design deck:** 15 slides summarizing doc 74, their source and how they map to the diagrams and screenshots |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
 
 Which to read:

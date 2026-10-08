@@ -1,0 +1,5 @@
+{"v":4,"createdOnFiles":{"v":1,"at":"2026-10-08T13:48:02Z"},"lists":"css","title":"IPsec to the NAS: Architecture and Design","cover":"cover",
+"order":["cover","north-star","daemonset","design-rules","metrics","alerts","architecture","dashboard","two-viewers","why-critical","at-scale","self-service","apm","measured","closing"],
+"sections":{"s1":{"description":"The north star: every node its own certificate, tunnel and report","start":"cover"},"s2":{"description":"Our in-house DaemonSet and its Prometheus metrics","start":"daemonset"},"s3":{"description":"From the node to every dashboard, and why the dashboard matters","start":"architecture"},"s4":{"description":"Integration with Dynatrace and other APMs, and where we stand","start":"apm"}},
+"faces":{"ibm-plex-sans":{"family":"IBM Plex Sans","href":"https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"},"jetbrains-mono":{"family":"JetBrains Mono","href":"https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap"}},
+"designSystems":[]}

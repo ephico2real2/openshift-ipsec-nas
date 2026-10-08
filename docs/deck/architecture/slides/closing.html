@@ -1,0 +1,6 @@
+<section id="closing" data-transition="fade" style="background:#15202B;color:#F5F4EF;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px;display:flex;flex-direction:column;justify-content:space-between">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#7FD4C9;letter-spacing:2px">THE DESIGN IN ONE LINE</p>
+<h1 style="font-size:88px;font-weight:600;line-height:1.12;color:#F5F4EF">One pod per node keeps its certificate and reports its tunnel.<br><span style="color:#7FD4C9">One source of truth</span> for the console, Grafana and Dynatrace.</h1>
+<p style="font-size:32px;color:#C9D3DC">Read with doc 74 (this design), doc 72 (the plan and the PoC), doc 71 (the NAS team)</p>
+<aside>The takeaway: our in-house DaemonSet is both the automation and the instrument. Once the NAS team is on board, every node gets its own certificate and tunnel with no step by hand, and every node's state is visible to operators, application teams and the enterprise APM from one Prometheus endpoint.</aside>
+</section>
