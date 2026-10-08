@@ -8,6 +8,8 @@
 
 **Option B, one certificate per node, with the tunnel definition refined to the enterprise standard**, for every enterprise cluster that mounts the NAS over NFS.
 
+**Minimum supported OpenShift version: 4.19.22, 4.20.11, or any 4.21 or 4.22**, the first releases whose NMState and node plugin both carry the refined tunnel's `rightca` and NFS port selectors ([doc 70](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors); measured on 4.22).
+
 Our enterprise IPsec standard for Linux hosts gives every host its own certificate from the enterprise CA, identified by that certificate (`%fromcert`), checks the NAS against the same CA, and protects NFS ([doc 70](70-review-enterprise-linux-ipsec-config.md#the-reference-configuration)). An OpenShift node has to meet the same standard. Of the three setup options, only Option B does.
 
 Options A and C are not pursued. Both put **one** certificate on every node, so every node presents the same identity, which the enterprise standard never does:

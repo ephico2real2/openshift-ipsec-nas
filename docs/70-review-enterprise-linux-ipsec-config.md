@@ -86,6 +86,21 @@ All three settings the reference adds to ours were applied to a node on CRC thro
 
 Two components must know a key before it reaches libreswan: **NMState** (the handler pod turns the NNCP into a NetworkManager connection) and the node's **NetworkManager-libreswan** plugin (it turns that connection into libreswan's configuration). Red Hat's article on IPsec with ONTAP ([7130948](https://access.redhat.com/articles/7130948), updated 2026-09-07, written for OpenShift 4.19) still says `rightca` "is not a supported parameter to use with nmstate" and cites the request [RHEL-114237](https://issues.redhat.com/browse/RHEL-114237). That request is **closed** (Done-Errata, 2026-05-19, fix version `rhel-10.2`); the nmstate change that resolves it is upstream commit [`891e18f4`](https://github.com/nmstate/nmstate/commit/891e18f41d2dbada961931631a15ea09678cce2a) (2025-11-18), first released in **nmstate 2.2.56**.
 
+**Minimum supported OpenShift version for the refined tunnel (Sample 2): 4.19.22, 4.20.11, or any 4.21 or 4.22.** Per release, from the package versions in the two tables further down:
+
+| OpenShift | `rightca` | NFS port selectors (`leftprotoport`, `rightprotoport`) | Sample 2 |
+|---|---|---|---|
+| 4.19.0 to 4.19.18 | No | No | Not supported |
+| 4.19.19 to 4.19.21 | Yes | No | Not supported |
+| **4.19.22 and later** | Yes | Yes | **Supported** (not measured) |
+| 4.20.0 to 4.20.2 | No | No | Not supported |
+| 4.20.3 to 4.20.10 | Yes | No | Not supported |
+| **4.20.11 and later** | Yes | Yes | **Supported** (not measured) |
+| **4.21** | Yes | Yes | **Supported** (not measured) |
+| **4.22** | Yes | Yes | **Supported**, measured on CRC 4.22.7 ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [63](evidence/crc/63-rightca-enforcement.txt)) |
+
+On a release that has `rightca` but not the selectors (4.19.19 to 4.19.21, 4.20.3 to 4.20.10), `ipsec.rightca` alone may be set, if the NAS does not limit its connection to NFS. Sample 1 uses none of these keys, so this floor does not apply to it. The NMState Operator must also be current: nmstate 2.2.57 or later in its handler (the command below).
+
 | Component | First version with `rightca` | First version with `leftprotoport`/`rightprotoport` | Source |
 |---|---|---|---|
 | nmstate | 2.2.56 (commit `891e18f4`) | 2.2.57 (commit [`c8c94b75`](https://github.com/nmstate/nmstate/commit/c8c94b75), RHEL-107158) | nmstate git history |
@@ -114,10 +129,10 @@ The node's plugin comes with the OpenShift release (the RHCOS extensions). Its p
 | **4.20.11 and later**, 4.21 | 1.2.29-1.el9_6 | Yes | Yes |
 | 4.22 | 1.2.30-1.el9 | Yes | Yes; **measured** on CRC 4.22.7 ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [63](evidence/crc/63-rightca-enforcement.txt)) |
 
-**So Sample 2 needs OpenShift 4.19.22, 4.20.11, 4.21 or later**; only 4.22 was measured. Red Hat's article was written for 4.19, whose early z-streams indeed lacked `rightca`. On a cluster, read both versions on one of its nodes before using Sample 2:
+Hence the minimum above; only 4.22 was measured. Red Hat's article was written for 4.19, whose early z-streams indeed lacked `rightca`. On a cluster, read both versions on one of its nodes before using Sample 2:
 
 ```sh
-oc -n openshift-nmstate exec ds/nmstate-handler -- nmstatectl --version      # 2.2.56 or later
+oc -n openshift-nmstate exec ds/nmstate-handler -- nmstatectl --version      # 2.2.57 or later
 oc debug node/<node> -- chroot /host sh -c 'strings /usr/libexec/nm-libreswan-service | grep -x -e rightca -e leftprotoport -e rightprotoport'
 ```
 

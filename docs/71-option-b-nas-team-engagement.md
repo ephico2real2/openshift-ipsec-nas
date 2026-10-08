@@ -89,4 +89,5 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 2026-10-08 | The standard's odd/even assignment of hosts is not used on OpenShift; node groups are chosen by label | Decided (operator) |
 | 2026-10-08 | Peers by subnet stays a requirement: the NAS whitelists each cluster's machine network | Decided (operator) |
 | 2026-10-08 | One NAS IP per cluster, alternated between clusters | Working assumption (operator); NAS IPs to confirm |
+| 2026-10-08 | Minimum supported OpenShift for the refined tunnel: 4.19.22, 4.20.11, or any 4.21 or 4.22, where NMState and the node both carry `rightca` and the port selectors ([doc 70](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors)) | Decided (operator) |
 | — | The PoC cluster | Open |
