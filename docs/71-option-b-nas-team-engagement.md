@@ -30,6 +30,7 @@
 
 ### What we ask
 
+- [ ] **How many NAS IPs the OpenShift nodes will mount, and what the standard's "EVEN" grouping is for** (load across two NAS heads, failure domains, or both). **The odd/even assignment does not carry over to OpenShift**: nodes come from MachineSets with generated names and addresses, and are replaced over time; a split between NAS servers is made by node label (zone, MachineSet), or every node reaches every NAS IP ([doc 70](70-review-enterprise-linux-ipsec-config.md#what-does-not-carry-over-odd-and-even)). The charts build one tunnel to one NAS IP today.
 - [ ] **How the NAS defines its IPsec peers today** for the Linux hosts: one connection per host (address and identity pinned), or one for any peer of a subnet (`right=%any`, `rightid=%fromcert`)? For OpenShift, a subnet definition means no NAS change when a node is added.
 - [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? **Our selectors must match theirs exactly**: the lab NAS refused a mismatch either way (`TS_UNACCEPTABLE`, [evidence 62](evidence/crc/62-nfs-only-selectors.txt)).
 - [ ] **Tunnel or transport mode** on the NAS's side.
@@ -75,6 +76,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 9 | NAS certificate rotation | Who renews the NAS's certificate, and how we are told | Storage | Open |
 | 10 | PoC | An enterprise non-production cluster with at least three workers, and the acceptance criteria of [doc 72](72-option-b-implementation-plan.md#6-the-engineering-poc) | Platform | Open |
 | 11 | Revocation of removed nodes' certificates | The plan of [doc 73](73-runbook-node-certificate-revocation.md#plan-first): does the NAS check CRL or OCSP, revoke by thumbprint, `Disable` false, superseded certificates, who holds the revoke token | Platform + PKI + Storage | Runbook written; plan open |
+| 12 | More than one NAS IP | If the nodes use several NAS IPs: one tunnel per NAS per node, by node label or to all, in the charts. Never by odd or even name or address ([doc 70](70-review-enterprise-linux-ipsec-config.md#what-does-not-carry-over-odd-and-even)) | Platform | Open: depends on the storage team's answer |
 
 ## Decision log
 
@@ -84,4 +86,5 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 2026-10-07 | The tunnel definition follows the enterprise standard (Sample 2) | Proposed; depends on the NAS team's answers |
 | 2026-10-07 | The enterprise CA is Venafi TPP, through cert-manager's Venafi issuer | Decided (operator) |
 | 2026-10-07 | Kyverno: the open-source release as-is, supported by platform engineering | Decided (operator) |
+| 2026-10-08 | The standard's odd/even assignment of hosts is not used on OpenShift; node groups are chosen by label | Decided (operator) |
 | — | The PoC cluster | Open |
