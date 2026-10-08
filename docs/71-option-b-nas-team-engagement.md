@@ -38,6 +38,7 @@
 - [ ] **IKE and ESP proposals** the NAS accepts, if not the defaults.
 - [ ] **The NAS product and version.** Our measurements are against libreswan; an appliance may differ.
 - [ ] **Firewall**: UDP 500 and 4500 and ESP from the worker subnet(s); NFS accepted only through IPsec.
+- [ ] **Revocation**: does the NAS check peer certificates against a CRL or OCSP, and how often? Without it, revoking a removed node's certificate stops nothing ([doc 73](73-runbook-node-certificate-revocation.md#plan-first)).
 - [ ] **Their change process and lead time** for a new peer subnet, and for the PoC cluster.
 
 ### What they send back
@@ -73,6 +74,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 | 8 | Firewall | Rules between the worker subnets and the NAS (IKE, NAT-T, ESP) | Network | Open |
 | 9 | NAS certificate rotation | Who renews the NAS's certificate, and how we are told | Storage | Open |
 | 10 | PoC | An enterprise non-production cluster with at least three workers, and the acceptance criteria of [doc 72](72-option-b-implementation-plan.md#6-the-engineering-poc) | Platform | Open |
+| 11 | Revocation of removed nodes' certificates | The plan of [doc 73](73-runbook-node-certificate-revocation.md#plan-first): does the NAS check CRL or OCSP, revoke by thumbprint, `Disable` false, superseded certificates, who holds the revoke token | Platform + PKI + Storage | Runbook written; plan open |
 
 ## Decision log
 

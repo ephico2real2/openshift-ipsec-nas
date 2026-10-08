@@ -158,7 +158,7 @@ Measured in the lab: first policy to an established tunnel in 47 s, no reboot.
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Figure 6. The lifecycle of a node's certificate and tunnel. Only revocation needs a person.*
+*Figure 6. The lifecycle of a node's certificate and tunnel. Only revocation needs a person: cert-manager does not revoke a certificate when it is deleted, and revocation needs planning first ([runbook, doc 73](73-runbook-node-certificate-revocation.md)).*
 
 ```text
 A node joins                       Its certificate renews                 A node leaves
@@ -197,7 +197,7 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 | 3 | The refined tunnel (tunnel mode, `rightca`, TCP 2049 only) is accepted by the enterprise NAS | NNCP `Available`, IKE SA established, NFS writes through the tunnel | Not run |
 | 4 | NFS is refused outside the tunnel | A mount with no tunnel fails; the NAS's cleartext counter rises | Measured against the lab NAS |
 | 5 | A new worker gets its certificate and tunnel with no human step | Scale a MachineSet up; time from Node to tunnel | Documented (doc 20, B.10); the lab cluster has one node |
-| 6 | A removed worker leaves nothing behind | Scale down; its Certificate, Secret and NNCP are gone; revoke at Venafi | Documented (doc 20, B.11, B.13) |
+| 6 | A removed worker leaves nothing behind | Scale down; its Certificate, Secret and NNCP are gone; its certificate revoked at Venafi with the [runbook](73-runbook-node-certificate-revocation.md) | Documented (doc 20, B.11, B.13); revocation not run |
 | 7 | A renewal causes no outage beyond the tunnel restart | Force a renewal (`cmctl renew`); NFS from an application continues | Measured (evidence 29) |
 | 8 | The NAS restarting does not need any cluster action | Restart the NAS's IPsec; every tunnel comes back within the cert-sync pod's 5-minute check | Not measured under Option B. Under Option C the node's connection was restarted by hand after the NAS restart, which is what Option B's pod does by itself ([evidence 36](evidence/crc/36-option-c-crc-renewal-and-c2.txt)) |
 | 9 | Each node's state is visible: metrics, alerts, the console dashboard | `IpsecNasTunnelDown` fires for a node whose tunnel is stopped, and only for it | Measured (doc 60) |
