@@ -108,6 +108,8 @@ The ConfigMap may already hold other settings: read it first (`oc -n openshift-u
 | `ipsec.type` | `transport` | `tunnel` only when there is NAT between the nodes and the NAS |
 | `ipsec.left` | `""` | Empty means `<node>.<nodeDomain>` |
 | `ipsec.right` | `""` | Empty means `nas.fqdn` |
+| `ipsec.rightca` | `""` | `%same`: accept only a NAS certificate from the node certificate's own CA. Left out of the NNCP when empty |
+| `ipsec.leftprotoport` / `rightprotoport` | `""` / `""` | `tcp` / `tcp/2049`: only NFS through the tunnel. **Must match the NAS's selectors exactly** (docs/70, Sample 2). Left out when empty |
 | `nodeSelector` | `node-role.kubernetes.io/worker: ""` | Which nodes get a certificate, a pod and a tunnel |
 | `tolerations` | `[]` | For the cert-sync DaemonSet |
 | `certificate.duration` / `renewBefore` / `keySize` | `8760h` / `720h` / `3072` | The per-node certificate |

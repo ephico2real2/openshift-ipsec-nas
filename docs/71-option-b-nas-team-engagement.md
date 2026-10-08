@@ -12,7 +12,7 @@
 | The option that matches it | **Option B**: one certificate per node from the enterprise CA, imported on that node only | [doc 70, *Each option*](70-review-enterprise-linux-ipsec-config.md#each-option-against-the-reference) |
 | Why not A or C | Every node presents one identity, so the NAS must allow `uniqueids=no` for **all** its peers; with the default the nodes replace each other's tunnel (measured) | [doc 51](51-option-c-summary.md), [lab findings 4, 5](lab/lima-lab.md#8-what-the-lab-showed) |
 | Option B and `uniqueids` | Works with the NAS's default `uniqueids=yes`: two peers with their own certificates held two tunnels (measured) | [doc 70, *`uniqueids`*](70-review-enterprise-linux-ipsec-config.md#uniqueids-and-option-b) |
-| The tunnel definition we propose | Option B's NNCP plus the standard's `rightca=%same`, `leftprotoport: tcp`, `rightprotoport: tcp/2049`, `type: tunnel` ("Sample 2"). NMState 2.2.60 accepts it offline; **not yet applied to a node** | [doc 70, Sample 2](70-review-enterprise-linux-ipsec-config.md#sample-2--matching-the-enterprise-standard-not-tested) |
+| The tunnel definition we propose | Option B's NNCP plus the standard's `rightca=%same`, `leftprotoport: tcp`, `rightprotoport: tcp/2049`, `type: tunnel` ("Sample 2"). NMState 2.2.60 accepts it offline; **not yet applied to a node** | [doc 70, Sample 2](70-review-enterprise-linux-ipsec-config.md#sample-2--matching-the-enterprise-standard-measured-in-the-lab) |
 | Measured where | Our lab (OpenShift Local and a libreswan NAS, where every tool is installed). **Not** on an enterprise cluster, **not** against the enterprise NAS | [docs/README.md](README.md) |
 | Enterprise clusters today | No Kyverno, no cert-manager integration with the enterprise CA | Operator, 2026-10-07 |
 
@@ -31,7 +31,7 @@
 ### What we ask
 
 - [ ] **How the NAS defines its IPsec peers today** for the Linux hosts: one connection per host (address and identity pinned), or one for any peer of a subnet (`right=%any`, `rightid=%fromcert`)? For OpenShift, a subnet definition means no NAS change when a node is added.
-- [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? If yes, our NNCP must carry Sample 2's selectors.
+- [ ] **The NAS side of the port selectors**: is its connection limited to TCP 2049? **Our selectors must match theirs exactly**: the lab NAS refused a mismatch either way (`TS_UNACCEPTABLE`, [evidence 61](evidence/crc/61-nfs-only-selectors.txt)).
 - [ ] **Tunnel or transport mode** on the NAS's side.
 - [ ] **`uniqueids`** (or the product's equivalent): we expect the default (`yes`); Option B needs no change. A and C would need `no` for every peer.
 - [ ] **Signature schemes**: does the NAS accept RSA-PSS signatures from a peer? (`leftauth=rsasig` in the standard; OpenShift cannot set `leftauth`.)
@@ -64,7 +64,7 @@ Node certificates come from the enterprise Venafi TPP through cert-manager's Ven
 
 | # | Item | What to decide or write | Owner | Status |
 |---|---|---|---|---|
-| 1 | The refined NNCP | Sample 2's four settings into the Kyverno policy template and the chart's values, as options with today's behaviour as the default | Platform | Spec in doc 70; not built |
+| 1 | The refined NNCP | The chart values `ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport` (empty by default), set to match the NAS | Platform | Built; measured in the lab ([evidence 61](evidence/crc/61-nfs-only-selectors.txt)) |
 | 2 | Venafi issuer | The chart's `clusterIssuer` value pointing at the Venafi `ClusterIssuer`, and its zone allowing the profile above | Platform | Open |
 | 3 | cert-manager | The cert-manager Operator for Red Hat OpenShift on enterprise clusters (channel, version, who operates it) | Platform | Open: not on enterprise clusters today |
 | 4 | Kyverno | Kyverno on enterprise clusters: version (1.19 or later) and its two OpenShift settings. The most popular policy engine for Kubernetes; we run the open-source release as-is and support it ourselves ([doc 72](72-option-b-implementation-plan.md#4-the-case-for-each-component)) | Platform | Support model decided |

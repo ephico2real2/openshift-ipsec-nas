@@ -92,6 +92,7 @@ Off by default; with them the chart sets up Option C with **cert-manager and Kyv
 | `tunnel.enabled` / `variant` / `pools` | `false` / `c1` / `[worker]` | C1: NNCP `ipsec-nas-wildcard-<pool>`. C2: Kyverno policy `ipsec-nncp-wildcard-<pool>`, one NNCP per node, with Kyverno's two ClusterRoles (`kyvernoRBAC.create`). The same objects as `render.sh` (the chart test compares them) |
 | `nodeDomain`, `nas.fqdn`, `nas.ip`, `clusterIssuer` | – | As in Option B's chart |
 | `ipsec.type` / `left` / `right` | `transport` / node FQDN (C2) / `nas.fqdn` | As in Option B's chart. OpenShift Local: `tunnel`, `%defaultroute`, the NAS's IP |
+| `ipsec.rightca` / `leftprotoport` / `rightprotoport` | `""` | As in Option B's chart: `%same`, `tcp`, `tcp/2049` to match a NAS limited to NFS; the selectors must match the NAS's exactly |
 | `prerequisites.skipCheck` / `kyvernoNamespace` | `false` / `kyverno` | The checks: NMState (tunnel), Kyverno 1.19 (C2), cert-manager (certificate) served; the `ClusterIssuer` exists; Kyverno does not ignore Nodes |
 
 **The chart never makes the MachineConfig.** It carries the private key and reboots its pool. `scripts/option-c-certificate.sh from-secret` builds each pool's MachineConfig from the certificate's Secret, with every check of the manual path, and you apply it.

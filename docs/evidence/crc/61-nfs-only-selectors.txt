@@ -1,0 +1,50 @@
+# The enterprise standard's NFS-only tunnel against the lab NAS (docs/70 Sample 2; docs/72 section 5).
+# CRC 4.22.7 on Option C (C2, Argo CD Application ipsec-nas-option-c), lab NAS crc-nas (libreswan 5.4, NFS accepted only
+# over IPsec), 2026-10-08 00:55-01:00Z by the Mac's clock. The NAS VM's clock ran about 1 h 47 min behind: its log
+# times read 23:08-23:12 on 2026-10-07. Tunnel mode throughout (CRC reaches the NAS through NAT).
+
+## 0. Restore point
+  Argo CD: targetRevision main; ipsec {left: %defaultroute, right: 192.168.64.8, type: tunnel}
+  NAS conn workers: left=192.168.64.8, leftid/rightid=%fromcert, right=%any, rightca=%same, ikev2=insist,
+    leftsubnet=192.168.64.8/32, rightsubnet=192.168.127.2/32, type=tunnel, auto=add; config setup uniqueids=no
+  Backup: /root/nas-workers.conf.before-protoport
+
+## 1. The NAS limited to NFS, the node's NNCP unchanged (all traffic to the NAS)
+  NAS: + leftprotoport=tcp/2049, rightprotoport=tcp; ipsec restarted
+    "workers": 192.168.64.8/32/TCP/2049===...===192.168.127.2/32/TCP
+  node: nmcli connection down/up ipsec-nas -> "Connection successfully activated" (NetworkManager), but:
+    pluto (node): CREATE_CHILD_SA failed with error notification TS_UNACCEPTABLE
+    pluto (NAS): Child SA's Traffic Selector request {TSi=192.168.127.2/32;TSr=192.168.64.8/32} does not match any IKEv2
+                 connection; responding with TS_UNACCEPTABLE
+    The IKE SA authenticated (peer 'O=KCS, CN=ocp-ipsec-workers', 3072-bit RSASSA-PSS with SHA2_512); no Child SA, no tunnel.
+  -> REFUSED. The three demo applications' NFS stalled.
+
+## 2. The node refined through the chart (branch docs/option-b-enterprise-plan, commit 6f93497)
+  Argo CD Application: targetRevision docs/option-b-enterprise-plan, ipsec += {rightca: %same, leftprotoport: tcp,
+    rightprotoport: tcp/2049}; Synced 6f93497, Healthy; NNCP ipsec-nas-crc generation 3, Available, with
+    leftprotoport: tcp, rightca: '%same', rightprotoport: tcp/2049, type: tunnel
+  NetworkManager's connection had the new keys (vpn.data), but libreswan had deleted the old connection (00:56:25) and
+  not loaded the new one; "nmcli connection up" -> "already active"; down then up (what Option B's cert-sync pod does):
+    node: initiator established Child SA; IPsec tunnel [192.168.127.2/32/TCP===192.168.64.8/32/TCP/2049] xfrm=AES_GCM_16_256
+    NAS:  responder established Child SA; IPsec tunnel [192.168.64.8/32/TCP/2049===192.168.127.2/32/TCP]
+    node xfrm policy: src 192.168.127.2/32 dst 192.168.64.8/32 proto tcp dport 2049 (and its reverse), nothing else
+  -> ESTABLISHED, NFS only.
+  00:58:18Z the three demo pages built 00:58:14Z (NFS resumed by itself); NAS tunnel inBytes=232080 outBytes=12029680;
+    nfs-over-ipsec 18482813 -> 18484946 packets; nfs-cleartext-dropped 674 -> 682 (NFS retries while no tunnel was up)
+  ping from the node to the NAS: 2 sent, 2 received, outside the tunnel (in clear): not in its selectors. The lab NAS's
+    firewall drops only cleartext NFS, so it answered.
+
+## 3. The node refined, the NAS restored (no selectors)
+  NAS: the backup restored (no protoport lines), ipsec restarted; node down/up:
+    pluto (node): CREATE_CHILD_SA failed with error notification TS_UNACCEPTABLE
+    pluto (NAS): Child SA's Traffic Selector request {TSi=192.168.127.2/32/TCP;TSr=192.168.64.8/32/TCP/2049} does not
+                 match any IKEv2 connection; responding with TS_UNACCEPTABLE
+  -> REFUSED: this NAS narrows in neither direction. The NNCP's selectors must match the NAS's exactly.
+
+## 4. Restored
+  Argo CD: targetRevision main, ipsec as in section 0; Synced 4f21e15, Healthy; NNCP without protoport/rightca;
+  node down/up: initiator established Child SA [192.168.127.2/32===192.168.64.8/32]
+  01:00:21Z the three demo pages built; NAS conn without protoport (0 lines); nfs-over-ipsec 18491128, cleartext 693.
+
+## Not measured: an enterprise NAS (another product may narrow traffic selectors); transport mode with port selectors
+## (CRC needs tunnel mode); Option B's cert-sync pod restarting the connection by itself after the NNCP change.
