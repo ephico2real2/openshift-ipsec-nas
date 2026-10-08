@@ -52,6 +52,7 @@ Side by side:
 | [71-option-b-nas-team-engagement.md](71-option-b-nas-team-engagement.md) | **Summary for the NAS team:** where we stand, what we bring and ask, the certificate profile for Venafi, what is left for us to specify |
 | [72-option-b-implementation-plan.md](72-option-b-implementation-plan.md) | **Implementation plan for Option B:** why there is no turnkey solution on OpenShift, the case for each component, end-to-end automation with workflow diagrams, the engineering PoC and its acceptance criteria |
 | [73-runbook-node-certificate-revocation.md](73-runbook-node-certificate-revocation.md) | **Runbook:** revoking a removed node's certificate; cert-manager does not revoke on deletion; the plan first, finding orphaned certificates, revoking by thumbprint |
+| [deck/option-b/](deck/option-b/README.md) | **The presentation deck on Option B:** 17 slides summarizing docs 70 to 73, their source and how they map to the diagrams |
 | [40-lab-crc-and-nas.md](40-lab-crc-and-nas.md) | **The lab:** OpenShift Local and a NAS VM on one Mac, how it differs from production, how it was built, testing with an application, and the gotchas met on the way |
 
 Which to read:

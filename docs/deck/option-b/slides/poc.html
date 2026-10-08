@@ -1,0 +1,18 @@
+<section id="poc" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE ENGINEERING POC</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">What the PoC must prove on an enterprise cluster</h2>
+<table style="font-size:24px;color:#1F2A36;width:1664px">
+<tr><th style="width:52%">Criterion</th><th style="width:48%">In the lab today</th></tr>
+<tr><td>Each worker gets its own certificate from Venafi TPP</td><td>With an in-cluster CA</td></tr>
+<tr><td>All tunnels up at once, NAS on uniqueids=yes</td><td>Two stand-in workers; one OpenShift node</td></tr>
+<tr><td>The enterprise NAS accepts the refined tunnel</td><td>Not run</td></tr>
+<tr><td>NFS refused outside the tunnel</td><td>Measured (lab NAS)</td></tr>
+<tr><td>A new worker: certificate and tunnel, no person</td><td>Documented; lab has one node</td></tr>
+<tr><td>Renewal with no outage beyond a tunnel restart</td><td>Measured (evidence 29)</td></tr>
+<tr><td>A NAS restart needs no cluster action</td><td>Not measured under Option B</td></tr>
+<tr><td>Per-node metrics, alerts, dashboard</td><td>Measured (doc 60)</td></tr>
+</table>
+<p style="font-size:28px;color:#3D4A57">On a non-production cluster with at least three workers, against the enterprise NAS; ten criteria in doc 72.</p>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">doc 72, section 6</p>
+<aside>Eight of the ten acceptance criteria are shown here; doc 72 also covers node removal and install and removal from Git. The right column is honest about the lab: what it measured, and what only the PoC can show, chiefly Venafi issuance, more than one OpenShift node, and the enterprise NAS.</aside>
+</section>

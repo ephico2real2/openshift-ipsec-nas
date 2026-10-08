@@ -1,0 +1,12 @@
+<section id="rhcos" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">WHY OPENSHIFT IS DIFFERENT</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">An OpenShift node is not a Linux server we configure by hand</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px"><h3 style="font-size:32px;font-weight:600;color:#15202B">Image-based</h3><p style="font-size:28px;color:#3D4A57">RHCOS keeps its operating system read-only; Red Hat says to avoid changing a node directly.</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px"><h3 style="font-size:32px;font-weight:600;color:#15202B">Managed by the cluster</h3><p style="font-size:28px;color:#3D4A57">The Machine Config Operator owns the node's files, through MachineConfigs per pool.</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px"><h3 style="font-size:32px;font-weight:600;color:#15202B">Network by policy</h3><p style="font-size:28px;color:#3D4A57">A tunnel is an NMState policy (NNCP), not a file in /etc/ipsec.d.</p></div>
+</div>
+<div style="display:flex;background:#15202B;padding:36px 44px;border-radius:16px"><p style="font-size:36px;line-height:1.35;color:#F5F4EF">So the Linux procedure (a conn file and certutil on each host) <b style="color:#7FD4C9">does not apply</b>. There is no turnkey Red Hat answer for per-node certificates.</p></div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">Red Hat OpenShift documentation, About RHCOS (4.19) · doc 72, section 2</p>
+<aside>Red Hat's own documentation describes RHCOS as managed more tightly than a default RHEL install, with a read-only /usr, operating system changes handled by the Machine Config Operator, and direct changes to a node discouraged. Anything we put on a node goes through a MachineConfig, which applies to a whole pool, or through a pod.</aside>
+</section>

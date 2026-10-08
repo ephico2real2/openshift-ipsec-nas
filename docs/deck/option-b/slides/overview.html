@@ -1,0 +1,14 @@
+<section id="overview" data-section="How Option B works, end to end" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE ARCHITECTURE</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">The node and the NAS prove who they are</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/102befd8fe192f9fbe00a32a291f0e3c" alt="Cluster settings put libreswan, a certificate and one tunnel definition on each worker node. The node and the NAS authenticate each other with certificates over IKEv2, and NFS traffic to the NAS IP travels as ESP. Pod-to-pod traffic is not encrypted." style="width:1150px;height:677px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:28px">
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">Each worker holds <b>its own certificate</b> and one tunnel definition.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">IKEv2 with certificates on both sides; NFS to the NAS travels as ESP.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">Pod-to-pod traffic is not part of it.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">doc 00, Overview · as deployed in the lab today (transport mode, all traffic to the NAS IP)</p>
+<aside>The technical overview, as it runs in the lab: libreswan on each node, configured by NMState, authenticates to the NAS with the node's certificate. The refined tunnel definition proposed later in this deck changes the mode to tunnel and limits it to NFS, like the enterprise standard.</aside>
+</section>

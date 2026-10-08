@@ -1,0 +1,15 @@
+<section id="mechanism" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE MECHANISM</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">The certificate lands first, then the tunnel</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/43a491bc868e5950b4f79f82678c8377" alt="Option B: when a worker joins, Kyverno requests a certificate for it, cert-manager issues it into a Secret, the cert-sync pod on that node imports it into the node's NSS database and labels the node, and only then Kyverno generates the NNCP that brings the tunnel up. No manual step and no reboot." style="width:1000px;height:683px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:24px">
+<p style="font-size:30px;line-height:1.4;color:#3D4A57"><b>Kyverno</b> asks for the node's certificate.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57"><b>cert-manager</b> gets it signed by the enterprise CA.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">The node's own <b>DaemonSet pod</b> imports it and labels the node.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">Only then <b>Kyverno</b> writes the node's NNCP, and <b>NMState</b> brings the tunnel up.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">doc 20, How it works · measured: first policy to tunnel in 47 s, no reboot</p>
+<aside>The order matters: the tunnel definition is only created once the certificate is on that node, so a node never tries to connect without its certificate. Nothing in this sequence is done by a person, and no node reboots.</aside>
+</section>
