@@ -213,6 +213,15 @@
         },
         "right": {
           "type": "string"
+        },
+        "rightca": {
+          "type": "string"
+        },
+        "leftprotoport": {
+          "type": "string"
+        },
+        "rightprotoport": {
+          "type": "string"
         }
       }
     }
