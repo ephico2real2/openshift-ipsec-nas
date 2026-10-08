@@ -1,0 +1,155 @@
+<!-- SPDX-License-Identifier: MIT-0. Started from the diagram-kit template, https://github.com/ephico2real2/diagram-kit -->
+<title>IPsec NAS Observability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f5f6f8; --surface: #ffffff; --ink: #18212c; --muted: #58636f; --rule: #d7dce3;
+  --host: #a55a0b; --host-wash: #fbf1e4; --remote: #0e6f68; --remote-wash: #e3f3f1;
+  --gap: #b3261e; --gap-wash: #fbe9e7; --none: #5f6a77; --none-wash: #eef0f3;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+    --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+    --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0e131a; --surface: #151c25; --ink: #e5e9ef; --muted: #9aa5b3; --rule: #2a3440;
+  --host: #f0a53c; --host-wash: #2a2014; --remote: #3fcfc0; --remote-wash: #122a28;
+  --gap: #f2857c; --gap-wash: #2d1614; --none: #9aa5b3; --none-wash: #1b232d;
+}
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; margin: 0; }
+.page { max-width: 1060px; margin: 0 auto; padding-inline: 16px; padding-block: 40px 72px; display: grid; gap: 44px; }
+header { display: grid; gap: 10px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(26px, 4vw, 36px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; text-wrap: balance; }
+p { margin: 0; max-width: 72ch; }
+.lede { font-size: 17px; max-width: 70ch; }
+.muted { color: var(--muted); }
+code { font-family: var(--font-mono); font-size: .9em; }
+section { display: grid; gap: 14px; }
+figure { margin: 0; display: grid; gap: 10px; }
+.fig-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 12px; }
+.fig-scroll svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--ink); }
+figcaption { font-size: 13.5px; color: var(--muted); max-width: 80ch; }
+.tbl { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+th { font-size: 12px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); background: var(--ground); }
+tr:last-child td { border-bottom: 0; }
+.yes { color: var(--remote); font-weight: 600; } .no { color: var(--gap); font-weight: 600; }
+.cell-gap { background: var(--gap-wash); }
+.decisions { display: grid; gap: 12px; }
+.decision { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 20px; display: grid; gap: 8px; }
+.decision .id { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.decision .q { font-weight: 600; }
+.decision .rec { font-size: 14px; border-left: 3px solid var(--remote); padding-left: 10px; }
+.decision .rec.warn { border-left-color: var(--host); }
+a { color: var(--remote); }
+:focus-visible { outline: 2px solid var(--remote); outline-offset: 2px; }
+</style>
+
+<div class="page">
+  <header>
+    <div class="eyebrow">openshift-ipsec-nas · architecture · 2026-10-08</div>
+    <h1>One pod per node, one source of truth for IPsec to the NAS</h1>
+    <p class="lede">Our in-house DaemonSet puts one pod on each node that has a tunnel. It keeps that node's certificate in place, and it reports the node's tunnel, certificate and NFS state as Prometheus metrics, which OpenShift's monitoring, the console, Grafana and Dynatrace all read from the same endpoint.</p>
+  </header>
+  <section>
+    <h2>From the node to every dashboard</h2>
+    <figure>
+      <div class="fig-scroll">
+<svg viewBox="0 0 1100 560" role="img" aria-label="Monitoring architecture. On each selected node one ipsec-cert-sync pod has three containers: sync imports the node certificate, collector reads the host every 30 seconds into a file, metrics serves it unprivileged on port 9754. A headless Service and a ServiceMonitor let the user workload Prometheus scrape each pod, with 12 alert rules sent to the user workload Alertmanager; Thanos Querier on port 9091 serves the data to Perses in the console and to Grafana. The same Service, annotated, is scraped by the Dynatrace ActiveGate. Any other APM that reads Prometheus text is proposed, not tested.">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<g font-family="IBM Plex Mono, monospace" font-size="13" font-weight="600">
+<rect x="20" y="14" width="360" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="200" y="34" text-anchor="middle" fill="var(--none)">EACH SELECTED NODE · one ipsec-cert-sync pod</text>
+<rect x="400" y="14" width="400" height="30" rx="6" fill="var(--remote-wash)" stroke="var(--remote)"/><text x="600" y="34" text-anchor="middle" fill="var(--remote)">THE CLUSTER · OpenShift monitoring</text>
+<rect x="820" y="14" width="260" height="30" rx="6" fill="var(--none-wash)" stroke="var(--none)"/><text x="950" y="34" text-anchor="middle" fill="var(--none)">OUTSIDE · an APM</text>
+</g>
+<g font-family="IBM Plex Sans, sans-serif" font-size="12.5" fill="currentColor">
+<line x1="390" y1="14" x2="390" y2="560" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<line x1="810" y1="14" x2="810" y2="560" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="6 5"/>
+<rect x="30" y="58" width="340" height="62" rx="7" fill="var(--none-wash)" stroke="var(--none)" stroke-width="1.2"/>
+<text x="44" y="80" font-weight="600">The node (RHCOS)</text>
+<text x="44" y="97">libreswan, NSS database, NetworkManager</text>
+<text x="44" y="113" fill="var(--muted)">/proc/net/xfrm_stat, the NFS mounts</text>
+<rect x="30" y="150" width="340" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="172" font-weight="600">sync · privileged</text>
+<text x="44" y="189">imports this node&#x27;s certificate, labels it</text>
+<text x="44" y="205" fill="var(--muted)">restarts a tunnel NetworkManager calls up</text>
+<rect x="30" y="242" width="340" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="44" y="264" font-weight="600">collector · privileged, host read-only</text>
+<text x="44" y="281">reads the host every 30 s</text>
+<text x="44" y="297" fill="var(--muted)">writes 16 metric families to a file</text>
+<rect x="30" y="334" width="340" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="44" y="356" font-weight="600">metrics · unprivileged</text>
+<text x="44" y="373">serves the file on :9754/metrics</text>
+<text x="44" y="389" fill="var(--muted)">the pod&#x27;s only network listener</text>
+<path d="M200,150 V120" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/><text x="208" y="140" fill="var(--muted)">writes NSS, nmcli</text>
+<path d="M370,96 H384 V273 H370" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<text x="388" y="205" transform="rotate(-90 388 205)" fill="var(--muted)">reads</text>
+<path d="M200,304 V334" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/><text x="208" y="326" fill="var(--muted)">a file</text>
+<rect x="410" y="334" width="290" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="424" y="356" font-weight="600">Service ipsec-nas-metrics</text>
+<text x="424" y="373">headless: each pod scraped alone</text>
+<text x="424" y="389" fill="var(--muted)">ServiceMonitor ipsec-nas, 30 s</text>
+<path d="M370,365 H410" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="410" y="242" width="380" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="424" y="264" font-weight="600">User workload Prometheus</text>
+<text x="424" y="281">labels node and exporter_node per series</text>
+<text x="424" y="297" fill="var(--muted)">PrometheusRule ipsec-nas: 12 alerts</text>
+<path d="M555,334 V304" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/><text x="563" y="326" fill="var(--muted)">scrape</text>
+<rect x="410" y="150" width="380" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="424" y="172" font-weight="600">Thanos Querier :9091</text>
+<text x="424" y="189">one place for these and platform metrics</text>
+<text x="424" y="205" fill="var(--muted)">readers: cluster-monitoring-view</text>
+<path d="M600,242 V212" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="410" y="58" width="180" height="62" rx="7" fill="var(--remote-wash)" stroke="var(--remote)" stroke-width="1.5"/>
+<text x="424" y="80" font-weight="600" fill="var(--remote)">Perses (COO)</text>
+<text x="424" y="97">the console dashboard</text>
+<text x="424" y="113" fill="var(--muted)">six sections</text>
+<rect x="610" y="58" width="180" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="624" y="80" font-weight="600">Grafana</text>
+<text x="624" y="97">the same dashboard</text>
+<text x="624" y="113" fill="var(--muted)">optional, a ConfigMap</text>
+<path d="M500,150 V120" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<path d="M700,150 V120" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="410" y="426" width="380" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="424" y="448" font-weight="600">Alertmanager (user workload)</text>
+<text x="424" y="465">IpsecNasTunnelDown, …CertificateExpiringSoon,</text>
+<text x="424" y="481" fill="var(--muted)">…NfsWithoutTunnel and nine more</text>
+<path d="M784,304 V426" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/><text x="742" y="416" fill="var(--muted)">alerts</text>
+<rect x="830" y="334" width="250" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="844" y="356" font-weight="600">Dynatrace ActiveGate</text>
+<text x="844" y="373">scrapes the annotated Service</text>
+<text x="844" y="389" fill="var(--muted)">metrics.dynatrace.com/*</text>
+<rect x="830" y="242" width="250" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
+<text x="844" y="264" font-weight="600">Dynatrace</text>
+<text x="844" y="281">ipsec_nas_* under their own names</text>
+<text x="844" y="297" fill="var(--muted)">measured on a trial tenant</text>
+<path d="M700,372 H830" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/><text x="706" y="365" fill="var(--muted)">annotations</text>
+<path d="M955,334 V304" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah)"/>
+<rect x="830" y="426" width="250" height="62" rx="7" fill="var(--host-wash)" stroke="var(--host)" stroke-width="1.5" stroke-dasharray="5 4"/>
+<text x="844" y="448" font-weight="600" fill="var(--host)">Any APM that reads</text>
+<text x="844" y="465">Prometheus text, from :9754</text>
+<text x="844" y="481" fill="var(--host)">or from Thanos: not tested</text>
+<path d="M700,388 H812 V457 H830" fill="none" stroke="var(--host)" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+<text x="805" y="452" transform="rotate(-90 805 452)" fill="var(--host)">proposed</text>
+<text x="30" y="520" fill="var(--muted)">One pod per node reports its own node. The same endpoint feeds OpenShift's monitoring, the console, Grafana and Dynatrace: one source of truth.</text>
+<text x="30" y="542" fill="var(--host)" font-weight="600">Dashed = proposed, not tested: an APM other than Dynatrace.</text>
+</g>
+</svg>
+      </div>
+      <figcaption>Solid: built and measured in the lab (Dynatrace on a trial tenant). Dashed: another APM reading the same endpoint, proposed and not tested.</figcaption>
+    </figure>
+  </section>
+</div>
