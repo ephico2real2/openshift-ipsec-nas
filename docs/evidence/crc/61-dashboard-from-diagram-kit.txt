@@ -117,3 +117,20 @@
     - doc 61 said the kit stops at any other legend; with an empty legend, or none, kit 0.2.2 did not. Kit 0.2.3 does.
   Regenerated with the corrected script and kit 0.2.3's branch: "converted ... (24 panels)" twice, "wrote ..." twice,
   and the five files have the same sha256.
+
+## 10. A third review, of section 9's corrections and of the CI added that day (2026-10-07)
+  It ran the script of #58 under /bin/bash 3.2.57, bash 5.3.20 and bash 5.2.37 on Linux: INT, TERM and HUP after each
+  of the first four moves, to the script and to its process group, 24 cases a shell: exit 0 and 5 of 5 files new,
+  every time; no line beginning "wrote" unless the five are in place. It found:
+    - the three signals were never given back after the moves. With the script's output a full pipe that nobody
+      reads, it was blocked in its first echo and under bash 5 only KILL ended it. "trap - INT TERM HUP" follows the
+      moves now. The test sends each of the three to the script's own process group, and has that case.
+    - the test held the script to TERM alone: a script that held off TERM only passed it. Now INT and HUP too.
+    - tests/test-alert-rules.sh ran promtool from quay.io/prometheus/prometheus:latest, a tag that moves, in CI on
+      every pull request. It is v3.15.0 by digest now; tests/test-pinned-downloads.sh fails on an image named by a
+      tag alone, or an action not named by its commit.
+    - seven calls in tests/test-option-c-chart.sh passed a rendering of about 100 KiB to ruby as one argument, 28 to
+      31 KiB under Linux's limit of 128 KiB (one, at 177 KiB, had already failed the first CI run). All go in on
+      stdin now. With four expectations spoiled in a copy, the five checks concerned fail.
+  All eight scripts under tests/ pass: option-c 40 ok, chart 17, dashboard script 13, pinned downloads 2, shared
+  collector 8, metrics collector 37, doc links and alert rules exit 0.

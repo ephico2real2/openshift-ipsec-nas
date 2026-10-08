@@ -117,5 +117,8 @@ convert "${C_GRAFANA}.tmp" "${C_CONFIG}.tmp"
 # the script again puts that right.)
 trap '' INT TERM HUP
 for f in "${TARGETS[@]}"; do mv "${f}.tmp" "${f}"; done
+# The moves are done, and the signals are the script's to take again: what is left only says so. Held off to the end,
+# they left a script whose output nobody read (a full pipe) to be stopped by KILL alone.
+trap - INT TERM HUP
 echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
 echo "wrote ${C_GRAFANA} and ${C_CONFIG}"

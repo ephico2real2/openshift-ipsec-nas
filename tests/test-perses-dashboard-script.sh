@@ -32,7 +32,9 @@ EOF
 chmod +x "${work}/bin/perses-dashboard"
 
 # The stand-in for mv, for the script's last five commands: on its call number MV_FAIL_ON it fails; after its call
-# number MV_TERM_AFTER it sends the script SIGTERM, as a kill between two moves would.
+# number MV_TERM_AFTER it sends the script SIGTERM, as a kill between two moves would. With MV_SIGNAL_GROUP_AFTER and
+# MV_SIGNAL it sends that signal to the script's whole process group, itself included, as Ctrl-C at a terminal does.
+# After its call number MV_FILL_AFTER it fills the FIFO MV_FILL, so that the next thing written to it blocks.
 mkdir "${work}/mvbin"
 cat > "${work}/mvbin/mv" <<'EOF'
 #!/bin/bash
@@ -40,6 +42,16 @@ n=0; [[ -f "${MV_COUNT_FILE}" ]] && read -r n < "${MV_COUNT_FILE}"; n=$((n + 1))
 if [[ "${n}" == "${MV_FAIL_ON:-0}" ]]; then echo "mv: (stand-in) the move number ${n} fails" >&2; exit 1; fi
 /bin/mv "$@" || exit 1
 if [[ "${n}" == "${MV_TERM_AFTER:-0}" ]]; then kill -TERM "${PPID}"; /bin/sleep 1; fi
+if [[ "${n}" == "${MV_SIGNAL_GROUP_AFTER:-0}" ]]; then kill "-${MV_SIGNAL}" -- "-${PPID}"; /bin/sleep 1; fi
+if [[ "${n}" == "${MV_FILL_AFTER:-0}" ]]; then
+  python3 -c 'import os, sys
+fifo = os.open(sys.argv[1], os.O_WRONLY | os.O_NONBLOCK)
+try:
+    while True: os.write(fifo, b"\0")
+except BlockingIOError: pass' "${MV_FILL}"
+  : > "${MV_FILL}.full"
+fi
+exit 0
 EOF
 chmod +x "${work}/mvbin/mv"
 
@@ -110,6 +122,45 @@ changed=$(diff <(echo "${before}") <(five) | grep -c '^>')
 [[ ${changed} -eq 5 && -z "$(left)" ]] \
   && ok "SIGTERM between two moves: the five files are written all the same, nothing temporary is left" \
   || bad "SIGTERM between two moves: ${changed} of 5 files written, left behind: $(left)"
+
+# The same for each signal a terminal or a supervisor sends, to the script's whole process group: the script leads a
+# group of its own here (a new session), which is the group the stand-in signals. A script that holds off TERM alone
+# passed the case above.
+for sig in INT TERM HUP; do
+  fresh; before="$(five)"
+  ( cd "${work}/repo" && PATH="${work}/mvbin:${PATH}" MV_COUNT_FILE="${work}/mvcount" MV_SIGNAL_GROUP_AFTER=2 MV_SIGNAL="${sig}" \
+      PERSES_DASHBOARD="${work}/bin/perses-dashboard" COUNT_FILE="${work}/count" FAIL_ON=0 PERCLI=stand-in \
+      python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' \
+      bash scripts/perses-dashboard.sh >"${work}/out" 2>"${work}/err" )
+  changed=$(diff <(echo "${before}") <(five) | grep -c '^>')
+  [[ ${changed} -eq 5 && -z "$(left)" ]] \
+    && ok "SIG${sig} to the group between two moves: the five files are written all the same, nothing temporary is left" \
+    || bad "SIG${sig} to the group between two moves: ${changed} of 5 files written, left behind: $(left)"
+done
+
+# Once the moves are done the signals are the script's to take again. Its output is a FIFO here that is full and that
+# nobody reads, so it blocks as it says what it wrote: SIGTERM must end it. (Held off to the end, KILL alone did.)
+# Not under bash 3.2, which does not act on one signal while a builtin of its is blocked, held off or not.
+if (( $(bash -c 'echo "${BASH_VERSINFO[0]}"') >= 4 )); then
+  fresh; before="$(five)"; mkfifo "${work}/fifo"; exec 8<>"${work}/fifo"
+  ( cd "${work}/repo" && PATH="${work}/mvbin:${PATH}" MV_COUNT_FILE="${work}/mvcount" MV_FILL_AFTER=5 MV_FILL="${work}/fifo" \
+      PERSES_DASHBOARD="${work}/bin/perses-dashboard" COUNT_FILE="${work}/count" FAIL_ON=0 PERCLI=stand-in \
+      exec bash scripts/perses-dashboard.sh >"${work}/fifo" 2>"${work}/err" ) &
+  blocked=$!
+  for _ in $(seq 1 100); do [[ -f "${work}/fifo.full" ]] && break; sleep 0.1; done
+  sleep 1; changed=$(diff <(echo "${before}") <(five) | grep -c '^>')
+  kill -TERM "${blocked}" 2>/dev/null; sleep 2
+  if kill -0 "${blocked}" 2>/dev/null; then
+    kill -KILL "${blocked}"
+    bad "after the moves (${changed} of 5 files written) SIGTERM did not end the script: its signals are still held off"
+  else
+    [[ ${changed} -eq 5 ]] && ok "after the moves the signals are the script's again: SIGTERM ends it, the five files written" \
+      || bad "the script ended before its five moves: ${changed} of 5 files written: $(cat "${work}/err")"
+  fi
+  wait "${blocked}" 2>/dev/null; exec 8<&-; rm -f "${work}/fifo" "${work}/fifo.full"
+else
+  printf 'skip  the signals after the moves (bash %s)\n' "$(bash -c 'echo "${BASH_VERSION}"')"
+fi
 
 fresh --other-uid; before="$(state)"
 if run 0; then
