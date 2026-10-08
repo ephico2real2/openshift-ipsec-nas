@@ -1,0 +1,15 @@
+<section id="at-scale" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">TRUST AT SCALE</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">On many nodes, the checks catch bad data</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/88e0f257260a0a5ddf94ef4a1e513a1b" alt="The dashboard on a three-node cluster with two faults injected: nodes reported twice 1, pods reporting the wrong node 1, and the per-node table showing the duplicated node in two rows and a node named by the wrong pod." style="width:640px;height:680px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:28px">
+<p style="font-size:28px;line-height:1.4;color:#3D4A57">Two faults injected on a three-node cluster: a duplicate pod, and a pod naming the wrong node.</p>
+<p style="font-size:28px;line-height:1.4;color:#3D4A57"><b>Both caught</b>: "Nodes reported twice" 1, "Pods reporting the wrong node" 1, each on its own row.</p>
+<p style="font-size:28px;line-height:1.4;color:#3D4A57">A node without a pod raises ExporterMissing for that node only.</p>
+<p style="font-size:26px;line-height:1.4;color:#5C6773">kind nodes have no libreswan: their IPsec columns are DOWN by design.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">kind, three nodes (doc 60, Capture 1; evidence kind/01, kind/02)</p>
+<aside>One pod per node only helps if the data really is per node. On a three-node test cluster we injected two faults, a duplicate pod and a pod reporting the wrong node; the Checks section caught both, on the right rows. A node with no pod raised its own ExporterMissing alert. The IPsec columns are down there because the test nodes have no libreswan; this test is about the plumbing.</aside>
+</section>

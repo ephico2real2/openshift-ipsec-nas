@@ -1,0 +1,18 @@
+<section id="dashboard" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE DASHBOARD</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">Six sections, six questions, in the console</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/c9f83c009d4e7d3b1d24869218e34396" alt="The OpenShift console's Perses dashboard, Summary and Tunnels per node: tunnels up 1, down 0, workers reporting 1, soonest certificate expiry 2.0 years, tunnel state UP, certificate days left as a bar, traffic through the tunnel, tunnel age 3.18h, metrics age 42s, libreswan 5.3, certificate source C." style="width:850px;height:680px;object-fit:contain">
+<table style="font-size:24px;color:#1F2A36;width:766px">
+<tr><th style="width:42%">Section</th><th style="width:58%">Answers</th></tr>
+<tr><td>Summary</td><td>Is anything wrong?</td></tr>
+<tr><td>Tunnels per node</td><td>Which node, how is it doing?</td></tr>
+<tr><td>Checks</td><td>Can the numbers be trusted?</td></tr>
+<tr><td>Per-node detail</td><td>Why is a tunnel down?</td></tr>
+<tr><td>History</td><td>Is it getting worse?</td></tr>
+<tr><td>Storage on the NAS</td><td>Can my pods reach the NAS?</td></tr>
+</table>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">The lab's OpenShift console, as a namespace reader (doc 61, Capture 8) · doc 74, section 5</p>
+<aside>The dashboard lives in the OpenShift console, through the Cluster Observability Operator, where operators and application teams already are. Each section answers one question, and the data in it was chosen for that question: the four numbers on-call needs first; each node's state and age; the checks that the numbers can be trusted; the per-node detail that says why a tunnel is down; the history; and the storage section for the application teams.</aside>
+</section>

@@ -1,0 +1,13 @@
+<section id="self-service" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">SELF-SERVICE</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">Application teams answer their own question</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/2c4d4883e0466860c2bc1a72945bd467" alt="The Storage on the NAS section in the console: 3 namespaces and 3 claims on the NAS, 0 claims not Bound, 0 NAS pods without a working tunnel; the claims with their NAS IP, export and directory; the pods with their node's tunnel UP." style="width:1000px;height:632px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:28px">
+<p style="font-size:28px;line-height:1.4;color:#3D4A57">"Is my pod's NAS path working?" One row per pod: its node, and that node's tunnel <b>UP</b>, <b>DOWN</b> or <b>NO COLLECTOR</b>.</p>
+<p style="font-size:28px;line-height:1.4;color:#3D4A57">No ticket: the metrics hold no personal or health data, so readers need only view in the project and cluster-monitoring-view.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">doc 61, Decision; doc 60, the storage section · doc 74, section 7</p>
+<aside>Self-service is a design goal, not an afterthought. The storage section lists every claim on the NAS and every pod that mounts one, with its node's tunnel state. An application team that thinks its NFS is stuck can look first. Access was decided for this: the metrics carry no personal or health data, so the platform grants cluster-monitoring-view to groups, and a reader of the project sees the dashboard.</aside>
+</section>
