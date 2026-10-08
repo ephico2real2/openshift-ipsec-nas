@@ -62,7 +62,7 @@ a { color: var(--remote); }
   <header>
     <div class="eyebrow">openshift-ipsec-nas · option B · 2026-10-07</div>
     <h1>How Option B gives every node its own certificate and tunnel</h1>
-    <p class="lede">OpenShift nodes run RHCOS, configured by pools, not one by one. Option B gives each node its own certificate from the enterprise CA and its own tunnel to the NAS, with cert-manager, Kyverno and one DaemonSet, and no step by hand. Solid boxes are shipped and measured in the lab; dashed boxes and amber text are proposed or still to agree.</p>
+    <p class="lede">OpenShift nodes run RHCOS, configured by pools, not one by one. Option B gives each node its own certificate from the enterprise CA and its own tunnel to the NAS, with cert-manager, Kyverno and one DaemonSet, and no step by hand. Solid boxes are shipped and measured in the lab; dashed boxes are still to agree; amber text marks settings chosen from the storage team&#x27;s answer.</p>
   </header>
   <section>
     <h2>Onboarding: from day 0 to a node's tunnel</h2>
@@ -120,7 +120,7 @@ a { color: var(--remote); }
 <rect x="30" y="640" width="300" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
 <text x="44" y="662" font-weight="600">⑦ NNCP ipsec-nas-&lt;node&gt;</text>
 <text x="44" y="679">policy ipsec-nncp-per-node, that node only</text>
-<text x="44" y="695" fill="var(--host)">proposed: + rightca, NFS selectors, tunnel</text>
+<text x="44" y="695" fill="var(--host)">chart values: rightca, selectors, tunnel</text>
 <rect x="570" y="728" width="280" height="62" rx="7" fill="none" stroke="currentColor" stroke-width="1.2"/>
 <text x="584" y="750" font-weight="600">⑧ NMState applies it</text>
 <text x="584" y="767">NetworkManager → libreswan</text>
@@ -148,7 +148,7 @@ a { color: var(--remote); }
 <path d="M985,790 V816" fill="none" stroke="var(--gap)" stroke-width="1.2" marker-end="url(#ah1)"/><text x="992" y="810" fill="var(--muted)">no</text>
 <path d="M710,790 V816" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ah1)"/><text x="718" y="810" fill="var(--muted)">the same pod</text>
 <text x="30" y="912" fill="var(--muted)">Measured in the lab (OpenShift Local): first policy to an established tunnel in 47 s, no reboot, no human step.</text>
-<text x="30" y="934" fill="var(--host)" font-weight="600">Dashed = to agree with the storage team; amber text = proposed, not applied yet (the NNCP's enterprise settings).</text>
+<text x="30" y="934" fill="var(--host)" font-weight="600">Dashed = to agree with the storage team; amber text = the NNCP's enterprise settings: chart values, measured in the lab, set to match the NAS.</text>
 </g>
 </svg>
       </div>

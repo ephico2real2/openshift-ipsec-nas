@@ -80,7 +80,8 @@ ipsec:
   # -- The tunnel's "right". Empty means nas.fqdn; the NAS's IP when it is reached through NAT (OpenShift Local).
   right: ""
   # -- Optional, as our enterprise standard for Linux hosts (docs/70, Sample 2); each is left out of the NNCP when empty.
-  # rightca: '%same' accepts only a NAS certificate from the node certificate's own CA.
+  # rightca: '%same' accepts only a NAS certificate from the node certificate's own CA (measured: docs/evidence/crc/63).
+  # rightca and the port selectors need OpenShift 4.19.22, 4.20.11, 4.21 or later (docs/70, "Which OpenShift versions").
   rightca: ""
   # -- Port selectors: with leftprotoport "tcp" and rightprotoport "tcp/2049", only NFS to the NAS goes through the
   # tunnel; other traffic to the NAS leaves the node in clear (an IPsec-only NAS drops it). The NAS must agree.

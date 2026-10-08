@@ -84,7 +84,7 @@ Supporting guides, in [`lab/`](lab/):
 
 | Prerequisite | Needed by | Installed by these docs? |
 |---|---|---|
-| OpenShift 4.19 or later on bare metal, vSphere, RHOSP or GCP, RHCOS nodes | All | No |
+| OpenShift 4.19 or later on bare metal, vSphere, RHOSP or GCP, RHCOS nodes (4.19.22, 4.20.11, 4.21 or later for the refined tunnel's `rightca` and port selectors: [doc 70](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors)) | All | No |
 | cert-manager, and the cluster's **existing** enterprise CA `ClusterIssuer` | B (A uses the same CA by hand) | No. Nothing here creates an issuer; `company-issuer-rnd` is a placeholder for its name |
 | Kyverno 1.19 or later, not filtering out Nodes (1.13 or later with the legacy policies) | A and B | Yes, with its two settings for OpenShift (00, Step 1.6) |
 | NMState Operator with an `NMState` instance | A and B | Yes (00, Step 1.5) |
