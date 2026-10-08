@@ -1,0 +1,7 @@
+<section id="lifecycle" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE LIFECYCLE</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">Join, renew, leave: one person, once</h2>
+<img src="/_blob/626bcdf09f791fa56b634b9937cbb419" alt="Option B lifecycle. A node joins: its certificate and Secret are made, imported on that node only, then its NNCP brings up the tunnel, with no reboot. Its certificate renews: cert-manager renews 30 days before expiry with a new key, the pod re-imports it within 5 minutes and restarts the tunnel. A node leaves: Kyverno deletes its Certificate and NNCP, a cleanup policy deletes the leftover Secret, and a person revokes the certificate at the CA." style="width:1600px;height:691px;object-fit:contain">
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">Join and renewal measured in the lab (evidence 29); removal: doc 20, B.11 and B.13</p>
+<aside>Joining and renewal need nobody. When a node leaves, Kyverno removes its certificate and tunnel definition and a cleanup policy removes the leftover Secret; the one human step is revoking that node's certificate at the CA, which is only possible because each node has its own.</aside>
+</section>

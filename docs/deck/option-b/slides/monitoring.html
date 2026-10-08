@@ -1,0 +1,14 @@
+<section id="monitoring" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">SEEING IT</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">Every node reports its own tunnel</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<img src="/_blob/53a49c479a400d00728b2087bef1a5cd" alt="Collecting: each ipsec-cert-sync pod reports its own node's metrics, the user workload Prometheus scrapes them every 30 seconds, and Thanos Querier serves them. Viewing: the dashboard in the OpenShift console, run by the Cluster Observability Operator, queries Thanos." style="width:1180px;height:602px;object-fit:contain">
+<div style="flex:1;display:flex;flex-direction:column;gap:24px">
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">Tunnel state, certificate expiry and NFS traffic, <b>per node</b>.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">12 alerts, such as IpsecNasTunnelDown and IpsecNasCertificateExpiringSoon.</p>
+<p style="font-size:30px;line-height:1.4;color:#3D4A57">A dashboard in the console, and which namespaces store data on the NAS.</p>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">docs 60 and 61 · measured in the lab</p>
+<aside>The same DaemonSet pods report each node's metrics; OpenShift's own user workload monitoring scrapes them, the alerts fire per node, and the Cluster Observability Operator shows the dashboard in the console. The dashboard also lists the namespaces and claims that store data on the NAS, and whether each pod's node has a working tunnel.</aside>
+</section>

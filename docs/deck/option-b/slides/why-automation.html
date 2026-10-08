@@ -1,0 +1,7 @@
+<section id="why-automation" data-section="Why each node needs its own certificate, and why Options A and C do not fit" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">WHY AUTOMATION</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">A MachineConfig reaches a pool, never one node</h2>
+<img src="/_blob/38e4f1e416d2f1d08f3b090d1d34147d" alt="Comparison of a MachineConfig and Option B. A MachineConfig targets a MachineConfigPool, so every node gets one identity; the NAS must allow uniqueids=no; renewal reboots the pool; per-node certificates would need one pool and one MachineConfig per node. Option B gives each node its own certificate in its own pod, works with uniqueids=yes, renews with no reboot." style="width:1664px;height:646px;object-fit:contain">
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">Measured in the lab: shared identity, one tunnel at a time; own certificates, two tunnels · docs 51, 72</p>
+<aside>Per-node certificates through MachineConfigs would need one MachineConfigPool and one MachineConfig per node, made and renewed by hand, with a reboot each time. That is not manageable at any scale. Option B gives each node its own certificate through a Secret mounted into that node's own pod.</aside>
+</section>

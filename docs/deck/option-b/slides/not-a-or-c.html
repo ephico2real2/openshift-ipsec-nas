@@ -1,0 +1,19 @@
+<section id="not-a-or-c" style="display:flex; flex-direction:column; gap:40px; padding:128px 128px 160px; background:#f5f4ef">
+  <p style="font-family:'JetBrains Mono', 'Courier New', monospace; font-size:24px; letter-spacing:2px; color:#0e6f68">OPTIONS A AND C, IN PASSING</p>
+  <h2 style="font-family:'IBM Plex Sans', Arial, sans-serif; font-size:72px; font-weight:600; line-height:1.1; color:#15202b">One identity on every node clashes with the NAS</h2>
+  <table style="width:1664px; font-family:'IBM Plex Sans', Arial, sans-serif; font-size:26px; color:#1f2a36">
+    <tr><th style="width:36%">Nodes present</th><th style="width:20%">NAS uniqueids</th><th style="width:44%">Result, measured (libreswan NAS)</th></tr>
+    <tr><td>Each its own certificate (B)</td><td>yes (default)</td><td>Two tunnels at once, NFS through IPsec</td></tr>
+    <tr><td>One shared identity (A, C)</td><td>yes (default)</td><td>One tunnel at a time: nodes replace each other</td></tr>
+    <tr><td>One shared identity (A, C)</td><td>no</td><td>Works, but changes the NAS for all its peers</td></tr>
+  </table>
+  <table style="width:1664px; font-family:'IBM Plex Sans', Arial, sans-serif; font-size:26px; color:#1f2a36">
+    <tr><th style="width:28%"></th><th style="width:24%">B: per node</th><th style="width:24%">A: shared</th><th style="width:24%">C: wildcard</th></tr>
+    <tr><td>Identity per node</td><td>Yes</td><td>No</td><td>No</td></tr>
+    <tr><td>NAS change</td><td>None</td><td>uniqueids=no</td><td>uniqueids=no</td></tr>
+    <tr><td>Renewal</td><td>Automatic</td><td>By hand, reboots</td><td>By hand, reboots</td></tr>
+    <tr><td>Revoke one node</td><td>Yes</td><td>No</td><td>No</td></tr>
+  </table>
+  <p style="position:absolute; bottom:64px; left:128px; width:1664px; font-family:'IBM Plex Sans', Arial, sans-serif; font-size:24px; color:#5c6773">Lima lab findings 3 to 5; Option C cases 1 to 7 · docs 51, 70</p>
+  <aside>Options A and C both put one certificate on every node, so the NAS sees the same identity many times. With libreswan's default, uniqueids=yes, the nodes keep replacing each other's tunnel; we measured that. The fix, uniqueids=no, changes the NAS for every peer it has, and our standard never shares an identity. Option B works with the NAS's defaults.</aside>
+</section>

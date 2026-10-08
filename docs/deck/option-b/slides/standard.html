@@ -1,0 +1,16 @@
+<section id="standard" style="background:#F5F4EF;color:#1F2A36;font-family:'IBM Plex Sans', Arial, sans-serif;padding:128px 128px 160px;display:flex;flex-direction:column;gap:40px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:24px;color:#0E6F68;letter-spacing:2px">THE REQUIREMENT</p>
+<h2 style="font-size:72px;font-weight:600;line-height:1.1;color:#15202B">Our Linux hosts already do it: one certificate per host</h2>
+<div style="display:flex;gap:48px;align-items:start">
+<div style="display:flex;flex-direction:column;background:#15202B;padding:36px 44px;border-radius:16px;width:760px">
+<p style="font-family:'JetBrains Mono', 'Courier New', monospace;font-size:26px;line-height:1.45;color:#E8ECEF">conn mytunnel2<br>&#160;&#160;left=&lt;host IP&gt;<br>&#160;&#160;right=&lt;NAS IP&gt;<br>&#160;&#160;<span style="color:#7FD4C9">leftcert="&lt;host FQDN&gt;"</span><br>&#160;&#160;leftid=%fromcert<br>&#160;&#160;rightid=%fromcert<br>&#160;&#160;rightca=%same<br>&#160;&#160;leftprotoport=tcp<br>&#160;&#160;rightprotoport=tcp/nfs<br>&#160;&#160;auto=start</p>
+</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:24px">
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px"><h3 style="font-size:32px;font-weight:600;color:#0E6F68">Its own certificate</h3><p style="font-size:28px;color:#3D4A57">Every host is known to the NAS by its own certificate, from the enterprise CA.</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px;border-top:1px solid #DCD9CF"><h3 style="font-size:32px;font-weight:600;color:#15202B">Same CA, NFS only</h3><p style="font-size:28px;color:#3D4A57">The NAS is checked against the same CA; only TCP to NFS (2049) goes through the tunnel.</p></div>
+<div style="flex:1;display:flex;flex-direction:column;gap:12px;background:#FDFDFB;padding:36px;border:1px solid #DCD9CF;border-radius:16px"><h3 style="font-size:32px;font-weight:600;color:#15202B">A valid, working setup</h3><p style="font-size:28px;color:#3D4A57">An OpenShift node has to meet the same standard.</p></div>
+</div>
+</div>
+<p style="position:absolute;left:128px;bottom:64px;width:1664px;font-size:24px;color:#5C6773">Our enterprise configuration for Linux hosts, names and addresses removed · doc 70</p>
+<aside>This is our own enterprise standard for a regular Linux host connecting to the NAS. Three things matter: each host has its own certificate (the nickname is the host's FQDN), the NAS is checked against the same CA, and the tunnel covers NFS only. The question for OpenShift is how to give every node the same thing.</aside>
+</section>
