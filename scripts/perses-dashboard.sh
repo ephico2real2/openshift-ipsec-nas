@@ -14,7 +14,7 @@
 # percli migrate, names the datasource on every query and on the Node filter, and refuses a panel that became a
 # placeholder or a query that differs from the Grafana one: docs/61-perses-dashboard-review.md, "Change the dashboard".
 # Install it once:
-#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.3"
+#   python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"
 # It is taken from PERSES_DASHBOARD, from the PATH, or from .venv/bin. percli must be 0.54.0, the Perses version in
 # COO 1.5.2's go.mod (COO's server reports none). By default it runs from the Perses image, with podman or docker:
 #   PERSES_IMAGE=docker.io/persesdev/perses:v0.54.0
@@ -117,5 +117,8 @@ convert "${C_GRAFANA}.tmp" "${C_CONFIG}.tmp"
 # the script again puts that right.)
 trap '' INT TERM HUP
 for f in "${TARGETS[@]}"; do mv "${f}.tmp" "${f}"; done
+# The moves are done, and the signals are the script's to take again: what is left only says so. Held off to the end,
+# they left a script whose output nobody read (a full pipe) to be stopped by KILL alone.
+trap - INT TERM HUP
 echo "wrote ${CONFIG}, ${MANIFEST} and ${GRAFANA_MANIFEST}"
 echo "wrote ${C_GRAFANA} and ${C_CONFIG}"

@@ -5,7 +5,9 @@
 set -euo pipefail
 
 ENGINE="${CONTAINER_ENGINE:-podman}"
-IMAGE="quay.io/prometheus/prometheus:latest"
+# By digest (the index: each platform takes its own image): "latest" is whatever was pushed last, and a release of
+# Prometheus must not be able to fail, or pass, a pull request that did not touch the rules. v3.15.0, 2026-10-07.
+IMAGE="quay.io/prometheus/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e"
 RULE_MANIFEST="manifests/option-b-per-node-certs/29-prometheus-rule.yaml"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT

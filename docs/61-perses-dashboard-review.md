@@ -152,7 +152,7 @@ The Grafana dashboard, `charts/ipsec-nas/files/ipsec-nas.json`, is the **one sou
 
 | Need | How |
 |---|---|
-| [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) 0.2.1 or later: its `perses-dashboard` command | `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.3"`. The script takes the command from `PERSES_DASHBOARD`, from the `PATH`, or from `.venv/bin` |
+| [diagram-kit](https://github.com/ephico2real2/diagram-kit) (MPL-2.0) 0.2.1 or later: its `perses-dashboard` command | `python3 -m venv .venv && .venv/bin/pip install "diagram-kit @ git+https://github.com/ephico2real2/diagram-kit@v0.2.4"`. The script takes the command from `PERSES_DASHBOARD`, from the `PATH`, or from `.venv/bin` |
 | `percli` 0.54.0, the Perses version in COO 1.5.2's and 1.5.3's `go.mod` | With podman or docker, nothing: the kit runs it from `docker.io/persesdev/perses:v0.54.0` (`PERSES_IMAGE` names another). Without a container engine, `PERCLI=<binary> PERSES_PLUGINS=<unpacked plugins>` ([how to install them](https://github.com/ephico2real2/openshift-coo-helm/blob/main/docs/percli.md)) |
 
 Before 2026-10-07 the repository had its own `scripts/perses-dashboard-fix.py`, which rewrote five panels after `percli` (two units, two labels, the per-node table), added a sixth, and found them by title. The kit replaced it; the fixes it made are now either the kit's or rules for the Grafana file.

@@ -47,7 +47,6 @@ render --set nodeselector.x=1 >/dev/null 2>&1 && bad "the schema refuses an unkn
 render --set metrics.persesDashboard.enabled=false | grep -qE 'kind: Perses(Dashboard|Datasource)$' \
   && bad "persesDashboard.enabled=false" || ok "metrics.persesDashboard.enabled=false renders no Perses object"
 grep -q 'name: ipsec-nas-grafana-dashboard' <<<"$out" && bad "grafanaDashboard is off by default" || ok "the Grafana ConfigMap is off by default"
-# On stdin: with both dashboards the rendering is larger than Linux allows for one argument (128 KiB; macOS takes it).
 render --set metrics.grafanaDashboard=true | ruby -ryaml -rjson -e '
   cm = YAML.load_stream($stdin.read).compact.find { |d| d["kind"] == "ConfigMap" && d["metadata"]["name"] == "ipsec-nas-grafana-dashboard" }
   exit 1 unless cm && cm["metadata"]["labels"]["grafana_dashboard"] == "1"
@@ -70,41 +69,43 @@ PY
 render | grep -qE 'kind: (NodeNetworkConfigurationPolicy|GeneratingPolicy|Certificate)$' \
   && bad "defaults render no tunnel and no certificate" || ok "defaults render no tunnel and no certificate"
 opt=(--set nodeDomain=ocp.example.com --set nas.fqdn=nas01.example.com --set nas.ip=10.0.0.50 --set prerequisites.skipCheck=true)
-same_objects() {  # $1 = chart rendering, $2 = render.sh file: every object of the file, by kind and name, equal in spec/rules
+# A rendering goes to ruby on stdin, here and below: with the dashboard it is about 100 KiB, and Linux allows 128 KiB
+# for one argument (macOS limits only the total), so as an argument it would fail in CI on the day it grows.
+same_objects() {  # stdin = chart rendering, $1 = render.sh file: every object of the file, by kind and name, equal in spec/rules
   ruby -ryaml -e '
     key = ->(d) { "#{d["kind"]}/#{d["metadata"]["name"]}" }
     body = ->(d) { d.reject { |k, _| %w[metadata].include?(k) } }
-    chart = YAML.load_stream(ARGV[0]).compact.to_h { |d| [key.(d), body.(d)] }
-    want  = YAML.load_stream(File.read(ARGV[1])).compact
+    chart = YAML.load_stream($stdin.read).compact.to_h { |d| [key.(d), body.(d)] }
+    want  = YAML.load_stream(File.read(ARGV[0])).compact
     bad = want.reject { |d| chart[key.(d)] == body.(d) }.map { |d| key.(d) }
     puts bad.join(" ") unless bad.empty?
-    exit(bad.empty? && !want.empty? ? 0 : 1)' -- "$1" "$2"
+    exit(bad.empty? && !want.empty? ? 0 : 1)' -- "$1"
 }
 for pool in worker master; do
   ( export NODE_DOMAIN=ocp.example.com NAS_FQDN=nas01.example.com NAS_IP=10.0.0.50 CLUSTER_ISSUER=x OCP_VERSION=4.19.0 MCP_ROLE=${pool}
     ./render.sh >/dev/null )
-  same_objects "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c1 --set "tunnel.pools={${pool}}")" \
-    rendered/option-c-wildcard-cert/10-nncp-all-workers.yaml && ok "C1, ${pool} pool: the NNCP equals render.sh's" || bad "C1 ${pool}"
-  same_objects "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2 --set "tunnel.pools={${pool}}")" \
-    rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml && ok "C2, ${pool} pool: the policy equals render.sh's" || bad "C2 ${pool}"
+  render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c1 --set "tunnel.pools={${pool}}" \
+    | same_objects rendered/option-c-wildcard-cert/10-nncp-all-workers.yaml && ok "C1, ${pool} pool: the NNCP equals render.sh's" || bad "C1 ${pool}"
+  render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2 --set "tunnel.pools={${pool}}" \
+    | same_objects rendered/option-c-wildcard-cert/11-kyverno-nncp-per-node-fqdn.yaml && ok "C2, ${pool} pool: the policy equals render.sh's" || bad "C2 ${pool}"
 done
 # Kyverno's roles: the manifest's NNCP rule and node reading; not its cert-manager rule, which only Option B needs.
-ruby -ryaml -e '
+render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2 | ruby -ryaml -e '
   roles = ->(t) { YAML.load_stream(t).compact.select { |d| d["kind"] == "ClusterRole" }.to_h { |d| [d["metadata"]["name"], d["rules"]] } }
-  chart, want = roles.(ARGV[0]), roles.(File.read(ARGV[1]))
+  chart, want = roles.($stdin.read), roles.(File.read(ARGV[0]))
   nncp = want["kyverno:ipsec-nas-generate"].select { |r| r["apiGroups"] == ["nmstate.io"] }
   exit(chart["kyverno:ipsec-nas-generate"] == nncp && chart["kyverno:ipsec-nas-read-nodes"] == want["kyverno:ipsec-nas-read-nodes"] ? 0 : 1)' \
-  -- "$(render "${opt[@]}" --set tunnel.enabled=true --set tunnel.variant=c2)" manifests/common/03-kyverno-rbac.yaml \
+  -- manifests/common/03-kyverno-rbac.yaml \
   && ok "C2: Kyverno's roles as manifests/common/03-kyverno-rbac.yaml, without its cert-manager rule (Option B only)" || bad "C2 Kyverno RBAC"
 both="$(render "${opt[@]}" --set tunnel.enabled=true --set 'tunnel.pools={worker,master}' | grep '^  name: ipsec-nas-wildcard-' | tr -d ' ' | tr '\n' ' ')"
 [[ "$both" == "name:ipsec-nas-wildcard-worker name:ipsec-nas-wildcard-master " ]] && ok "both pools: one NNCP each (${both})" || bad "both pools: ${both}"
 cert="$(render "${opt[@]}" --set certificate.enabled=true --set clusterIssuer=enterprise-ca)"
 ruby -ryaml -e '
-  c = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "Certificate" } or exit 1
+  c = YAML.load_stream($stdin.read).compact.find { |d| d["kind"] == "Certificate" } or exit 1
   s = c["spec"]
   ok = s["dnsNames"] == ["*.ocp.example.com"] && s["commonName"] == "ocp-ipsec-workers" && s["subject"]["organizations"] == ["KCS"] &&
        s["privateKey"]["size"] == 3072 && s["usages"].include?("client auth") && s["issuerRef"]["name"] == "enterprise-ca" && s["duration"] == "17520h"
-  exit(ok ? 0 : 1)' -- "$cert" && ok "the Certificate: *.ocp.example.com, CN=ocp-ipsec-workers, O=KCS, RSA 3072, client auth, 2 years" || bad "the Certificate"
+  exit(ok ? 0 : 1)' <<<"$cert" && ok "the Certificate: *.ocp.example.com, CN=ocp-ipsec-workers, O=KCS, RSA 3072, client auth, 2 years" || bad "the Certificate"
 grep -q 'kind: MachineConfig' <<<"$cert$(render "${opt[@]}" --set tunnel.enabled=true)" && bad "the chart never renders a MachineConfig" || ok "the chart never renders a MachineConfig"
 # helm exits non-zero on these by design: capture first (with pipefail, a pipe would fail even on the right message).
 refused="$(render --set tunnel.enabled=true --set nas.ip=10.0.0.50 --set nas.fqdn=n --set prerequisites.skipCheck=true)"
@@ -120,12 +121,12 @@ render "${opt[@]}" --set tunnel.enabled=true --set 'tunnel.pools={infra}' >/dev/
 
 # Dynatrace's annotated Prometheus exporters (#46): off by default; on, the four annotations with Dynatrace's filter JSON.
 render | grep -q 'metrics.dynatrace.com/' && bad "no Dynatrace annotation by default" || ok "no Dynatrace annotation by default"
-ruby -ryaml -rjson -e '
-  svc = YAML.load_stream(ARGV[0]).compact.find { |d| d["kind"] == "Service" } or exit 1
+render --set metrics.dynatrace.scrape=true | ruby -ryaml -rjson -e '
+  svc = YAML.load_stream($stdin.read).compact.find { |d| d["kind"] == "Service" } or exit 1
   a = svc["metadata"]["annotations"]
   ok = a["metrics.dynatrace.com/scrape"] == "true" && a["metrics.dynatrace.com/port"] == "9754" && a["metrics.dynatrace.com/path"] == "/metrics" &&
        JSON.parse(a["metrics.dynatrace.com/filter"]) == {"mode" => "include", "names" => ["ipsec_nas_*"]}
-  exit(ok ? 0 : 1)' -- "$(render --set metrics.dynatrace.scrape=true)" \
+  exit(ok ? 0 : 1)' \
   && ok "metrics.dynatrace.scrape=true: scrape, port 9754, path /metrics, filter {mode: include, names: [ipsec_nas_*]}" || bad "Dynatrace annotations"
 
 # The collector script inside the rendered ConfigMap parses.
