@@ -74,13 +74,69 @@ Our NNCP's libreswan settings are in [`manifests/option-b-per-node-certs/27-kyve
 | `leftrsasigkey`, `rightrsasigkey=%cert` | the same | **Yes** | `leftrsasigkey`, `rightrsasigkey` | yes |
 | `leftauth`, `rightauth=rsasig` | not set | Not settable: no NMState field, and the plugin does not write the keys. Every option's node key is RSA 3072, which the libreswan NAS accepted in every run; the reference NAS's acceptance is to confirm | — (only `authby`) | no |
 | `rightid=%fromcert` | `rightid: '%fromcert'` | **Yes** | `rightid` | yes |
-| `rightca=%same` | not set | **No**; could be added | `rightca` | yes |
-| `leftprotoport=tcp`, `rightprotoport=tcp/nfs` | not set: all traffic to the NAS's IP | **No**; could be added (`tcp/2049` avoids the name lookup) | `leftprotoport`, `rightprotoport` | yes |
+| `rightca=%same` | not set by default; chart value `ipsec.rightca: '%same'` | **Yes** with the chart value: the node refuses a NAS certificate from any other CA (measured, [evidence 63](evidence/crc/63-rightca-enforcement.txt)) | `rightca` | yes |
+| `leftprotoport=tcp`, `rightprotoport=tcp/nfs` | not set by default (all traffic to the NAS's IP); chart values `ipsec.leftprotoport`, `ipsec.rightprotoport` | **Yes** with the chart values (`tcp/2049` avoids the name lookup; measured, [evidence 62](evidence/crc/62-nfs-only-selectors.txt)) | `leftprotoport`, `rightprotoport` | yes |
 | no `type` (tunnel) | `type: transport` (`tunnel` where there is NAT) | **No** unless the NAS accepts transport mode from these peers | `type` | in use: the tunnel comes up with it (measured) |
 | no `ikev2` (libreswan's default) | `ikev2: insist` | Compatible when the NAS speaks IKEv2 (to confirm) | `ikev2` | yes |
 | `auto=start` | NetworkManager activates the connection the NNCP defines | Equivalent | — | — |
 
-None of the three settings marked "could be added" has been tried on a node yet.
+All three settings the reference adds to ours were applied to a node on CRC through the charts ([Sample 2](#sample-2--matching-the-enterprise-standard-measured-in-the-lab), [evidence 62](evidence/crc/62-nfs-only-selectors.txt), [evidence 63](evidence/crc/63-rightca-enforcement.txt)).
+
+### Which OpenShift versions carry `rightca` and the port selectors
+
+Two components must know a key before it reaches libreswan: **NMState** (the handler pod turns the NNCP into a NetworkManager connection) and the node's **NetworkManager-libreswan** plugin (it turns that connection into libreswan's configuration). Red Hat's article on IPsec with ONTAP ([7130948](https://access.redhat.com/articles/7130948), updated 2026-09-07, written for OpenShift 4.19) still says `rightca` "is not a supported parameter to use with nmstate" and cites the request [RHEL-114237](https://issues.redhat.com/browse/RHEL-114237). That request is **closed** (Done-Errata, 2026-05-19, fix version `rhel-10.2`); the nmstate change that resolves it is upstream commit [`891e18f4`](https://github.com/nmstate/nmstate/commit/891e18f41d2dbada961931631a15ea09678cce2a) (2025-11-18), first released in **nmstate 2.2.56**.
+
+**Minimum supported OpenShift version for the refined tunnel (Sample 2): 4.19.22, 4.20.11, or any 4.21 or 4.22.** Per release, from the package versions in the two tables further down:
+
+| OpenShift | `rightca` | NFS port selectors (`leftprotoport`, `rightprotoport`) | Sample 2 |
+|---|---|---|---|
+| 4.19.0 to 4.19.18 | No | No | Not supported |
+| 4.19.19 to 4.19.21 | Yes | No | Not supported |
+| **4.19.22 and later** | Yes | Yes | **Supported** (not measured) |
+| 4.20.0 to 4.20.2 | No | No | Not supported |
+| 4.20.3 to 4.20.10 | Yes | No | Not supported |
+| **4.20.11 and later** | Yes | Yes | **Supported** (not measured) |
+| **4.21** | Yes | Yes | **Supported** (not measured) |
+| **4.22** | Yes | Yes | **Supported**, measured on CRC 4.22.7 ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [63](evidence/crc/63-rightca-enforcement.txt)) |
+
+On a release that has `rightca` but not the selectors (4.19.19 to 4.19.21, 4.20.3 to 4.20.10), `ipsec.rightca` alone may be set, if the NAS does not limit its connection to NFS. Sample 1 uses none of these keys, so this floor does not apply to it. **Both charts check it:** with any of the keys set, `helm install` and `helm upgrade` stop with a message naming the minimum when the cluster's last completed update is below it (`templates/_openshift-floor.tpl`, tested at every boundary by `tests/test-openshift-floor.sh`). The check reads the `ClusterVersion`, so it runs only where Helm reaches the cluster: **Argo CD renders the chart without cluster access and skips it**, as it skips the chart's other cluster checks; there, the version must be confirmed before the keys are set. The NMState Operator must also be current: nmstate 2.2.57 or later in its handler (the command below).
+
+| Component | First version with `rightca` | First version with `leftprotoport`/`rightprotoport` | Source |
+|---|---|---|---|
+| nmstate | 2.2.56 (commit `891e18f4`) | 2.2.57 (commit [`c8c94b75`](https://github.com/nmstate/nmstate/commit/c8c94b75), RHEL-107158) | nmstate git history |
+| NetworkManager-libreswan (RHEL 9) | 1.2.27-1 (RHEL-118819) | 1.2.29-1 (RHEL-130907) | [CentOS Stream 9 package changelog](https://gitlab.com/redhat/centos-stream/rpms/NetworkManager-libreswan/-/blob/c9s/NetworkManager-libreswan.spec) |
+
+The NMState handler's package in each release, read on 2026-10-08 from the rpm manifest of the newest `openshift4/ose-kubernetes-nmstate-handler-rhel9` image in the Red Hat container catalog:
+
+| OpenShift | nmstate in the handler | `rightca` and port selectors in NMState |
+|---|---|---|
+| 4.14, 4.15 | 2.2.39 | No |
+| 4.16 to 4.19 | 2.2.59 (el9_4) | Yes |
+| 4.20, 4.21 | 2.2.60 (el9_6.1) | Yes |
+| 4.22 | 2.2.60 (el9_8) | Yes; measured on CRC 4.22.7 |
+
+The NMState Operator is updated through OLM, apart from the cluster: the table shows the newest handler of each release, and a cluster that has not taken the update runs an older one (the command below shows which).
+
+The node's plugin comes with the OpenShift release (the RHCOS extensions). Its package in each z-stream, read on 2026-10-08 from the release pages of the 4-stable stream ([example: 4.19.49](https://amd64.ocp.releases.ci.openshift.org/releasestream/4-stable/release/4.19.49), *Extensions*); upstream NetworkManager-libreswan has `"rightca"` from tag 1.2.27 and `"leftprotoport"` from 1.2.29:
+
+| OpenShift | NetworkManager-libreswan | `rightca` | Port selectors |
+|---|---|---|---|
+| 4.19.0 to 4.19.18 | 1.2.24-1.el9 | No | No |
+| 4.19.19 to 4.19.21 | 1.2.27-2.el9_6 | Yes | No |
+| **4.19.22 and later** | 1.2.29-1.el9_6 | Yes | Yes |
+| 4.20.0 to 4.20.2 | 1.2.24-1.el9 | No | No |
+| 4.20.3 to 4.20.10 | 1.2.27-2.el9_6 | Yes | No |
+| **4.20.11 and later**, 4.21 | 1.2.29-1.el9_6 | Yes | Yes |
+| 4.22 | 1.2.30-1.el9 | Yes | Yes; **measured** on CRC 4.22.7 ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [63](evidence/crc/63-rightca-enforcement.txt)) |
+
+Hence the minimum above; only 4.22 was measured. Red Hat's article was written for 4.19, whose early z-streams indeed lacked `rightca`. On a cluster, read both versions on one of its nodes before using Sample 2:
+
+```sh
+oc -n openshift-nmstate exec ds/nmstate-handler -- nmstatectl --version      # 2.2.57 or later
+oc debug node/<node> -- chroot /host sh -c 'strings /usr/libexec/nm-libreswan-service | grep -x -e rightca -e leftprotoport -e rightprotoport'
+```
+
+Both commands were run on CRC 4.22.7: `nmstatectl 2.2.60`, and the plugin printed all three keys.
 
 ## Each option against the reference
 
@@ -153,7 +209,7 @@ Measured on CRC: the NNCP `Available` 13 seconds after the policy, the NAS log `
 
 ### Sample 2 – Matching the enterprise standard (measured in the lab)
 
-The same NNCP with the three settings of the reference that ours lacks. Every field exists in NMState 2.2.60 on OpenShift 4.22 and in the node's NetworkManager-libreswan plugin ([setting by setting](#setting-by-setting-against-our-nncp)). NMState accepts it: on CRC, `nmstatectl gc` (which generates the configuration without applying it) turned its `desiredState` into a NetworkManager connection with `leftprotoport=tcp`, `rightca=%same`, `rightprotoport=tcp/2049` and `type=tunnel` among its `[vpn]` keys. It was then applied on OpenShift Local through the charts' new values: see *Measured in the lab* below.
+The same NNCP with the three settings of the reference that ours lacks. Every field exists in NMState and in the node's NetworkManager-libreswan plugin from OpenShift 4.19.22, 4.20.11 and 4.21 ([which versions](#which-openshift-versions-carry-rightca-and-the-port-selectors)). NMState accepts it: on CRC, `nmstatectl gc` (which generates the configuration without applying it) turned its `desiredState` into a NetworkManager connection with `leftprotoport=tcp`, `rightca=%same`, `rightprotoport=tcp/2049` and `type=tunnel` among its `[vpn]` keys. It was then applied on OpenShift Local through the charts' new values: see *Measured in the lab* below.
 
 ```yaml
 apiVersion: nmstate.io/v1
@@ -184,17 +240,28 @@ spec:
         type: tunnel                             # CHANGED: the reference's mode (libreswan's default)
 ```
 
-What changes with it: only TCP to port 2049 on the NAS goes through the tunnel; anything else to the NAS (`ping`, NFSv3's helpers) leaves the node in clear, and an IPsec-only NAS drops it. Whether to use it depends on the storage team's answers: if the NAS's connection for hosts is limited to TCP 2049, Sample 1 may be refused and Sample 2 needed ([finding 4](#findings)). In Option B it would go into the policy's template (`27-kyverno-nncp-per-node.yaml.tmpl`, or the chart's), not into each node's NNCP.
+What changes with it: only TCP to port 2049 on the NAS goes through the tunnel; anything else to the NAS (`ping`, NFSv3's helpers) leaves the node in clear, and an IPsec-only NAS drops it. Whether to use it depends on the storage team's answers: if the NAS's connection for hosts is limited to TCP 2049, Sample 1 may be refused and Sample 2 needed ([finding 4](#findings)). In Option B it is set once, as the chart values `ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport` and `ipsec.type`, which the chart's Kyverno policy writes into every node's NNCP; no one edits a node's NNCP.
 
-**Measured in the lab** ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)), on OpenShift Local through the charts' new values `ipsec.rightca`, `ipsec.leftprotoport` and `ipsec.rightprotoport` (tunnel mode, as the lab needs for its NAT), against the libreswan NAS:
+`rightca: '%same'` also works on its own: it was measured without port selectors, in tunnel mode (transport mode with it not measured). With it the node accepts the NAS only with a certificate from the CA that issued the node's own; without it, from any CA in the node's NSS database ([evidence 63](evidence/crc/63-rightca-enforcement.txt)).
+
+**Measured in the lab** ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [evidence 63](evidence/crc/63-rightca-enforcement.txt)), on OpenShift Local through the charts' new values `ipsec.rightca`, `ipsec.leftprotoport` and `ipsec.rightprotoport` (tunnel mode, as the lab needs for its NAT), against the libreswan NAS:
 
 | The NAS's connection | The node's NNCP | Result |
 |---|---|---|
 | NFS only (`leftprotoport=tcp/2049`, `rightprotoport=tcp`) | Sample 1 (all traffic to the NAS) | **Refused**: `TS_UNACCEPTABLE`; the IKE SA authenticates, no Child SA, no tunnel |
 | NFS only | **Sample 2** | **Tunnel up**, `[…/32/TCP===…/32/TCP/2049]`; NFS through it; a `ping` to the NAS goes outside the tunnel |
 | All traffic (no selectors) | Sample 2 | **Refused**: `TS_UNACCEPTABLE` |
+| Certificate from the node's CA | `rightca: '%same'` | **Tunnel up**; libreswan's connection lists the CA on both sides: `CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'O=Enterprise POC, CN=Enterprise Root CA'` (`'%any'` on the NAS's side without it) |
+| Certificate from **another CA**, which the node also trusts | `rightca: '%same'` | **Refused by the node**: `authentication failed: no certificate matched … 'CN=crc-nas.lab.internal, O=rightca test'` |
+| The same | no `rightca` | **Tunnel up**: `authenticated peer certificate … issued by 'CN=Other Lab Root CA'`, so `rightca` alone made the difference |
 
-The NAS narrowed the request in neither direction: **the NNCP's selectors must match the NAS's exactly**, so the storage team's answer decides which sample to use. Not measured: an enterprise NAS product, which may narrow differently; transport mode with port selectors.
+The NAS narrowed the request in neither direction: **the NNCP's selectors must match the NAS's exactly**, so the storage team's answer decides which sample to use. Not measured: an enterprise NAS product, which may narrow differently; transport mode with port selectors or `rightca`.
+
+Three behaviours the runs showed, for anyone repeating them:
+
+- **A changed NNCP leaves the node without a tunnel until the connection is restarted.** NetworkManager takes the new keys and removes libreswan's old connection without loading the new one; `nmcli connection down` then `up` loads it. Option B's cert-sync pod restarts the connection when it finds no tunnel; that path was not measured after an NNCP change.
+- **libreswan writes a distinguished name with `O=` first** (`O=Enterprise POC, CN=Enterprise Root CA`), the other way round from `openssl` and `certutil`. A `rightca` written as an explicit name in the wrong order matches nothing; `%same` avoids the question.
+- **pluto caches its root certificates**: a CA added to the NSS database while it runs is used only after `ipsec whack --rereadcerts`.
 
 ### The NAS side for both samples (`uniqueids=yes`)
 
@@ -220,13 +287,13 @@ conn workers
     auto=add
 ```
 
-On the NAS, `ipsec trafficstatus` then lists one tunnel per node, each with its own `id='CN=<node>.<NODE_DOMAIN>'`. For Sample 2 the NAS's connection would carry the matching `type=tunnel` and port selectors (`leftprotoport=tcp/2049`, `rightprotoport=tcp`, the NAS being `left` there); not tested.
+On the NAS, `ipsec trafficstatus` then lists one tunnel per node, each with its own `id='CN=<node>.<NODE_DOMAIN>'`. For Sample 2 the NAS's connection carries the matching `type=tunnel` and port selectors (`leftprotoport=tcp/2049`, `rightprotoport=tcp`, the NAS being `left` there); measured in the lab ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), section 2).
 
 ## Findings
 
 1. **Option B is the option that matches the enterprise standard.** The standard gives every host its own certificate and identity; Option B gives every node its own certificate from the same CA, and it worked against a libreswan NAS on its default settings. It is already our standard ([docs/README.md](README.md)).
 2. **Options A and C need the NAS to accept one identity from many peers** (`uniqueids=no`). The standard has no case of hosts sharing an identity, so the NAS may not allow it today. Measured against libreswan only; another NAS product has its own setting, or none (issue #34).
-3. **Three settings of the standard are not in our NNCP: `rightca=%same`, the NFS port selectors, and tunnel mode.** All three exist in NMState 2.2.60 and the node's plugin on OpenShift 4.22, so any option can carry them; they were not tested.
+3. **The three settings of the standard our NNCP lacked, `rightca=%same`, the NFS port selectors and tunnel mode, work on OpenShift.** They are chart values in both charts, empty by default, and were measured on CRC 4.22.7: `rightca: '%same'` refuses a NAS certificate from another CA and accepts one from the node's own ([evidence 63](evidence/crc/63-rightca-enforcement.txt)); the selectors carry NFS only ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)). Red Hat's article on ONTAP still calls `rightca` unsupported in NMState; its request RHEL-114237 is closed, and the NMState and node plugin support it from OpenShift 4.19.22, 4.20.11 and 4.21 ([which versions](#which-openshift-versions-carry-rightca-and-the-port-selectors)).
 4. **The port selectors must match the NAS's exactly.** Measured against the lab's libreswan NAS ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)): a NAS limited to TCP 2049 refused the node's all-traffic request (`TS_UNACCEPTABLE`), and a NAS without selectors refused the node's NFS-only request. Which one to use is the storage team's answer.
 5. **`leftauth`/`rightauth=rsasig` cannot be set from OpenShift** (no NMState field, not written by the plugin). With RSA keys on every option, authentication is by RSA signature anyway: on CRC the node signed with `3072-bit RSASSA-PSS with SHA2_512` ([evidence 17](evidence/crc/17-option-b-tunnel.txt)). Confirm the enterprise NAS accepts RSA-PSS signatures.
 
@@ -241,8 +308,11 @@ On the NAS, `ipsec trafficstatus` then lists one tunnel per node, each with its 
 
 ## What to test next
 
-On CRC and the lab NAS, with Option B's settings on a node (CRC runs Option C today; the test needs Option B there, or the C2 tunnel values):
+Done on CRC and the lab NAS: the NAS set like the standard's counterpart against today's NNCP (refused, [evidence 62](evidence/crc/62-nfs-only-selectors.txt) section 1); Sample 2 applied through the chart (tunnel up, NFS through it, section 2); a `ping` to the NAS leaves the node in clear (section 2; the lab NAS answered it, as its firewall drops only cleartext NFS); `rightca: '%same'` enforced ([evidence 63](evidence/crc/63-rightca-enforcement.txt)).
 
-1. The NAS's connection set like the standard's counterpart (port selectors `tcp/2049`, tunnel mode, `rightca=%same`), and the node's NNCP **unchanged**: does the tunnel come up? This answers finding 4.
-2. The NNCP with `leftprotoport: tcp`, `rightprotoport: tcp/2049`, `rightca: '%same'`, `type: tunnel`: does NMState accept it, does the tunnel come up, and do NFS writes go through it?
-3. Traffic to the NAS other than TCP 2049 (for example `ping`) with the port selectors: it leaves the node in clear, and an IPsec-only NAS should not answer it.
+Still to measure:
+
+1. Against the enterprise NAS, in the PoC ([doc 72](72-option-b-implementation-plan.md#6-the-engineering-poc), criterion 3).
+2. Transport mode with the port selectors and `rightca` (CRC needs tunnel mode for its NAT; a Lima worker does not).
+3. Option B's cert-sync pod restarting the connection by itself after an NNCP change (both runs restarted it by hand).
+4. A node on OpenShift 4.19.22 or 4.20.11 or later, to confirm the version table above on a real cluster.

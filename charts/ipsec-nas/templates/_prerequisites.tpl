@@ -24,6 +24,7 @@ The checks that read objects only run against a real cluster ("helm template" ha
 {{- if not ($.Capabilities.APIVersions.Has $api) }}{{ fail (printf "prerequisite missing: %s. The cluster does not serve %s. Install it first; this chart does not install it. (Without a cluster, use --set prerequisites.skipCheck=true.)" $what $api) }}{{ end -}}
 {{- end -}}
 {{- if lookup "v1" "Namespace" "" "kube-system" -}}
+{{- include "ipsec-nas.openshiftFloor" (dict "ipsec" .Values.ipsec "version" (include "ipsec-nas.openshiftVersion" .)) -}}
 {{- if not (lookup "cert-manager.io/v1" "ClusterIssuer" "" .Values.clusterIssuer) }}{{ fail (printf "prerequisite missing: ClusterIssuer %q does not exist. Set clusterIssuer to the existing enterprise CA issuer (oc get clusterissuer). This chart does not create one." .Values.clusterIssuer) }}{{ end -}}
 {{- $kyverno := lookup "v1" "ConfigMap" .Values.prerequisites.kyvernoNamespace "kyverno" -}}
 {{- if $kyverno -}}

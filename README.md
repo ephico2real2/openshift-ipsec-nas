@@ -105,7 +105,9 @@ in the docs, not manifests here. Apply the files **only in the order the docs gi
 
 ## Requirements (summary)
 
-- OpenShift 4.19 (design target), RHCOS workers, bare metal / vSphere / RHOSP / GCP
+- OpenShift 4.19 or later, RHCOS workers, bare metal / vSphere / RHOSP / GCP. **Minimum supported for the refined tunnel
+  (the enterprise standard's `rightca` and NFS port selectors): 4.19.22, 4.20.11, or any 4.21 or 4.22**
+  ([docs/70](docs/70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors))
 - Kyverno 1.19 or later for the CEL policies (1.13 or later with the legacy ones; community software, not Red Hat supported)
 - cert-manager Operator and the cluster's **existing** enterprise CA `ClusterIssuer`, Ready. Nothing here creates an issuer; `company-issuer-rnd` in the docs is a placeholder for its name (`CLUSTER_ISSUER`).
 - NAS supporting IKEv2 transport mode with PKI auth, chaining to the same enterprise root CA

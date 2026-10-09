@@ -55,7 +55,7 @@ The slides refer to their images by the deck's asset URLs (`/_blob/<id>`), which
 | `/_blob/38e4f1e416d2f1d08f3b090d1d34147d` | [`diagrams/option-b-workflow/option-b-why-automation.light.png`](../../diagrams/option-b-workflow/option-b-why-automation.light.png) | `why-automation` |
 | `/_blob/102befd8fe192f9fbe00a32a291f0e3c` | [`diagrams/ipsec-nas/overview.light.png`](../../diagrams/ipsec-nas/overview.light.png) | `overview` |
 | `/_blob/43a491bc868e5950b4f79f82678c8377` | [`diagrams/ipsec-nas/option-b-per-node-certs.light.png`](../../diagrams/ipsec-nas/option-b-per-node-certs.light.png) | `mechanism` |
-| `/_blob/7be70a806ac044ed450d5d41d3881f0c` | [`diagrams/option-b-workflow/option-b-onboarding.light.png`](../../diagrams/option-b-workflow/option-b-onboarding.light.png) | `onboarding` |
+| `/_blob/dbd6599d41a2d7993835230f2c84de29` | [`diagrams/option-b-workflow/option-b-onboarding.light.png`](../../diagrams/option-b-workflow/option-b-onboarding.light.png) | `onboarding` |
 | `/_blob/626bcdf09f791fa56b634b9937cbb419` | [`diagrams/option-b-workflow/option-b-lifecycle.light.png`](../../diagrams/option-b-workflow/option-b-lifecycle.light.png) | `lifecycle` |
 | `/_blob/53a49c479a400d00728b2087bef1a5cd` | [`diagrams/ipsec-nas/perses-dashboard.light.png`](../../diagrams/ipsec-nas/perses-dashboard.light.png) | `monitoring` |
 

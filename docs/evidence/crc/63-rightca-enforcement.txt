@@ -1,0 +1,66 @@
+# What rightca: '%same' does on an OpenShift node (docs/70 Sample 2 and "Which OpenShift versions carry rightca").
+# CRC 4.22.7 (RHCOS 9.8.20260721-0), NMState handler nmstate-2.2.60-2.el9_8, Option C (C2) through the Argo CD
+# Application ipsec-nas-option-c (chart charts/ipsec-nas-option-c-metrics, main 9c9ec92), lab NAS crc-nas
+# (libreswan, NFS accepted only over IPsec). 2026-10-08 15:13-15:18Z.
+# Every certificate in the lab comes from one CA, so a passing tunnel alone does not show rightca at work: this run
+# gives the NAS a certificate from a SECOND CA that the node also trusts, so that only rightca can refuse it.
+
+## 0. Before
+  Node NSS (/var/lib/ipsec/nss): KCS-IPSEC-CA CT,C,C (CN=Enterprise Root CA, O=Enterprise POC); left_server u,u,u
+  NAS NSS: CA CT,C,C (the same root); nas u,u,u (CN=crc-nas.lab.internal, O=KCS OpenShift lab, issued by that root)
+  NAS conn workers: leftcert=nas, rightca=%same, rightid=%fromcert, type=tunnel; config setup uniqueids=no
+  Node, NNCP generation 4 (no rightca): ipsec status
+    CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'%any'          <- the NAS's side: any CA
+  Backups: the Application as JSON; NAS /root/nas-workers.conf.before-rightca-test
+
+## A. rightca: '%same' through the chart (Application values ipsec.rightca)
+  15:14:06 patched; 15:14:41 NNCP ipsec-nas-crc generation 5 Available with rightca: '%same' (35 s)
+  NetworkManager's connection (vpn.data): rightca = %same
+  libreswan before a down/up: no connection loaded, no tunnel (as evidence 62: NetworkManager deletes the old
+    connection on the change and does not load the new one); nmcli connection down/up:
+    CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'O=Enterprise POC, CN=Enterprise Root CA'   <- the NAS's side: our CA
+    ESP up, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+  -> libreswan loaded the CA constraint; the tunnel came up with the NAS's certificate from the same CA.
+
+## B. The NAS presents a certificate from another CA, which the node also trusts
+  Throwaway CA "CN=Other Lab Root CA, O=rightca test" (7 days); NAS certificate CN=crc-nas.lab.internal, SAN DNS:crc-nas
+    .lab.internal + IP:192.168.64.8, RSA 3072, EKU server+client auth, nickname nas-otherca.
+  NAS: leftcert=nas-otherca; rightca="O=Enterprise POC, CN=Enterprise Root CA" (it still checks the node against our CA)
+  Node: certutil -A -n OTHER-LAB-CA -t CT,C,C  (the node trusts BOTH roots)
+
+  Two setup errors on the way, kept because they matter to anyone repeating this:
+  - rightca written in NSS order ("CN=Enterprise Root CA, O=Enterprise POC") does not match: the NAS refused the node
+    with "authentication failed: no certificate matched RSASSA-PSS with SHA2_512 and 'O=KCS, CN=ocp-ipsec-workers'".
+    libreswan writes DNs the other way round: "O=Enterprise POC, CN=Enterprise Root CA", as its status line shows.
+  - pluto caches its root certificates: a CA added to NSS while it runs is not used until
+    "ipsec whack --rereadcerts" ("freeing root certificate cache"). Before that the node refused with
+    "SEC_ERROR_UNTRUSTED_ISSUER", which is the chain check, not rightca.
+
+  B1. Node with rightca: '%same' (after --rereadcerts; 15:16:16):
+    pluto (node): adding the CA+root cert O=rightca test,CN=Other Lab Root CA
+                  adding the CA+root cert CN=Enterprise Root CA,O=Enterprise POC
+                  authentication failed: no certificate matched RSASSA-PSS with SHA2_512 and
+                    'CN=crc-nas.lab.internal, O=rightca test'
+    nmcli: "Connection successfully activated", but ipsec trafficstatus: empty (no tunnel)
+    -> REFUSED by the node: the certificate is valid (the chain check passed) but not from the node's CA.
+
+  B2. The same, node WITHOUT rightca (Application value removed; 15:17:05 NNCP generation 6 Available; 15:17:18):
+    CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'%any'
+    pluto (node): initiator established IKE SA; authenticated peer certificate 'CN=crc-nas.lab.internal, O=rightca test'
+                    and 3072-bit RSASSA-PSS with SHA2_512 digital signature issued by 'CN=Other Lab Root CA, O=rightca test'
+                  initiator established Child SA; IPsec tunnel [192.168.127.2/32===192.168.64.8/32] xfrm=AES_GCM_16_256
+    -> ACCEPTED: without rightca the node takes a NAS certificate from any CA it trusts.
+
+  B1 and B2 differ only in rightca: it is what refused the NAS's certificate from the other CA.
+
+## C. Restored (15:17:41)
+  NAS: the backup conf (leftcert=nas, rightca=%same), nas-otherca deleted from its NSS, ipsec restarted
+  Node: OTHER-LAB-CA deleted from its NSS, ipsec whack --rereadcerts, connection down/up:
+    CAs: 'O=Enterprise POC, CN=Enterprise Root CA'...'%any'; ESP up, id='O=KCS OpenShift lab, CN=crc-nas.lab.internal'
+  Application helm values identical to the backup (diff of spec.source.helm: none)
+  15:17:57 a file written and read back through NFS in ipsec-nas-csi-demo, ipsec-nas-team-a, ipsec-nas-team-b
+  NAS counters: nfs-over-ipsec 23013387 -> 23014157 packets; nfs-cleartext-dropped 732 -> 734 (NFS retries while no
+    tunnel was up)
+
+## Not measured: an enterprise NAS product; OpenShift releases other than 4.22 (the node's NetworkManager-libreswan
+## needs 1.2.27 or later for rightca: docs/70).

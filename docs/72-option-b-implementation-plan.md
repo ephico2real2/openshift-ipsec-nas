@@ -8,6 +8,8 @@
 
 **Option B, one certificate per node, with the tunnel definition refined to the enterprise standard**, for every enterprise cluster that mounts the NAS over NFS.
 
+**Minimum supported OpenShift version: 4.19.22, 4.20.11, or any 4.21 or 4.22**, the first releases whose NMState and node plugin both carry the refined tunnel's `rightca` and NFS port selectors ([doc 70](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors); measured on 4.22).
+
 Our enterprise IPsec standard for Linux hosts gives every host its own certificate from the enterprise CA, identified by that certificate (`%fromcert`), checks the NAS against the same CA, and protects NFS ([doc 70](70-review-enterprise-linux-ipsec-config.md#the-reference-configuration)). An OpenShift node has to meet the same standard. Of the three setup options, only Option B does.
 
 Options A and C are not pursued. Both put **one** certificate on every node, so every node presents the same identity, which the enterprise standard never does:
@@ -130,7 +132,7 @@ Every component is part of OpenShift or a Red Hat operator, except Kyverno and o
 </picture>
 <!-- markdownlint-enable MD033 -->
 
-*Figure 5. Onboarding, from day 0 to a node's tunnel. Dashed: the storage team's side, to agree. Amber: the refined tunnel settings, proposed.*
+*Figure 5. Onboarding, from day 0 to a node's tunnel. Dashed: the storage team's side, to agree. Amber: the refined tunnel settings, chart values measured in the lab, set to match the NAS.*
 
 ```text
 Day 0 (people): cert-manager Operator + ClusterIssuer (Venafi TPP) · Kyverno, NMState, the chart (Argo CD) · UWM, COO
@@ -141,7 +143,7 @@ Per node (automatic):
  ③ the CA signs (Venafi TPP zone)         → ④ Secret ipsec-cert-<node>
  ⑤ the DaemonSet's pod on that node       Kyverno mounts that node's Secret   (no Secret yet → it waits)
  ⑥ import into the node's NSS (left_server), label ipsec.kcs.io/cert-ready=true
- ⑦ Kyverno: NNCP ipsec-nas-<node>         [proposed: + rightca, NFS port selectors, tunnel mode]
+ ⑦ Kyverno: NNCP ipsec-nas-<node>         [chart values: + rightca, NFS port selectors, tunnel mode]
  ⑧ NMState → NetworkManager → libreswan → IKEv2 with the node's own certificate
  ⑨ the NAS checks the node's CN against the same CA → tunnel up, NFS as ESP   (refused → IpsecNasTunnelDown)
  ⑩ the same pod reports metrics → UWM → alerts, Perses dashboard
@@ -173,7 +175,7 @@ Measured in the lab: the first policy to an established tunnel in 47 seconds ([d
 
 ### The refined tunnel definition
 
-The NNCP Option B generates today, plus the enterprise standard's `rightca: '%same'`, `leftprotoport: tcp`, `rightprotoport: tcp/2049` and `type: tunnel` ([doc 70, Sample 2](70-review-enterprise-linux-ipsec-config.md#sample-2--matching-the-enterprise-standard-measured-in-the-lab)). Built as chart values in both charts (`ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport`, with `ipsec.type`), empty by default, so today's output is unchanged. **Measured in the lab** ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)): against a NAS limited to NFS, the refined NNCP brings the tunnel up (`[…/TCP===…/TCP/2049]`, NFS through it) and today's NNCP is refused (`TS_UNACCEPTABLE`); against a NAS without selectors, the refined NNCP is refused too. **The selectors must match the NAS's exactly**: set them from the storage team's answer.
+The NNCP Option B generates today, plus the enterprise standard's `rightca: '%same'`, `leftprotoport: tcp`, `rightprotoport: tcp/2049` and `type: tunnel` ([doc 70, Sample 2](70-review-enterprise-linux-ipsec-config.md#sample-2--matching-the-enterprise-standard-measured-in-the-lab)). Built as chart values in both charts (`ipsec.rightca`, `ipsec.leftprotoport`, `ipsec.rightprotoport`, with `ipsec.type`), empty by default, so today's output is unchanged. **Measured in the lab** ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)): against a NAS limited to NFS, the refined NNCP brings the tunnel up (`[…/TCP===…/TCP/2049]`, NFS through it) and today's NNCP is refused (`TS_UNACCEPTABLE`); against a NAS without selectors, the refined NNCP is refused too. **The selectors must match the NAS's exactly**: set them from the storage team's answer. `rightca: '%same'` is enforced: the node refused a NAS certificate from another CA it also trusted, and accepted the same certificate once `rightca` was removed ([evidence 63](evidence/crc/63-rightca-enforcement.txt)). Red Hat's ONTAP article still calls `rightca` unsupported in NMState; its request (RHEL-114237) is closed, and these keys need OpenShift 4.19.22, 4.20.11, 4.21 or later ([doc 70, which versions](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors)).
 
 ## 6. The engineering PoC
 
@@ -181,7 +183,7 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 
 **Prerequisites** (owners in [doc 71](71-option-b-nas-team-engagement.md#what-is-left-for-us-to-specify)):
 
-- [ ] An enterprise non-production cluster with **at least three workers**, on OpenShift 4.19 or later.
+- [ ] An enterprise non-production cluster with **at least three workers**, on OpenShift 4.19.22, 4.20.11, 4.21 or later (the refined tunnel's keys, [doc 70](70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors)); `nmstatectl --version` and the node plugin's keys read on one node.
 - [ ] The cert-manager Operator for Red Hat OpenShift, and a `ClusterIssuer` for the Venafi TPP zone with the node certificate profile.
 - [ ] Kyverno 1.19 or later: the open-source release, supported by platform engineering.
 - [ ] The NMState Operator; `routingViaHost` and IPsec `External` mode ([doc 00](00-prepare-the-cluster.md)).
@@ -194,7 +196,7 @@ The NNCP Option B generates today, plus the enterprise standard's `rightca: '%sa
 |---|---|---|---|
 | 1 | Every selected worker gets its **own** certificate from Venafi TPP, with server and client authentication | `oc get certificate -n kcs-ipsec`; `openssl x509` on each Secret: subject, issuer chain, EKU | With an in-cluster CA |
 | 2 | Every worker's tunnel is up **at the same time**, each under its own identity, with the NAS on `uniqueids=yes` | `ipsec trafficstatus` on the nodes; the NAS's status lists one `id` per node | Two stand-in workers (Lima); one OpenShift node |
-| 3 | The refined tunnel (tunnel mode, `rightca`, TCP 2049 only) is accepted by the enterprise NAS | NNCP `Available`, IKE SA established, NFS writes through the tunnel | Measured against the lab NAS set up the same way; refused when the two sides' selectors differ ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)) |
+| 3 | The refined tunnel (tunnel mode, `rightca`, TCP 2049 only) is accepted by the enterprise NAS | NNCP `Available`, IKE SA established, NFS writes through the tunnel | Measured against the lab NAS set up the same way; refused when the two sides' selectors differ ([evidence 62](evidence/crc/62-nfs-only-selectors.txt)); `rightca` refuses a NAS certificate from another CA ([evidence 63](evidence/crc/63-rightca-enforcement.txt)) |
 | 4 | NFS is refused outside the tunnel | A mount with no tunnel fails; the NAS's cleartext counter rises | Measured against the lab NAS |
 | 5 | A new worker gets its certificate and tunnel with no human step | Scale a MachineSet up; time from Node to tunnel | Documented (doc 20, B.10); the lab cluster has one node |
 | 6 | A removed worker leaves nothing behind | Scale down; its Certificate, Secret and NNCP are gone; its certificate revoked at Venafi with the [runbook](73-runbook-node-certificate-revocation.md) | Documented (doc 20, B.11, B.13); revocation not run |
