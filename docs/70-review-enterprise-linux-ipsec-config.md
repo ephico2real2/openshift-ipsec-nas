@@ -99,7 +99,7 @@ Two components must know a key before it reaches libreswan: **NMState** (the han
 | **4.21** | Yes | Yes | **Supported** (not measured) |
 | **4.22** | Yes | Yes | **Supported**, measured on CRC 4.22.7 ([evidence 62](evidence/crc/62-nfs-only-selectors.txt), [63](evidence/crc/63-rightca-enforcement.txt)) |
 
-On a release that has `rightca` but not the selectors (4.19.19 to 4.19.21, 4.20.3 to 4.20.10), `ipsec.rightca` alone may be set, if the NAS does not limit its connection to NFS. Sample 1 uses none of these keys, so this floor does not apply to it. The NMState Operator must also be current: nmstate 2.2.57 or later in its handler (the command below).
+On a release that has `rightca` but not the selectors (4.19.19 to 4.19.21, 4.20.3 to 4.20.10), `ipsec.rightca` alone may be set, if the NAS does not limit its connection to NFS. Sample 1 uses none of these keys, so this floor does not apply to it. **Both charts check it:** with any of the keys set, `helm install` and `helm upgrade` stop with a message naming the minimum when the cluster's last completed update is below it (`templates/_openshift-floor.tpl`, tested at every boundary by `tests/test-openshift-floor.sh`). The check reads the `ClusterVersion`, so it runs only where Helm reaches the cluster: **Argo CD renders the chart without cluster access and skips it**, as it skips the chart's other cluster checks; there, the version must be confirmed before the keys are set. The NMState Operator must also be current: nmstate 2.2.57 or later in its handler (the command below).
 
 | Component | First version with `rightca` | First version with `leftprotoport`/`rightprotoport` | Source |
 |---|---|---|---|

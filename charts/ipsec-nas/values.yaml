@@ -135,7 +135,8 @@ uninstallCleanup:
   removeCertificates: true
 
 prerequisites:
-  # -- Skip the checks in templates/_prerequisites.tpl. For "helm template" without a cluster.
+  # -- Skip the checks in templates/_prerequisites.tpl, the OpenShift version floor of the refined tunnel included.
+  # For "helm template" without a cluster.
   skipCheck: false
   # -- Namespace Kyverno is installed in, to check that it does not filter out Nodes.
   kyvernoNamespace: kyverno

@@ -93,7 +93,7 @@ Off by default; with them the chart sets up Option C with **cert-manager and Kyv
 | `nodeDomain`, `nas.fqdn`, `nas.ip`, `clusterIssuer` | – | As in Option B's chart |
 | `ipsec.type` / `left` / `right` | `transport` / node FQDN (C2) / `nas.fqdn` | As in Option B's chart. OpenShift Local: `tunnel`, `%defaultroute`, the NAS's IP |
 | `ipsec.rightca` / `leftprotoport` / `rightprotoport` | `""` | As in Option B's chart: `%same`, `tcp`, `tcp/2049` to match a NAS limited to NFS; the selectors must match the NAS's exactly; OpenShift 4.19.22, 4.20.11, 4.21 or later ([docs/70](../../docs/70-review-enterprise-linux-ipsec-config.md#which-openshift-versions-carry-rightca-and-the-port-selectors)) |
-| `prerequisites.skipCheck` / `kyvernoNamespace` | `false` / `kyverno` | The checks: NMState (tunnel), Kyverno 1.19 (C2), cert-manager (certificate) served; the `ClusterIssuer` exists; Kyverno does not ignore Nodes |
+| `prerequisites.skipCheck` / `kyvernoNamespace` | `false` / `kyverno` | The checks: NMState (tunnel), Kyverno 1.19 (C2), cert-manager (certificate) served; the `ClusterIssuer` exists; with `tunnel.enabled` and the refined keys set, the cluster's last completed update is OpenShift 4.19.22, 4.20.11 or 4.21 or later (4.19.19, 4.20.3 or 4.21 for `ipsec.rightca` alone; `templates/_openshift-floor.tpl`); Kyverno does not ignore Nodes |
 
 **The chart never makes the MachineConfig.** It carries the private key and reboots its pool. `scripts/option-c-certificate.sh from-secret` builds each pool's MachineConfig from the certificate's Secret, with every check of the manual path, and you apply it.
 
