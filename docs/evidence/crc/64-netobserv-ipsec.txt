@@ -44,7 +44,7 @@
   03:19-03:21: node CPU 10762-10938m (91-92%), memory 26022Mi (94%); an API call (get lease) took 0.24-4.87 s;
   host: load average 101.89 / 83.00 / 45.33 (1/5/15 min) on 12 CPUs, kswapd0 at 100% CPU (memory reclaim),
   kube-apiserver 387%, kubelet 148%. NetObserv's own pods used about 57m and 115Mi.
-  03:22:50 FlowCollector deleted to relieve the node.
+  03:22:50 FlowCollector deleted to relieve the node (the cause was taken to be NetObserv at that point; see section 6).
 
 ## 5. Recovery and removal
   After the FlowCollector was deleted, its agent and processor kept running: the operator, which removes them, was
@@ -68,13 +68,23 @@
   1. The IPSec feature marks the node-to-NAS tunnel (External mode, libreswan, NAT-T): 30 flows with
      IPSecStatus="success" on a node whose only IPsec is that tunnel. Not yet confirmed by address.
   2. Its cost is small in itself: agent 13m / 56Mi, processor 42m / 54Mi at sampling 1 on this node.
-  3. This lab node has no room for it. It was at 91% memory before the install; within minutes of it the node was
-     reclaiming memory (kswapd0 100%, no swap), the API server slowed (an API call up to 4.87 s), and operators with
-     leader leases (NetObserv's, Kyverno's) restarted; after NetObserv was removed the load fell from 138 to 20.
-     The timing and the recovery point to NetObserv as the trigger, but the load before the install was not
-     recorded, so it is not proven that it alone caused it.
+  3. The node could not carry the test, and the cause is NOT established. It was at 91% memory before the install;
+     within minutes it was reclaiming memory (kswapd0 100%, no swap), the API server slowed (an API call up to
+     4.87 s), and operators with leader leases (NetObserv's, Kyverno's) restarted. But another workload was being
+     installed on the same node at the same time (section 6), and the load rose again to 80 at 03:31 with NetObserv
+     gone. NetObserv's own pods used about 57m and 115Mi. What is established: this node has no memory headroom.
   4. consolePlugin.enable: false does not keep the operator from adding its static plugin to the console's
      configuration (1.12.3): on a cluster where that matters, remove or check it after install.
+
+## 6. Other activity on the node during the test (found afterwards)
+  mongodb-poc (another workstream on the same lab cluster): a Helm install's jobs mongot-mongodb-search-helm-preflight
+  (03:14:22-03:15:15), -csv-reclaim (03:16:08-03:17:45), -approver (03:17:46...), again 03:24:25 and 03:25:15, and
+  its operator pod recreated at 03:29:00; OLM's catalog server (opm) at 172% CPU and the package server at 106% at
+  03:31. namespace-configuration-operator's image-override cron job every 10 minutes (03:10, 03:20; the 03:20 one in
+  Error). openshift-console redeployed at 03:29:00 (after the plugin entry was removed). 03:31:10 load 80.42 / 58.49
+  / 51.40 with no NetObserv on the cluster.
+  So the pressure in section 4 cannot be attributed to NetObserv; a rerun needs a quiet node with headroom and the
+  load recorded before the install.
 
 ## Not measured (the rest of issue #35)
   The flows to the NAS by address (the per-NAS FlowMetrics were never created); a TCP flow to port 2049 on egress
