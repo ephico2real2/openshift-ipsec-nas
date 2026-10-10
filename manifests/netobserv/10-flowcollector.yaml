@@ -1,0 +1,73 @@
+# The FlowCollector for the IPsec spike (issue #35): the eBPF agent with the IPSec feature, metrics only.
+# Lab values: the NAS of the lab is 192.168.64.8 (lab/crc). Requires 00-operator.yaml, installed.
+apiVersion: flows.netobserv.io/v1beta2
+kind: FlowCollector
+metadata:
+  name: cluster
+spec:
+  namespace: netobserv
+  agent:
+    type: eBPF
+    ebpf:
+      # every packet: the NAS flows are few, and the spike must not miss one (costs CPU; measured)
+      sampling: 1
+      # kprobe/kretprobe on xfrm_output and xfrm_input; not privileged: the operator then grants
+      # BPF, PERFMON and NET_ADMIN only
+      features:
+      - IPSec
+  processor:
+    # one flowlogs-pipeline pod (default 3): the lab cluster is a single node
+    consumerReplicas: 1
+    metrics:
+      includeList:
+      - node_ingress_bytes_total
+      - node_egress_bytes_total
+      - node_ipsec_flows_total
+  # metrics only: no flow store and no console plugin. Even so, 1.12.3 registers its static plugin and adds it to
+  # the console's spec.plugins: check, and remove it if unwanted (README.md)
+  loki:
+    enable: false
+  consolePlugin:
+    enable: false
+---
+# Traffic from the nodes to the NAS, by protocol, port and IPsec status. With IPsec, a node's NFS leaves
+# as ESP (or UDP 4500 under NAT-T): a TCP flow to port 2049 seen here left the node unencrypted.
+apiVersion: flows.netobserv.io/v1alpha1
+kind: FlowMetric
+metadata:
+  name: nas-egress-bytes
+  namespace: netobserv
+spec:
+  metricName: nas_egress_bytes_total
+  type: Counter
+  valueField: Bytes
+  direction: Egress
+  filters:
+  - field: DstAddr
+    matchType: Equal
+    value: 192.168.64.8
+  labels:
+  - SrcK8S_HostName
+  - Proto
+  - DstPort
+  - IPSecStatus
+---
+apiVersion: flows.netobserv.io/v1alpha1
+kind: FlowMetric
+metadata:
+  name: nas-ingress-bytes
+  namespace: netobserv
+spec:
+  metricName: nas_ingress_bytes_total
+  type: Counter
+  valueField: Bytes
+  direction: Ingress
+  filters:
+  - field: SrcAddr
+    matchType: Equal
+    value: 192.168.64.8
+  labels:
+  - DstK8S_HostName
+  - Proto
+  - SrcPort
+  - IPSecStatus

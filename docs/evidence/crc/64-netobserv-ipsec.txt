@@ -1,0 +1,82 @@
+# Issue #35: Red Hat's Network Observability (NetObserv) IPSec feature against the node-to-NAS tunnel.
+# CRC 4.22.7 (single node, RHCOS 9.8, kernel 5.14.0-687.29.1.el9_8), NetObserv Operator 1.12.3 (stable channel,
+# redhat-operators), eBPF agent 1.12.3. The tunnel: Option C (C2) to the lab NAS 192.168.64.8, tunnel mode, NAT-T
+# (ESPinUDP, port 4500). Manifests: manifests/netobserv/. 2026-10-10 03:13-03:29Z.
+
+## 0. Before (03:13)
+  Node: CPU 2044m (17%), memory 25277Mi (91%).
+  eBPF programs on the node (bpftool v7.5.0 from registry.redhat.io/rhel9/support-tools): 385, mostly cgroup_device
+    (systemd). No XDP and no TC programs on any interface ("bpftool net show": xdp, tc, flow_dissector, netfilter
+    all empty). Tracing programs already present, owner not identified by bpftool (Dynatrace OneAgent runs on the
+    node): processExitHook (tracepoint), processForkHook (raw_tracepoint), uprobes on OpenSSL SSL_read/SSL_read_ex/
+    SSL_pending, kprobes on accept/accept4/read/recv/recvmsg/recvfrom/close.
+  ovnkube-node: 2 errors in 30 minutes, both in ovnkube-controller and unrelated ("Error in patching annotations on
+    pod namespace-configuration-operator/...-image-override-...", a cron job every 10 minutes); restarts 9-10 each.
+
+## 1. How the feature works (netobserv-ebpf-agent source, main branch, bpf/ipsec.h; pkg/decode/flows)
+  kprobe + kretprobe on xfrm_output (egress) and xfrm_input (ingress). The result is stored on the WIRE flow: the
+  flow id is rewritten to ESP, or kept as UDP 4500 under NAT-T (ipsec_to_wire_flow_id), so the status lands on the
+  node<->NAS ESP/NAT-T flow, not on the inner NFS TCP/2049 flow. Flow fields: IPSecStatus "success" (kernel return
+  0) or "error" (IPSecRetCode = the kernel's return code). Built-in metrics node/namespace/workload_ipsec_flows_total
+  count flows that have IPSecStatus, labelled by it. A built-in health rule IPsecErrors needs
+  node_to_node_ingress_flows_total (warning at apply time).
+  Consequence to test: encryption happens before the packet reaches the TC hook where flows are captured, so a TCP
+  flow to the NAS's port 2049 seen on egress would be NFS that left the node unencrypted.
+
+## 2. Install
+  03:13:55 operator subscription applied; 03:14:55 CSV network-observability-operator.v1.12.3 Succeeded.
+  03:17:53 FlowCollector applied (sampling 1, features [IPSec], loki and console plugin disabled, metrics
+    node_ingress/egress_bytes_total and node_ipsec_flows_total); 03:18:31 processor set to 1 replica (default 3).
+  Agent: not privileged; capabilities add BPF, PERFMON, NET_ADMIN, drop ALL; readOnlyRootFilesystem.
+  03:20:22 FlowCollector Ready.
+  Resources (oc adm top, 03:19:56): agent 13m / 56Mi; flowlogs-pipeline 42m / 54Mi; static plugin 2m / 5Mi.
+
+## 3. First result (03:22:41, the processor's own /metrics on :9401)
+  netobserv_node_ipsec_flows_total{DstK8S_HostName="",IPSecStatus="success",SrcK8S_HostName=""} 30
+  CRC is one node with no OVN-Kubernetes east-west IPsec, so the only IPsec on it is the NAS tunnel: the agent DID
+  mark the External-mode libreswan tunnel's flows as encrypted. Not yet confirmed by address (the per-NAS
+  FlowMetrics could not be created, below); the host-name labels came back empty.
+
+## 4. The node could not carry it
+  The operator lost its leader lease repeatedly ("leader election lost"; 4 restarts in 7 minutes, CrashLoopBackOff),
+  so its webhooks had no endpoint and the two FlowMetrics (nas_egress_bytes_total, nas_ingress_bytes_total) were
+  refused on every try.
+  03:19-03:21: node CPU 10762-10938m (91-92%), memory 26022Mi (94%); an API call (get lease) took 0.24-4.87 s;
+  host: load average 101.89 / 83.00 / 45.33 (1/5/15 min) on 12 CPUs, kswapd0 at 100% CPU (memory reclaim),
+  kube-apiserver 387%, kubelet 148%. NetObserv's own pods used about 57m and 115Mi.
+  03:22:50 FlowCollector deleted to relieve the node.
+
+## 5. Recovery and removal
+  After the FlowCollector was deleted, its agent and processor kept running: the operator, which removes them, was
+  crash-looping, and the API server was too slow to collect them. Kyverno's admission controller had lost its
+  endpoint too, and its webhook refused the namespace deletions ("validate.kyverno.svc-fail ... no endpoints").
+  03:24:37-49 subscription, CSV and the NetObserv Deployments and DaemonSet deleted by hand.
+  Node, from /proc on the host (load 1/5/15 min, MemAvailable; no swap configured):
+    03:22:56 112.97 92.27 50.84  1130 MiB      03:25:22  68.28 87.47 55.54  1579 MiB (NetObserv pods gone)
+    03:24:08 138.68 100.61 56.73 1349 MiB      03:27:44  28.99 69.22 53.58  1563 MiB
+    03:24:51  97.73 94.05 56.33   912 MiB      03:28:47  19.81 58.46 50.90  1514 MiB
+  03:27:55 the three namespaces deleted once Kyverno answered; the CRDs deleted.
+  The operator had registered its static console plugin and ADDED "netobserv-plugin-static" to the console's
+  spec.plugins although consolePlugin.enable was false: the entry was removed with a JSON patch (test, then remove)
+  and the ConsolePlugin deleted. The console's list is back to its five earlier plugins.
+  03:29:22 nothing named netobserv left (namespaces, CRDs, ConsolePlugin).
+  03:29:27 node CPU 8177m (69%), memory 25814Mi (93%); every Kyverno controller Running; a file written and read
+  through NFS in ipsec-nas-csi-demo, ipsec-nas-team-a and ipsec-nas-team-b; NAS counters nfs-over-ipsec 44081754,
+  nfs-cleartext-dropped 737 (734 at the last check: three NFS retries the NAS dropped while the node was starved).
+
+## Findings
+  1. The IPSec feature marks the node-to-NAS tunnel (External mode, libreswan, NAT-T): 30 flows with
+     IPSecStatus="success" on a node whose only IPsec is that tunnel. Not yet confirmed by address.
+  2. Its cost is small in itself: agent 13m / 56Mi, processor 42m / 54Mi at sampling 1 on this node.
+  3. This lab node has no room for it. It was at 91% memory before the install; within minutes of it the node was
+     reclaiming memory (kswapd0 100%, no swap), the API server slowed (an API call up to 4.87 s), and operators with
+     leader leases (NetObserv's, Kyverno's) restarted; after NetObserv was removed the load fell from 138 to 20.
+     The timing and the recovery point to NetObserv as the trigger, but the load before the install was not
+     recorded, so it is not proven that it alone caused it.
+  4. consolePlugin.enable: false does not keep the operator from adding its static plugin to the console's
+     configuration (1.12.3): on a cluster where that matters, remove or check it after install.
+
+## Not measured (the rest of issue #35)
+  The flows to the NAS by address (the per-NAS FlowMetrics were never created); a TCP flow to port 2049 on egress
+  when the tunnel is removed; metrics in Prometheus; ovnkube-node and the eBPF hooks after the install. They need a
+  node with memory headroom.
