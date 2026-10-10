@@ -281,7 +281,7 @@ and a volume in the pod that names it:
 What the team gets: a directory `csi/<namespace>/<claim name>` on the NAS, writable by its pods under `restricted-v2`, reached only through the tunnel. Things to know:
 
 - **The size is not a quota.** NFS has no per-directory limit here; ask the storage team for quotas if they matter.
-- **A claim can grow, never shrink.** Raise `spec.resources.requests.storage` (`oc patch pvc <claim> -n <namespace> --type merge -p '{"spec":{"resources":{"requests":{"storage":"20Gi"}}}}'`). The driver only records the new size (no quota to change, no step on the node), so it is done at once: measured, a claim went from 1Gi to 2Gi within two seconds, its volume with it ([evidence 65](../evidence/crc/65-csi-volume-expansion.txt)). The team classes of Part 5 do not allow it yet.
+- **A claim can grow, never shrink.** Raise `spec.resources.requests.storage` (`oc patch pvc <claim> -n <namespace> --type merge -p '{"spec":{"resources":{"requests":{"storage":"20Gi"}}}}'`). The driver only records the new size (no quota to change, no step on the node), so it is done at once: measured, a claim went from 1Gi to 2Gi within two seconds, its volume with it ([evidence 65](../evidence/crc/65-csi-volume-expansion.txt)). The team classes of Part 5 allow it too.
 - **Deleting the claim keeps the data.** The PersistentVolume goes with the claim; the directory and its data stay on the NAS (also when the whole namespace is deleted; measured).
 - **The name is the directory.** A new claim with the same name in the same namespace gets a new volume on the **same** directory, with the old data in it (measured).
 - **Pods write with the pod's user ID**, through the directory's group: the anonymous group, which `root_squash` also gives the pod's group 0 ([Step 3.3](#step-33--see-the-data-on-the-nas-and-prove-it-used-the-tunnel)). If the NAS maps users differently and writes fail, see [Troubleshooting](#troubleshooting).
@@ -344,6 +344,7 @@ parameters:
   onDelete: retain                  # deleting a volume keeps its data (Part 6)
 reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume
 volumeBindingMode: Immediate
+allowVolumeExpansion: true          # a claim may grow (Part 4)
 mountOptions:
 - nfsvers=4.1
 - hard
@@ -358,16 +359,16 @@ oc apply -f rendered/demo-app-csi/teams/60-team-a.yaml -f rendered/demo-app-csi/
 ```
 
 ```bash
-oc get storageclass -o custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,SHARE:.parameters.share,ONDELETE:.parameters.onDelete | grep -E 'NAME|ipsec-nas'
+oc get storageclass -o custom-columns=NAME:.metadata.name,RECLAIM:.reclaimPolicy,EXPAND:.allowVolumeExpansion,SHARE:.parameters.share,ONDELETE:.parameters.onDelete | grep -E 'NAME|ipsec-nas'
 ```
 
 ✅ **Expected** (measured):
 
 ```text
-NAME               RECLAIM   SHARE            ONDELETE
-ipsec-nas-csi      Delete    /export          retain
-ipsec-nas-team-a   Delete    /export-team-a   retain
-ipsec-nas-team-b   Delete    /export-team-b   retain
+NAME               RECLAIM   EXPAND   SHARE            ONDELETE
+ipsec-nas-csi      Delete    true     /export          retain
+ipsec-nas-team-a   Delete    true     /export-team-a   retain
+ipsec-nas-team-b   Delete    true     /export-team-b   retain
 ```
 
 ### Step 5.3 – Each team claims from its class

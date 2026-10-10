@@ -38,6 +38,13 @@
   2Gi; the claim stayed 1Gi (dry run). The API checks the class when the resize is asked for, not when the claim
   was made.
 
+## 6. The team classes (19:44)
+  allowVolumeExpansion: true added to manifests/demo-app-csi/teams/60-team-a.yaml.tmpl and 61-team-b.yaml.tmpl.
+  oc diff of the rendered files against the cluster: only "+allowVolumeExpansion: true" on each class; applied
+  (the classes "configured", their namespaces and claims "unchanged"). Every ipsec-nas class now reads EXPAND true.
+  The patch of section 4, again with --dry-run=server, on ipsec-nas-team-a/app-data and ipsec-nas-team-b/app-data:
+  accepted (2Gi); both claims stayed 1Gi.
+
 ## Not measured
   A resize while a pod writes to the claim (the driver has no node-side step, so the mount is not touched); the
   claims of mongodb-poc (8Gi each, class ipsec-nas-csi) were not resized.

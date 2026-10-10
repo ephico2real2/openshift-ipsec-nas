@@ -13,6 +13,7 @@ parameters:
   onDelete: retain                  # deleting a volume keeps its data (Part 6)
 reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume
 volumeBindingMode: Immediate
+allowVolumeExpansion: true          # a claim may grow (Part 4)
 mountOptions:
 - nfsvers=4.1
 - hard
