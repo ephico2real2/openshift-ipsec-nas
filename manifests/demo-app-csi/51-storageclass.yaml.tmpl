@@ -17,6 +17,9 @@ parameters:
   onDelete: retain
 reclaimPolicy: Delete               # deleting a claim deletes its PersistentVolume too; onDelete decides about the data
 volumeBindingMode: Immediate
+# A claim may ask for more: the driver only records the new size (no quota on NFS), so the resize is instant.
+# Unlike the fields above, this one can be changed on a live class (oc patch)
+allowVolumeExpansion: true
 mountOptions:
 - nfsvers=4.1
 - hard                              # retry forever instead of returning I/O errors to the app

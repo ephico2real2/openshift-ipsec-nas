@@ -1,0 +1,43 @@
+# allowVolumeExpansion on the class ipsec-nas-csi (docs/lab/nas-csi-dynamic-provisioning.md, Parts 2, 4 and 6).
+# CRC 4.22.7 (Kubernetes v1.35.6), csi-driver-nfs 4.13.4 (nfsplugin v4.13.4, csi-resizer v2.2.0), lab NAS crc-nas
+# (192.168.64.8, /export). 2026-10-10 by the Mac's clock; the NAS VM's clock ran 37 min behind (18:23:07 vs 17:45:46).
+
+## 0. Before: set live only
+  The class carried allowVolumeExpansion: true, but the template manifests/demo-app-csi/51-storageclass.yaml.tmpl did
+  not. managedFields: f:allowVolumeExpansion owned by manager kubectl-patch, operation Update, 2026-10-10T15:24:11Z;
+  every other field by kubectl-client-side-apply at creation (2026-10-05T02:23:21Z). The team classes
+  ipsec-nas-team-a and ipsec-nas-team-b: allowVolumeExpansion unset.
+
+## 1. What the driver does on a resize (source, tag v4.13.4)
+  pkg/nfs/controllerserver.go:470-483 ControllerExpandVolume checks the volume ID and the capacity range, logs, and
+  returns CapacityBytes = the requested size. It sets no quota and does not ask for a node-side step. The driver
+  advertises EXPAND_VOLUME (pkg/nfs/nfs.go:111). On NFS a claim's size is recorded, never enforced, before or after.
+
+## 2. Which StorageClass fields can change on a live class
+  Kubernetes ValidateStorageClassUpdate (pkg/apis/storage/validation/validation.go, release-1.35) forbids updates to
+  parameters, provisioner, reclaimPolicy and volumeBindingMode only. allowVolumeExpansion and mountOptions are
+  mutable; the live kubectl patch of section 0 succeeded.
+
+## 3. A resize, on a throwaway claim (ipsec-nas-csi-demo/expand-check, ReadWriteMany, class ipsec-nas-csi)
+  18:22:47 Bound 1Gi, volume pvc-d446b48e-d26c-4210-8a1f-99e58177519a
+  patched spec.resources.requests.storage 1Gi -> 2Gi; the first status poll (polling every 2 s) already read
+  capacity 2Gi: PVC request 2Gi, capacity 2Gi, allocatedResources 2Gi; the PV's spec.capacity 2Gi.
+  Events: ExternalExpanding (volume_expand) "waiting for an external controller to expand this PVC",
+    Resizing (external-resizer nfs.csi.k8s.io), VolumeResizeSuccessful "Resize volume succeeded".
+  Claim deleted; its volume went with it (reclaimPolicy Delete) and, onDelete retain, left the empty directory
+  /export/csi/ipsec-nas-csi-demo/expand-check on the NAS, removed by hand (rmdir). /export/csi/ipsec-nas-csi-demo
+  holds app-data only, as before.
+
+## 4. A class without the flag refuses it
+  oc patch pvc app-data -n ipsec-nas-team-a ... storage 2Gi --dry-run=server:
+    Error from server (Forbidden): persistentvolumeclaims "app-data" is forbidden: only dynamically provisioned pvc
+    can be resized and the storageclass that provisions the pvc must support resize
+
+## 5. An existing claim is covered too
+  ipsec-nas-csi-demo/app-data (created 2026-10-05T01:44:49Z, 1Gi): the same patch with --dry-run=server returned
+  2Gi; the claim stayed 1Gi (dry run). The API checks the class when the resize is asked for, not when the claim
+  was made.
+
+## Not measured
+  A resize while a pod writes to the claim (the driver has no node-side step, so the mount is not touched); the
+  claims of mongodb-poc (8Gi each, class ipsec-nas-csi) were not resized.

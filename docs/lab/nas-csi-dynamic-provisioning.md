@@ -151,6 +151,7 @@ cat rendered/demo-app-csi/51-storageclass.yaml
 | `onDelete: retain` | When the volume is deleted, its directory and data **stay** on the NAS ([Part 6](#part-6--what-deleting-a-claim-does-and-how-to-change-it)) |
 | `reclaimPolicy: Delete` | Deleting a claim deletes its PersistentVolume too, so no `Released` volumes are left behind |
 | `volumeBindingMode: Immediate` | The volume is made when the claim is created, not when a pod first uses it |
+| `allowVolumeExpansion: true` | A claim can ask for a larger size later ([Part 4](#part-4--use-it-for-your-application)). Without it the API refuses the resize |
 | `mountOptions: nfsvers=4.1, hard, noatime` | The same as the static volume of nas-consumer-app.md |
 
 **Why the `csi/` parent.** With `root_squash`, the driver creates directories as the NAS's anonymous user, and that user cannot create a directory inside one that another user owns. Measured: with `subDir: ${pvc.metadata.namespace}/${pvc.metadata.name}`, a claim in `ipsec-nas-demo` failed with `mkdir …/ipsec-nas-demo/app-data: permission denied`, because `/export/ipsec-nas-demo` belongs to the static demo's pod. Under `csi/`, every directory is the driver's own.
@@ -162,7 +163,7 @@ oc apply -f rendered/demo-app-csi/51-storageclass.yaml
 oc get storageclass ipsec-nas-csi
 ```
 
-✅ **Expected:** `ipsec-nas-csi   nfs.csi.k8s.io   Delete   Immediate`. It is not the default class; claims ask for it by name.
+✅ **Expected:** `ipsec-nas-csi   nfs.csi.k8s.io   Delete   Immediate   true`. It is not the default class; claims ask for it by name.
 
 ---
 
@@ -280,6 +281,7 @@ and a volume in the pod that names it:
 What the team gets: a directory `csi/<namespace>/<claim name>` on the NAS, writable by its pods under `restricted-v2`, reached only through the tunnel. Things to know:
 
 - **The size is not a quota.** NFS has no per-directory limit here; ask the storage team for quotas if they matter.
+- **A claim can grow, never shrink.** Raise `spec.resources.requests.storage` (`oc patch pvc <claim> -n <namespace> --type merge -p '{"spec":{"resources":{"requests":{"storage":"20Gi"}}}}'`). The driver only records the new size (no quota to change, no step on the node), so it is done at once: measured, a claim went from 1Gi to 2Gi within two seconds, its volume with it ([evidence 65](../evidence/crc/65-csi-volume-expansion.txt)). The team classes of Part 5 do not allow it yet.
 - **Deleting the claim keeps the data.** The PersistentVolume goes with the claim; the directory and its data stay on the NAS (also when the whole namespace is deleted; measured).
 - **The name is the directory.** A new claim with the same name in the same namespace gets a new volume on the **same** directory, with the old data in it (measured).
 - **Pods write with the pod's user ID**, through the directory's group: the anonymous group, which `root_squash` also gives the pod's group 0 ([Step 3.3](#step-33--see-the-data-on-the-nas-and-prove-it-used-the-tunnel)). If the NAS maps users differently and writes fail, see [Troubleshooting](#troubleshooting).
@@ -414,7 +416,7 @@ oc debug node/<node> -- chroot /host bash -c "findmnt -t nfs4 -o SOURCE | grep c
 ### Rules for several classes
 
 1. **One parent directory per class on a shared export.** The driver names each directory after the claim's namespace and name, not after its class. Measured with a class that keeps data and one that removes it, both using `csi/…` on `/export`: a claim of the removing class, given the name of an earlier claim of the keeping class, bound to the kept directory and could read its data, and deleting it removed the directory and the data. Give each class its own parent (`csi/…`, `csi-scratch/…`), or its own export.
-2. **A class cannot be edited.** To change one, delete it and create it again ([Part 6](#how-to-change-it)); its volumes are not touched.
+2. **Most of a class cannot be edited.** Its `parameters`, `provisioner`, `reclaimPolicy` and `volumeBindingMode` are fixed: to change one, delete the class and create it again ([Part 6](#how-to-change-it)); its volumes are not touched. `allowVolumeExpansion` and `mountOptions` can be changed in place.
 3. **Name the class in every claim.** Only one class can be the cluster's default (`storageclass.kubernetes.io/is-default-class: "true"`); on CRC it is `crc-csi-hostpath-provisioner`, so a claim without `storageClassName` does not reach the NAS.
 
 **Not measured:** a second NAS IP, or a second NAS. That needs a second tunnel, which the lab does not have.
@@ -450,7 +452,8 @@ Measured in [evidence 59](../evidence/crc/59-csi-reclaim-and-ondelete.txt); `Ret
 
 | To change… | Do this | What it affects |
 |---|---|---|
-| A class's `reclaimPolicy` or `onDelete` | A class cannot be edited. Delete it and create it again with the new values: `oc delete storageclass ipsec-nas-csi`, edit the template, render, `oc apply -f rendered/demo-app-csi/51-storageclass.yaml` | Claims made **from then on**. Deleting a class does not touch its volumes or their data (measured) |
+| A class's `allowVolumeExpansion` | Edit it in place: `oc patch storageclass ipsec-nas-csi -p '{"allowVolumeExpansion":true}'`, and the same in the template | Every claim of the class, existing ones too: the API checks the class when the resize is asked for (measured with a server-side dry run, [evidence 65](../evidence/crc/65-csi-volume-expansion.txt)) |
+| A class's `reclaimPolicy` or `onDelete` | These cannot be edited (`onDelete` is one of its `parameters`). Delete it and create it again with the new values: `oc delete storageclass ipsec-nas-csi`, edit the template, render, `oc apply -f rendered/demo-app-csi/51-storageclass.yaml` | Claims made **from then on**. Deleting a class does not touch its volumes or their data (measured) |
 | An existing volume's `reclaimPolicy` | `oc patch pv <pv> -p '{"spec":{"persistentVolumeReclaimPolicy":"Delete"}}'` (or `"Retain"`) | That volume only |
 | An existing volume's `onDelete` | Cannot be changed: it is part of the volume's handle (`…#retain`). A handle made with no policy (`…#`, from before a class or the default set one) gets the driver's **current** default when it is deleted (measured) | — |
 | The driver's default `onDelete` | `controller.defaultOnDeletePolicy` in [`values.yaml`](../../manifests/csi-driver-nfs/values.yaml), then `helm upgrade csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace csi-driver-nfs --version 4.13.4 -f manifests/csi-driver-nfs/values.yaml --wait` | Classes without `onDelete`: written into their new volumes' handles; and volumes whose handle has no policy |
