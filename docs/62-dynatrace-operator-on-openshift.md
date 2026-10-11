@@ -107,9 +107,36 @@ timeseries v = avg(ipsec_nas_tunnel_up), by: {node, connection, k8s.pod.name, k8
 
 ## Scope and security
 
-- **Full stack touches every namespace.** `cloudNativeFullStack` puts a privileged OneAgent on every node, and its webhook injects Dynatrace's code module into pods as they start, in every namespace it matches: on CRC 53, other projects included, from their next restart. To limit it, add a `namespaceSelector` to `oneAgent.cloudNativeFullStack` (Dynatrace's DynaKube reference), or choose a lighter mode from the release's samples (`kubernetesObservability`, `applicationMonitoring`, `hostMonitoring`).
+- **Full stack touches every namespace.** `cloudNativeFullStack` puts a privileged OneAgent on every node, and its webhook injects Dynatrace's code module into pods as they start, in every namespace it matches: on CRC 53, other projects included, from their next restart. To limit it, add a `namespaceSelector` to `oneAgent.cloudNativeFullStack` (Dynatrace's DynaKube reference), or choose a lighter mode from the release's samples (`kubernetesObservability`, `applicationMonitoring`, `hostMonitoring`). Only the operator's own namespace, `kube-*`, `openshift*` (and GKE's `gke-*`, `gmp-*`) are left out by default (operator 1.11.0, `pkg/api/exp/injection.go`).
+- **Not compatible with Network Observability, as installed.** See [below](#network-observability-does-not-run-beside-it).
 - **The token** is in one place on the cluster, the Secret `dynatrace/dynakube`, readable by whoever can read Secrets in `dynatrace`. Revoke a token that has been shared anywhere else, and replace it in the Secret.
 - **Images** come from Red Hat's certified registry (the operator) and Dynatrace's public registry (OneAgent, ActiveGate).
+
+## Network Observability does not run beside it
+
+Measured on CRC with Network Observability Operator 1.12.3 and Dynatrace Operator 1.11.0 (cloudNativeFullStack, `metadataEnrichment` on, no `namespaceSelector`): **the Network Observability eBPF agent never starts.** [Evidence 64](evidence/crc/64-netobserv-ipsec.txt), section 7a.
+
+1. Dynatrace's namespace webhook labels every new namespace for injection, `netobserv` and `netobserv-privileged` included. Only its own namespace, `kube-*`, `openshift*` (and GKE's `gke-*`, `gmp-*`) are left out by default (operator 1.11.0, `pkg/api/exp/injection.go`).
+2. Its pod webhook then adds the init container `dynatrace-operator` to the agent's pods, with a `RuntimeDefault` seccomp profile. Dynatrace documents that this profile "can interfere with SecurityContextConstraints" that do not allow one ([Seccomp profile configuration](https://docs.dynatrace.com/managed/ingest-from/setup-on-k8s/guides/networking-security-compliance/security-configurations/seccomp); the default since Dynatrace Operator 1.9.0).
+3. The SCC the operator makes for the agent, `netobserv-ebpf-agent` (BPF, PERFMON, NET_ADMIN, host network), allows no seccomp profile. The DaemonSet's `FailedCreate` event ends with `container.seccomp.security.alpha.kubernetes.io/dynatrace-operator]: Forbidden: seccomp may not be set`, the FlowCollector stays `Ready=False` (`DaemonSet netobserv-ebpf-agent not ready: 0/1`), and no flows are collected. The processor in `netobserv` is injected too and runs, because `restricted-v2` allows the profile, so only the agent fails.
+
+**To run both**, leave Network Observability's namespaces out of the injection: Dynatrace's documented way ([Configure monitoring for namespaces and pods](https://docs.dynatrace.com/docs/ingest-from/setup-on-k8s/guides/operation/annotate)). Both injections need it. Patch the live DynaKube, because the [file here](../manifests/dynatrace/dynakube-cloudnativefullstack.yaml) has a placeholder `apiUrl`:
+
+```bash
+oc patch dynakube dynakube -n dynatrace --type merge -p '{"spec":{
+  "metadataEnrichment":{"namespaceSelector":{"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"NotIn","values":["netobserv","netobserv-privileged"]}]}},
+  "oneAgent":{"cloudNativeFullStack":{"namespaceSelector":{"matchExpressions":[{"key":"kubernetes.io/metadata.name","operator":"NotIn","values":["netobserv","netobserv-privileged"]}]}}}}}'
+```
+
+✅ **Expected** (measured): within seconds the two namespaces lose the label `dynakube.internal.dynatrace.com/instance`, the DynaKube stays `Running`, and the agent's DaemonSet creates its pod on its next retry, under the SCC `netobserv-ebpf-agent`, with no injection.
+
+| Other ways | Why not |
+|---|---|
+| The pod annotation `dynatrace.com/inject: "false"` | The FlowCollector cannot set annotations on the agent's pods |
+| A FlowCollector namespace named `openshift-*`, which Dynatrace skips | Red Hat advises keeping `netobserv`: the operator's cluster role bindings name `netobserv` service accounts |
+| `feature.dynatrace.com/init-container-seccomp-profile: "false"` on the DynaKube | Removes the profile from every injected pod in the cluster, and operator 1.11.0 lists the flag as deprecated. Not tested |
+
+The cost: Dynatrace no longer sees inside Network Observability's own pods. This lab removed Network Observability after the evaluation (issue #35) and took the selectors out again, so the DynaKube here has none.
 
 ## Removal
 
