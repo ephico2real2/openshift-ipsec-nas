@@ -9,20 +9,8 @@ spec:
   apiUrl: https://<ENVIRONMENT_ID>.live.dynatrace.com/api   # your environment
   metadataEnrichment:
     enabled: true
-    namespaceSelector:
-      # Not Network Observability's namespaces: the injection adds a seccomp annotation that the eBPF agent's
-      # SCC refuses, so the agent never starts (docs/evidence/crc/64-netobserv-ipsec.txt, section 7)
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: NotIn
-          values: [netobserv, netobserv-privileged]
   oneAgent:
     cloudNativeFullStack:
-      namespaceSelector:              # the same as metadataEnrichment's: both inject
-        matchExpressions:
-          - key: kubernetes.io/metadata.name
-            operator: NotIn
-            values: [netobserv, netobserv-privileged]
       tolerations:
         - effect: NoSchedule
           key: node-role.kubernetes.io/master

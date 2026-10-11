@@ -178,6 +178,27 @@
   8. The four pods used 10m CPU and 227 MiB together at sampling 1 (7e), and the node's load did not change; the
      agent adds TC hooks on every interface and four probes on xfrm.
 
+## 8. Decision and removal, 2026-10-11 18:58-18:59Z
+  Decision (operator): not adopted. For this tunnel NetObserv 1.12.3 added nothing the collector does not report
+  (IPSecStatus misses the NAS's flows, 7c; bytes and IPsec errors repeat ipsec_nas_tunnel_*_bytes_total and
+  ipsec_nas_xfrm_errors_total), it costs 227 MiB against the collector's 12 MiB, and it does not run beside
+  Dynatrace full stack without a DynaKube change (7a; docs/62, "Network Observability does not run beside it").
+  Its one addition, seeing NFS that bypassed the tunnel (TCP 2049 on egress), was not tested.
+  Removal, in this order: the two FlowMetrics; the FlowCollector (18:58:31; its pods gone by 18:58:54); the
+  Subscription and the CSV network-observability-operator.v1.12.3 only (the namespace also lists copies of every
+  cluster-wide operator's CSV: cert-manager, COO, custom-metrics-autoscaler, MetalLB, namespace-configuration,
+  GitOps; untouched); the namespaces netobserv, netobserv-privileged (already going) and
+  openshift-netobserv-operator; the three CRDs. The SCC netobserv-ebpf-agent went with the operator.
+  OLM left 10 ClusterRoles and 6 ClusterRoleBindings labelled olm.owner=network-observability-operator.v1.12.3
+  (netobserv-informers, -hostnetwork, -loki-*, -token-review, ...): deleted by that label, 16 objects. Section 5's
+  check (namespaces, CRDs, ConsolePlugin) did not cover cluster roles, so whether the first run left them is not known.
+  Console: spec.plugins index 5 was netobserv-plugin-static; JSON patch test + remove; back to the five plugins.
+  ConsolePlugin deleted. 18:59:29: nothing named netobserv in clusterrole, clusterrolebinding, crd, consoleplugin,
+  scc, webhook configurations, apiservices or namespaces.
+  DynaKube restored, 18:59:40: JSON patch (test the values, then remove) of both namespaceSelectors, dry run first;
+  its spec then equals the copy saved before 7a's patch (jq -S .spec diff: none). DynaKube Running; 57 namespaces
+  labelled for injection (59 before 7a, less the two removed).
+
 ## Not measured (the rest of issue #35)
   A TCP flow to port 2049 on egress when the tunnel is removed: not run, because mongodb-poc's mongot volumes
   (3 x 8Gi, class ipsec-nas-csi) use the same tunnel and removing it would cut their storage. Upstream's NETOBSERV-2343
