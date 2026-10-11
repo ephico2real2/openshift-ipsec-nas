@@ -14,6 +14,9 @@
     pod namespace-configuration-operator/...-image-override-...", a cron job every 10 minutes); restarts 9-10 each.
 
 ## 1. How the feature works (netobserv-ebpf-agent source, main branch, bpf/ipsec.h; pkg/decode/flows)
+  RETRACTED for the agent that runs here (section 7): the wire-flow rewrite described below is upstream's
+  NETOBSERV-2343 (PR #1010, merged 2026-07-30), after the v1.12.0 tag (2026-07-20); the 1.12.3 agent behaves as
+  v1.12.0's code does. What follows describes main only.
   kprobe + kretprobe on xfrm_output (egress) and xfrm_input (ingress). The result is stored on the WIRE flow: the
   flow id is rewritten to ESP, or kept as UDP 4500 under NAT-T (ipsec_to_wire_flow_id), so the status lands on the
   node<->NAS ESP/NAT-T flow, not on the inner NFS TCP/2049 flow. Flow fields: IPSecStatus "success" (kernel return
@@ -66,7 +69,8 @@
 
 ## Findings
   1. The IPSec feature marks the node-to-NAS tunnel (External mode, libreswan, NAT-T): 30 flows with
-     IPSecStatus="success" on a node whose only IPsec is that tunnel. Not yet confirmed by address.
+     IPSecStatus="success" on a node whose only IPsec is that tunnel. By address (section 7): the marks do not land
+     on the NAS's flows; the plain flows to the NAS show the encryption instead.
   2. Its cost is small in itself: agent 13m / 56Mi, processor 42m / 54Mi at sampling 1 on this node.
   3. The node could not carry the test, and the cause is NOT established. It was at 91% memory before the install;
      within minutes it was reclaiming memory (kswapd0 100%, no swap), the API server slowed (an API call up to
@@ -86,7 +90,95 @@
   So the pressure in section 4 cannot be attributed to NetObserv; a rerun needs a quiet node with headroom and the
   load recorded before the install.
 
+## 7. Rerun, 2026-10-11 11:54-13:41Z (the same manifests; CRC restarted 2026-10-10 22:10 with 32 GiB and 14 CPUs)
+  Before (11:54): node 999m CPU, 23778Mi memory (75%); host load 2.85 / 3.27 / 3.48, MemAvailable 6198 MiB, no swap;
+    no install running. eBPF: 364 programs (cgroup_device 333, cgroup_skb 10, kprobe 19, raw_tracepoint 1,
+    tracepoint 1); no xdp, tc, flow_dissector or netfilter programs. ovnkube-node restarts 10 (ovn-acl-logging 11),
+    0 errors in 30 min. Console spec.plugins: five. NAS: nfs-over-ipsec 60977759, nfs-cleartext-dropped 737.
+  11:54:36 operator applied; 11:55:04 CSV Succeeded, no restarts, webhooks with endpoints. netobserv-plugin-static
+    was deployed with the operator, before any FlowCollector. 11:55:10 FlowCollector and both FlowMetrics created
+    (the webhook answered; in section 4 it did not).
+
+  7a. The agent never started: Dynatrace's injection.
+    FlowCollector Ready=False, WaitingEBPFAgents "DaemonSet netobserv-ebpf-agent not ready: 0/1". DaemonSet event
+    FailedCreate: every SCC refused the pod; the one granted to its service account (netobserv-ebpf-agent, created
+    by the operator: BPF, PERFMON, NET_ADMIN, host network, no seccompProfiles) refused only
+    "metadata.annotations[container.seccomp.security.alpha.kubernetes.io/dynatrace-operator]: Forbidden: seccomp
+    may not be set".
+    Cause: the DynaKube (cloudNativeFullStack, metadataEnrichment, no namespaceSelector) matches every namespace
+    except Dynatrace operator 1.11.0's defaults (^dynatrace$, ^kube-.*, ^openshift(-.*)?, ^gke-.*, ^gmp-.*;
+    pkg/api/exp/injection.go:45-54). Its namespace webhook labelled netobserv and netobserv-privileged
+    dynakube.internal.dynatrace.com/instance=dynakube; its pod webhook (failurePolicy Ignore) then injects the
+    init container "dynatrace-operator" with that seccomp annotation. The processor pod in netobserv was injected
+    too, and ran (restricted-v2 allows seccomp).
+    Why section 2's agent started is not established (no annotation was recorded then).
+    Options weighed: Dynatrace's documented opt-outs are a DynaKube namespaceSelector or a pod annotation
+    dynatrace.com/inject: "false" (docs.dynatrace.com, "Configure monitoring for namespaces and pods"); the
+    FlowCollector cannot annotate the agent's pods (spec.agent.ebpf.advanced: capOverride, env, scheduling). A
+    FlowCollector namespace named openshift-* would be skipped by Dynatrace, but the field's description advises
+    keeping "netobserv": OLM's six ClusterRoleBindings name netobserv/... service accounts.
+    Chosen (operator decision): DynaKube namespaceSelector NotIn [netobserv, netobserv-privileged] on both
+    metadataEnrichment and oneAgent.cloudNativeFullStack, patched live 13:30:06 (server dry run first; tolerations
+    and apiUrl kept). By 13:30:13 both namespaces had lost the label; labelled namespaces 59 -> 57; DynaKube Running.
+    13:31:59 agent pod Running under SCC netobserv-ebpf-agent, not injected, no init container; FlowCollector Ready.
+    The processor was restarted so it runs without injection too.
+
+  7b. Flows to and from the NAS (the two FlowMetrics; demo-app requests to put NFS through the tunnel)
+    Processor :9401 at 13:33:50:
+      nas_egress_bytes_total{Proto="17",DstPort="4500",IPSecStatus=""}  596214
+      nas_ingress_bytes_total{Proto="17",SrcPort="4500",IPSecStatus=""} 266436
+      nas_ingress_bytes_total{Proto="6",SrcPort="2049",IPSecStatus=""}  203276
+    Egress to the NAS: UDP 4500 only, no TCP 2049: the node's NFS left encrypted (NAT-T).
+    Ingress: TCP from port 2049 as well as UDP 4500. Not cleartext on the wire: tcpdump -Q out on the NAS's
+    interface lima1, 13:37 (host 192.168.64.1, the node as the NAS sees it through NAT), during the same kind of
+    traffic: 178 packets, all "UDP-encap: ESP", none TCP 2049; NAS nfs-over-ipsec 61028638 -> 61028852,
+    nfs-cleartext-dropped 737 -> 737. The agent's TC ingress hook sees the replies a second time after the node
+    decrypts them. So on ingress, TCP 2049 is not a sign of cleartext; on egress it would be.
+
+  7c. Where IPSecStatus goes (a temporary FlowMetric, filter IPSecStatus Presence, counting flows; deleted after)
+    13:38:09: 33 marked flow records, none on the flows of 7b:
+      16  SrcAddr 192.168.64.8 SrcPort 12550 -> DstAddr 192.168.127.2 DstPort 15313, Proto 17
+      16  SrcAddr :: -> DstAddr ::, Proto 0, no ports
+       1  SrcAddr 192.168.127.2 SrcPort 983 -> DstAddr 192.168.64.8 DstPort 2049, Proto 6 (the inner NFS flow)
+    The node's inbound SA has SPI 0x31063bd1 (ip xfrm state; espinudp sport 4500 dport 4500): 0x3106 = 12550,
+    0x3bd1 = 15313. Source, v1.12.0-community (tag 2026-07-20) bpf/ipsec.h: enter_xfrm_func parses the skb at the
+    xfrm_input/xfrm_output kprobe as an ordinary packet. On ingress under NAT-T the transport header is then the
+    ESP header, so the "UDP ports" are the SPI's halves. On egress the family comes from the Ethernet header at
+    skb->mac_header (core_fill_in_l2), which a packet the node sends has not got yet at xfrm_output, so the key
+    is mostly empty. A key that matches no TC flow leaves the IPSecStatus on a record of its own, with no bytes
+    (a Bytes-valued FlowMetric with the same filter produced no series).
+    Upstream's NETOBSERV-2343 (PR #1010, merged 2026-07-30, "correlate IPsec metadata with on-wire ESP/NAT-T
+    flows") rewrites the key to the wire tuple and merges orphans in userspace; it is not in 1.12.3 (the marked
+    inbound key here is still UDP with SPI ports, which main would rewrite to ESP). Whether it fixes this tunnel
+    (External libreswan, NAT-T, the empty egress key) is not tested.
+
+  7d. Prometheus (platform Thanos querier, 13:36:51): netobserv_nas_egress_bytes_total{Proto="17",DstPort="4500"}
+    1416050; netobserv_nas_ingress_bytes_total UDP 4500 618242 and TCP 2049 473226; netobserv_node_ipsec_flows_total
+    {IPSecStatus="success"} 43; sum(rate(netobserv_nas_egress_bytes_total[5m])) by (Proto,DstPort): UDP 4500 4520 B/s.
+
+  7e. Cost and side effects
+    oc adm top 13:36:51: agent 3m / 105Mi, flowlogs-pipeline 4m / 37Mi, controller-manager 3m / 53Mi, static
+    plugin 0m / 32Mi. Node 825m (5%), 24338Mi (77%).
+    Host load, agent running (13:39-13:40): 3.70 3.40 3.54 to 3.23 3.33 3.51, MemAvailable 5636-5748 MiB. Before
+    the agent started (11:54-12:34, operator and processor only): 1-minute load at most 5.83.
+    eBPF after (13:37): 386 programs: kprobe 27 (+8: kprobe and kretprobe on xfrm_input and xfrm_output, among
+    them), sched_cls 6, tracing 1, tracepoint 2, cgroup_device 339; tcx ingress and egress (tcx_ingress_flow_parse,
+    tcx_egress_flow_parse) on 140 interfaces (br-ex, br-int, enp0s1, ovn-k8s-mp0, the pods' veths), where there
+    was none before.
+    ovnkube-node: restarts unchanged; no error lines in ovnkube-controller in 45 min.
+    Console spec.plugins: netobserv-plugin-static added again (finding 4).
+
+## Findings of the rerun (section 7)
+  5. On a cluster with Dynatrace full stack, NetObserv's agent does not start until NetObserv's namespaces are left
+     out of the injection: a DynaKube namespaceSelector is the documented way. Any cluster that runs both needs it.
+  6. In 1.12.3, IPSecStatus cannot say whether the NAS's traffic was encrypted on this tunnel (External libreswan,
+     NAT-T): the marks are stored under keys that match no flow (7c). The flows themselves can: egress to the NAS
+     carries only UDP 4500 (or ESP without NAT-T), and a TCP flow to port 2049 on egress would be cleartext.
+  7. On ingress, decrypted NFS appears as TCP from port 2049; it is not cleartext on the wire (7b, the NAS capture).
+  8. The four pods used 10m CPU and 227 MiB together at sampling 1 (7e), and the node's load did not change; the
+     agent adds TC hooks on every interface and four probes on xfrm.
+
 ## Not measured (the rest of issue #35)
-  The flows to the NAS by address (the per-NAS FlowMetrics were never created); a TCP flow to port 2049 on egress
-  when the tunnel is removed; metrics in Prometheus; ovnkube-node and the eBPF hooks after the install. They need a
-  node with memory headroom.
+  A TCP flow to port 2049 on egress when the tunnel is removed: not run, because mongodb-poc's mongot volumes
+  (3 x 8Gi, class ipsec-nas-csi) use the same tunnel and removing it would cut their storage. Upstream's NETOBSERV-2343
+  build against this tunnel. A multi-node cluster (SrcK8S_HostName stayed empty on CRC).

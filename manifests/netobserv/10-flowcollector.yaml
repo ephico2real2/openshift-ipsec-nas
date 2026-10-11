@@ -32,6 +32,7 @@ spec:
 ---
 # Traffic from the nodes to the NAS, by protocol, port and IPsec status. With IPsec, a node's NFS leaves
 # as ESP (or UDP 4500 under NAT-T): a TCP flow to port 2049 seen here left the node unencrypted.
+# IPSecStatus stays empty here in 1.12.3: the agent stores it under other flow keys (evidence 64, section 7).
 apiVersion: flows.netobserv.io/v1alpha1
 kind: FlowMetric
 metadata:
@@ -52,6 +53,8 @@ spec:
   - DstPort
   - IPSecStatus
 ---
+# Traffic from the NAS to the nodes. Here TCP from port 2049 is expected beside UDP 4500: the agent also sees
+# the NFS replies after the node decrypts them (the NAS sent them as ESP; evidence 64, section 7).
 apiVersion: flows.netobserv.io/v1alpha1
 kind: FlowMetric
 metadata:
